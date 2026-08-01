@@ -1,0 +1,6 @@
+{
+  "name": "Motor de Aventuras Gráficas en Texto",
+  "description": "Motor y editor interactivo de aventuras gráficas point-and-click basadas en texto con exportador HTML independiente y sistema de guardado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
