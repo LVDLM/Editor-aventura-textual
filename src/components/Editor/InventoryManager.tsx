@@ -18,6 +18,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('Box');
+  const [isGameOver, setIsGameOver] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const handleCreateOrUpdateItem = () => {
@@ -28,7 +29,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
         ...prev,
         inventoryItems: prev.inventoryItems.map((item) =>
           item.id === editingItemId
-            ? { ...item, name: name.trim(), description: description.trim(), icon: selectedIcon }
+            ? { ...item, name: name.trim(), description: description.trim(), icon: selectedIcon, isGameOver: isGameOver || undefined }
             : item
         ),
       }));
@@ -39,6 +40,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
         name: name.trim(),
         description: description.trim(),
         icon: selectedIcon,
+        isGameOver: isGameOver || undefined,
       };
       updateProject((prev) => ({
         ...prev,
@@ -49,6 +51,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
     setName('');
     setDescription('');
     setSelectedIcon('Box');
+    setIsGameOver(false);
   };
 
   const handleEditClick = (item: InventoryItem) => {
@@ -56,6 +59,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
     setName(item.name);
     setDescription(item.description);
     setSelectedIcon(item.icon);
+    setIsGameOver(!!item.isGameOver);
   };
 
   const handleDeleteItem = (itemId: string) => {
@@ -114,14 +118,49 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">Descripción para el Jugador</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-semibold text-slate-300">Descripción para el Jugador</label>
+            <button
+              type="button"
+              onClick={() => {
+                setDescription((prev) =>
+                  prev
+                    ? `${prev.trim()} [Terminar / Cargar partida]`
+                    : 'Inspeccionas este objeto y sufres un destino fatal. [Terminar / Cargar partida]'
+                );
+                setIsGameOver(true);
+              }}
+              className="text-[10px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-lg transition-colors"
+            >
+              💀 Insertar "[Terminar / Cargar partida]"
+            </button>
+          </div>
           <input
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-amber-500"
-            placeholder="Ej: Una pequeña llave gastada con forma de trébol."
+            placeholder="Ej: Una pequeña llave gastada con forma de trébol. [Terminar / Cargar partida]"
           />
+        </div>
+
+        {/* Game Over toggle */}
+        <div className="bg-rose-950/20 border border-rose-500/30 rounded-xl p-3 flex items-center justify-between">
+          <div>
+            <span className="font-bold text-xs text-rose-300 block">💀 Fin de Partida al Examinar / Usar</span>
+            <span className="text-[11px] text-slate-400">
+              Marca este objeto si al interactuar con él el jugador pierde o termina la historia.
+            </span>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isGameOver}
+              onChange={(e) => setIsGameOver(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+          </label>
         </div>
 
         <div className="flex items-center gap-2 pt-2">

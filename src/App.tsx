@@ -112,6 +112,7 @@ export default function App() {
             gameState={gameState}
             setGameState={setGameState}
             onReset={handleResetGame}
+            onOpenSaveLoad={() => setShowSaveLoad(true)}
           />
         ) : (
           <GameEditor

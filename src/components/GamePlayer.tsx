@@ -24,6 +24,8 @@ import {
   Shield,
   PackageCheck,
   Save,
+  Skull,
+  Bookmark,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -40,6 +42,7 @@ interface GamePlayerProps {
   };
   setGameState: React.Dispatch<React.SetStateAction<any>>;
   onReset: () => void;
+  onOpenSaveLoad?: () => void;
 }
 
 const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
@@ -47,6 +50,7 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
   BookOpen: ({ className }) => <BookOpen className={className} />,
   Flashlight: ({ className }) => <Flashlight className={className} />,
   Box: ({ className }) => <Box className={className} />,
+  Skull: ({ className }) => <Skull className={className} />,
 };
 
 export const GamePlayer: React.FC<GamePlayerProps> = ({
@@ -54,6 +58,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   gameState,
   setGameState,
   onReset,
+  onOpenSaveLoad,
 }) => {
   const [activeVerb, setActiveVerb] = useState<VerbType | null>(null);
   const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null);
@@ -111,11 +116,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     }
 
     if (item) {
+      const isItemGameOver = !!item.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(item.description || '');
+      const rawDesc = item.description || 'Sin descripción adicional.';
+      const cleanDesc = rawDesc.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim();
+
       setModalFeedback({
-        type: 'item',
+        type: isItemGameOver ? 'gameover' : 'item',
         title: item.name,
-        verbIconName: 'Eye',
-        message: item.description || 'Sin descripción adicional.',
+        verbIconName: isItemGameOver ? 'Skull' : 'Eye',
+        isGameOver: isItemGameOver,
+        message: cleanDesc,
       });
     }
   };
@@ -240,7 +250,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       const verbObj = ALL_VERBS.find((v) => v.id === verbToUse);
       const verbIconName = verbObj?.iconName || 'Eye';
 
-      if (willPickupItem && itemObj) {
+      const isRuleGameOver = !!rule.isGameOver || !!rule.stateChange?.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.responseMessage || '') || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.stateChange?.appendStoryText || '');
+
+      if (isRuleGameOver) {
+        playSound('error');
+        const rawMsg = messageToShow || rule.responseMessage || 'Has alcanzado un desenlace fatal.';
+        setModalFeedback({
+          type: 'gameover',
+          title: 'FIN DE PARTIDA',
+          verbIconName: 'Skull',
+          isGameOver: true,
+          message: rawMsg.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
+        });
+      } else if (willPickupItem && itemObj) {
         playSound('pickup');
         const itemMsg = `¡Has conseguido: ${itemObj.name}!`;
         setModalFeedback({
@@ -254,7 +276,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         setModalFeedback({
           type: 'action',
           verbIconName,
-          message: messageToShow,
+          message: messageToShow.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
         });
       }
 
@@ -372,6 +394,91 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       }
       return <span key={idx}>{part}</span>;
     });
+  };
+
+  // Parses [Terminar / Cargar partida] or similar bracket tags into interactive End Game action bars
+  const renderTextWithTags = (rawText: string, isBlockGameOver?: boolean) => {
+    if (!rawText) return null;
+
+    const tagRegex = /(\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\])/gi;
+    const parts = rawText.split(tagRegex);
+    const hasTag = /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(rawText);
+
+    const renderedContent = parts.map((part, index) => {
+      const matchTag = part.match(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i);
+      if (matchTag) {
+        const tagText = matchTag[0].toLowerCase();
+        const showRestart = tagText.includes('terminar') || tagText.includes('fin');
+        const showLoad = tagText.includes('cargar') || tagText.includes('terminar');
+
+        return (
+          <div
+            key={index}
+            className="my-4 p-4 rounded-2xl bg-rose-950/60 border border-rose-500/50 flex flex-wrap items-center justify-between gap-3 shadow-xl backdrop-blur-sm"
+          >
+            <div className="flex items-center gap-2.5 text-rose-300 font-bold text-xs uppercase tracking-wider">
+              <Skull className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
+              <span>Fin de la Historia</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {showRestart && (
+                <button
+                  onClick={onReset}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Terminar / Reiniciar</span>
+                </button>
+              )}
+              {showLoad && onOpenSaveLoad && (
+                <button
+                  onClick={onOpenSaveLoad}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Cargar partida</span>
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      }
+      return <React.Fragment key={index}>{renderInteractiveText(part)}</React.Fragment>;
+    });
+
+    if (isBlockGameOver && !hasTag) {
+      return (
+        <>
+          {renderedContent}
+          <div className="my-4 p-4 rounded-2xl bg-rose-950/60 border border-rose-500/50 flex flex-wrap items-center justify-between gap-3 shadow-xl backdrop-blur-sm">
+            <div className="flex items-center gap-2.5 text-rose-300 font-bold text-xs uppercase tracking-wider">
+              <Skull className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
+              <span>Fin de la Historia</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onReset}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Terminar / Reiniciar</span>
+              </button>
+              {onOpenSaveLoad && (
+                <button
+                  onClick={onOpenSaveLoad}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Cargar partida</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    return renderedContent;
   };
 
   const getVerbIcon = (iconName: string) => {
@@ -513,22 +620,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 return null;
               }
               return (
-                <p key={block.id} className="tracking-wide">
-                  {renderInteractiveText(block.text)}
-                </p>
+                <div key={block.id} className="tracking-wide">
+                  {renderTextWithTags(block.text, block.isGameOver)}
+                </div>
               );
             })}
 
             {/* Appended Story Paragraphs */}
             {(gameState.appendedTextsPerScene[gameState.currentSceneId] || []).map((appended, i) => (
-              <motion.p
+              <motion.div
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 key={i}
                 className="tracking-wide"
               >
-                {renderInteractiveText(appended)}
-              </motion.p>
+                {renderTextWithTags(appended)}
+              </motion.div>
             ))}
           </div>
         </div>
@@ -546,14 +653,18 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 exit={{ opacity: 0, scale: 0.92, y: 15 }}
                 onClick={(e) => e.stopPropagation()}
                 className={`w-full max-w-lg p-6 rounded-2xl border ${
-                  modalFeedback.type === 'item'
+                  modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                    ? 'border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.35)] bg-slate-950/95'
+                    : modalFeedback.type === 'item'
                     ? 'border-2 border-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.3)] bg-slate-900'
                     : `${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-2xl`
                 } space-y-4`}
               >
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
                   <div className="flex items-center gap-2.5">
-                    {modalFeedback.type === 'item' ? (
+                    {modalFeedback.type === 'gameover' || modalFeedback.isGameOver ? (
+                      <Skull className="w-5 h-5 text-rose-400 shrink-0 animate-bounce" />
+                    ) : modalFeedback.type === 'item' ? (
                       <PackageCheck className="w-5 h-5 text-amber-400 shrink-0" />
                     ) : (
                       <div className={`w-5 h-5 ${themeConfig.accentClass} flex items-center justify-center shrink-0`}>
@@ -561,8 +672,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       </div>
                     )}
 
-                    <h3 className={`font-bold text-base ${modalFeedback.type === 'item' ? 'text-amber-300' : themeConfig.textMainClass}`}>
-                      {modalFeedback.title || (modalFeedback.type === 'item' ? 'Objeto' : 'Resultado de la Acción')}
+                    <h3
+                      className={`font-bold text-base ${
+                        modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                          ? 'text-rose-300'
+                          : modalFeedback.type === 'item'
+                          ? 'text-amber-300'
+                          : themeConfig.textMainClass
+                      }`}
+                    >
+                      {modalFeedback.title ||
+                        (modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                          ? 'FIN DE PARTIDA'
+                          : modalFeedback.type === 'item'
+                          ? 'Objeto'
+                          : 'Resultado de la Acción')}
                     </h3>
 
                     {modalFeedback.isAutosaved && (
@@ -596,7 +720,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 <div className="py-2">
                   <p
                     className={`text-base leading-relaxed whitespace-pre-line ${
-                      modalFeedback.type === 'item'
+                      modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                        ? 'text-rose-100 font-medium'
+                        : modalFeedback.type === 'item'
                         ? 'text-amber-100 font-medium'
                         : `${themeConfig.textMainClass} italic`
                     }`}
@@ -605,13 +731,46 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   </p>
                 </div>
 
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={() => setModalFeedback(null)}
-                    className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-md transition-colors"
-                  >
-                    Entendido
-                  </button>
+                <div className="flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-white/10">
+                  {modalFeedback.type === 'gameover' || modalFeedback.isGameOver ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setModalFeedback(null);
+                          onReset();
+                        }}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        <span>Terminar / Reiniciar</span>
+                      </button>
+                      {onOpenSaveLoad && (
+                        <button
+                          onClick={() => {
+                            setModalFeedback(null);
+                            onOpenSaveLoad();
+                          }}
+                          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Bookmark className="w-4 h-4 text-emerald-300" />
+                          <span>Cargar partida</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setModalFeedback(null)}
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-colors"
+                      >
+                        Cerrar
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setModalFeedback(null)}
+                      className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer"
+                    >
+                      Entendido
+                    </button>
+                  )}
                 </div>
               </motion.div>
             </div>

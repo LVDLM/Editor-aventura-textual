@@ -16,6 +16,7 @@ export interface InventoryItem {
   name: string;
   description: string;
   icon: string; // Lucide icon name
+  isGameOver?: boolean; // Triggers end of game when inspected/used
 }
 
 export interface StateChange {
@@ -26,6 +27,8 @@ export interface StateChange {
   appendStoryText?: string; // Append extra text paragraph to current scene
   revealHotspotIds?: string[]; // Enable hidden hotspots
   hideHotspotIds?: string[]; // Disable hotspots
+  isGameOver?: boolean; // Triggers game over / end of game
+  gameOverMessage?: string; // Optional custom message/title for game over
 }
 
 export interface ActionRule {
@@ -39,6 +42,7 @@ export interface ActionRule {
   // What happens when triggered
   responseMessage: string; // Message printed in narrative response box
   stateChange?: StateChange;
+  isGameOver?: boolean; // Direct game over flag on action rule
   
   // Custom priority or condition fail message
   failMessage?: string; // Message if required item or flag is missing
@@ -60,6 +64,7 @@ export interface SceneTextBlock {
   text: string; // Narrative text content
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
+  isGameOver?: boolean; // Marks paragraph as triggering end of game
 }
 
 export interface Scene {

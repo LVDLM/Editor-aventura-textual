@@ -124,6 +124,25 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     }));
   };
 
+  const handleToggleBlockGameOver = (blockId: string, isGameOver: boolean) => {
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          textBlocks: s.textBlocks.map((b) => (b.id === blockId ? { ...b, isGameOver } : b)),
+        };
+      }),
+    }));
+  };
+
+  const handleInsertGameOverTagToBlock = (blockId: string, currentText: string) => {
+    const newText = currentText ? `${currentText.trim()} [Terminar / Cargar partida]` : 'Has llegado al final. [Terminar / Cargar partida]';
+    handleUpdateBlockText(blockId, newText);
+    handleToggleBlockGameOver(blockId, true);
+  };
+
   const handleUpdateBlockFlagCondition = (
     blockId: string,
     conditionType: 'visibleIf' | 'hiddenIf',
@@ -388,6 +407,11 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       <span className="font-mono text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
                         Párrafo #{index + 1}
                       </span>
+                      {block.isGameOver && (
+                        <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-bold flex items-center gap-1">
+                          💀 Fin de Partida
+                        </span>
+                      )}
                       {visibleFlag && (
                         <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-mono flex items-center gap-1">
                           <Eye className="w-3 h-3 text-emerald-400" />
@@ -402,15 +426,26 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       )}
                     </div>
 
-                    {activeScene.textBlocks.length > 1 && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleDeleteTextBlock(block.id)}
-                        className="text-slate-500 hover:text-red-400 p-1 transition-colors"
-                        title="Eliminar este párrafo"
+                        type="button"
+                        onClick={() => handleInsertGameOverTagToBlock(block.id, block.text)}
+                        className="text-[10px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+                        title="Añade automáticamente [Terminar / Cargar partida] al final de este párrafo"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <span>💀 Insertar Botón de Fin de Partida</span>
                       </button>
-                    )}
+
+                      {activeScene.textBlocks.length > 1 && (
+                        <button
+                          onClick={() => handleDeleteTextBlock(block.id)}
+                          className="text-slate-500 hover:text-red-400 p-1 transition-colors"
+                          title="Eliminar este párrafo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <textarea

@@ -29,6 +29,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [flagSetValue, setFieldSetValue] = useState(true);
   const [goToSceneId, setGoToSceneId] = useState('');
   const [appendStoryText, setAppendStoryText] = useState('');
+  const [isGameOver, setIsGameOver] = useState(false);
 
   const handleEditAction = (action: ActionRule) => {
     setEditingActionId(action.id);
@@ -39,6 +40,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setRemoveItemId(action.stateChange?.removeItemId || '');
     setGoToSceneId(action.stateChange?.goToSceneId || '');
     setAppendStoryText(action.stateChange?.appendStoryText || '');
+    setIsGameOver(!!action.isGameOver || !!action.stateChange?.isGameOver);
 
     if (action.stateChange?.setFlags) {
       const entries = Object.entries(action.stateChange.setFlags);
@@ -62,6 +64,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     if (removeItemId) stateChangeObj.removeItemId = removeItemId;
     if (goToSceneId) stateChangeObj.goToSceneId = goToSceneId;
     if (appendStoryText.trim()) stateChangeObj.appendStoryText = appendStoryText.trim();
+    if (isGameOver) stateChangeObj.isGameOver = true;
     if (flagToSet) {
       stateChangeObj.setFlags = { [flagToSet]: flagSetValue };
     }
@@ -71,6 +74,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       verb,
       responseMessage: responseMessage.trim(),
       requiredItemId: requiredItemId || undefined,
+      isGameOver: isGameOver || undefined,
       stateChange: Object.keys(stateChangeObj).length > 0 ? stateChangeObj : undefined,
     };
 
@@ -104,6 +108,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setFlagToSet('');
     setGoToSceneId('');
     setAppendStoryText('');
+    setIsGameOver(false);
   };
 
   return (
@@ -195,16 +200,53 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
             {/* Response Message */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Mensaje de Respuesta al Jugador <span className="text-amber-400">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Mensaje de Respuesta al Jugador <span className="text-amber-400">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResponseMessage((prev) =>
+                      prev
+                        ? `${prev.trim()} [Terminar / Cargar partida]`
+                        : 'Acción fatal. [Terminar / Cargar partida]'
+                    );
+                    setIsGameOver(true);
+                  }}
+                  className="text-[10px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <span>💀 Insertar "[Terminar / Cargar partida]"</span>
+                </button>
+              </div>
               <textarea
                 rows={2}
                 value={responseMessage}
                 onChange={(e) => setResponseMessage(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-amber-500"
-                placeholder="Ej: La habitación se ilumina con una cálida luz."
+                placeholder="Ej: Pulsas el botón y una descarga eléctrica recorre tu cuerpo... [Terminar / Cargar partida]"
               />
+            </div>
+
+            {/* Game Over toggle box */}
+            <div className="bg-rose-950/30 border border-rose-500/40 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <span className="font-bold text-xs text-rose-300 block flex items-center gap-1.5">
+                  <span>💀 Fin de Partida / Terminar Historia</span>
+                </span>
+                <span className="text-[11px] text-slate-300">
+                  Marca esta acción para terminar la historia o mostrar los botones de fin de juego (Reiniciar / Cargar partida).
+                </span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isGameOver}
+                  onChange={(e) => setIsGameOver(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+              </label>
             </div>
 
             {/* State Change Consequences */}
