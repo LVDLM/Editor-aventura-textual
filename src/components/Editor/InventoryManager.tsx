@@ -19,7 +19,22 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
   const [description, setDescription] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('Box');
   const [isGameOver, setIsGameOver] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageFileData, setImageFileData] = useState<string | undefined>(undefined);
+  const [imageFileName, setImageFileName] = useState<string | undefined>(undefined);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+
+  const handleImageFileUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const sanitizedFileName = file.name.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
+      setImageFileData(dataUrl);
+      setImageFileName(sanitizedFileName);
+      setImageUrl('');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleCreateOrUpdateItem = () => {
     if (!name.trim()) return;
@@ -29,7 +44,16 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
         ...prev,
         inventoryItems: prev.inventoryItems.map((item) =>
           item.id === editingItemId
-            ? { ...item, name: name.trim(), description: description.trim(), icon: selectedIcon, isGameOver: isGameOver || undefined }
+            ? {
+                ...item,
+                name: name.trim(),
+                description: description.trim(),
+                icon: selectedIcon,
+                isGameOver: isGameOver || undefined,
+                imageUrl: imageUrl ? imageUrl : undefined,
+                imageFileData: imageFileData,
+                imageFileName: imageFileName,
+              }
             : item
         ),
       }));
@@ -41,6 +65,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
         description: description.trim(),
         icon: selectedIcon,
         isGameOver: isGameOver || undefined,
+        imageUrl: imageUrl ? imageUrl : undefined,
+        imageFileData: imageFileData,
+        imageFileName: imageFileName,
       };
       updateProject((prev) => ({
         ...prev,
@@ -52,6 +79,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
     setDescription('');
     setSelectedIcon('Box');
     setIsGameOver(false);
+    setImageUrl('');
+    setImageFileData(undefined);
+    setImageFileName(undefined);
   };
 
   const handleEditClick = (item: InventoryItem) => {
@@ -60,6 +90,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
     setDescription(item.description);
     setSelectedIcon(item.icon);
     setIsGameOver(!!item.isGameOver);
+    setImageUrl(item.imageUrl || '');
+    setImageFileData(item.imageFileData);
+    setImageFileName(item.imageFileName);
   };
 
   const handleDeleteItem = (itemId: string) => {
@@ -144,6 +177,69 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
           />
         </div>
 
+        {/* Item Image Upload / URL */}
+        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <span className="text-amber-400">🖼️</span>
+              <span>Imagen del Objeto (Opcional - Se mostrará al obtenerlo u observarlo)</span>
+            </label>
+            {(imageFileData || imageUrl) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setImageFileData(undefined);
+                  setImageFileName(undefined);
+                  setImageUrl('');
+                }}
+                className="text-[10px] text-rose-400 hover:text-rose-300 underline"
+              >
+                Quitar Imagen
+              </button>
+            )}
+          </div>
+
+          {(imageFileData || imageUrl) ? (
+            <div className="flex items-center gap-3 bg-slate-900 border border-amber-500/30 rounded-xl p-2.5">
+              <img
+                src={imageFileData || imageUrl}
+                alt="Objeto"
+                className="w-16 h-16 object-contain rounded-lg border border-slate-700 bg-slate-950 shrink-0"
+              />
+              <div className="text-xs space-y-0.5 overflow-hidden">
+                <p className="font-semibold text-amber-300 truncate">
+                  {imageFileName || 'Imagen de objeto lista'}
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  Se incluirá en la carpeta <code className="text-amber-200">IMG/</code> si exportas en ZIP.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="flex items-center justify-center gap-2 py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl cursor-pointer text-xs text-slate-300 transition-colors">
+                <span>📂 Subir imagen de objeto</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleImageFileUpload(f);
+                  }}
+                />
+              </label>
+              <input
+                type="text"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="O escribe URL de la imagen (https://...)"
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-amber-500 outline-none"
+              />
+            </div>
+          )}
+        </div>
+
         {/* Game Over toggle */}
         <div className="bg-rose-950/20 border border-rose-500/30 rounded-xl p-3 flex items-center justify-between">
           <div>
@@ -201,17 +297,30 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
               const iconObj = AVAILABLE_ICONS.find((i) => i.name === item.icon);
               const IconComp = iconObj ? iconObj.Icon : Box;
 
+              const itemImg = item.imageFileData || item.imageUrl;
+
               return (
                 <div
                   key={item.id}
                   className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-start justify-between gap-3 shadow-inner"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
-                      <IconComp className="w-5 h-5" />
-                    </div>
+                    {itemImg ? (
+                      <img
+                        src={itemImg}
+                        alt={item.name}
+                        className="w-10 h-10 object-contain rounded-lg border border-amber-500/30 bg-black shrink-0"
+                      />
+                    ) : (
+                      <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+                        <IconComp className="w-5 h-5" />
+                      </div>
+                    )}
                     <div>
-                      <h4 className="font-bold text-sm text-slate-100">{item.name}</h4>
+                      <h4 className="font-bold text-sm text-slate-100 flex items-center gap-1.5">
+                        <span>{item.name}</span>
+                        {itemImg && <span className="text-[10px] text-amber-400">🖼️</span>}
+                      </h4>
                       <p className="text-xs text-slate-400 mt-0.5">{item.description || 'Sin descripción'}</p>
                       <span className="inline-block mt-2 text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                         ID: {item.id}

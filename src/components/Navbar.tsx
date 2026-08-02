@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Edit3, Save, Download, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown } from 'lucide-react';
+import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle } from 'lucide-react';
 import { EngineTheme } from '../types';
 
 interface NavbarProps {
@@ -10,6 +10,7 @@ interface NavbarProps {
   setTheme: (theme: EngineTheme) => void;
   soundEnabled: boolean;
   toggleSound: () => void;
+  onOpenNewProject: () => void;
   onOpenSaveLoad: () => void;
   onOpenExport: () => void;
   onOpenHelp: () => void;
@@ -24,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setTheme,
   soundEnabled,
   toggleSound,
+  onOpenNewProject,
   onOpenSaveLoad,
   onOpenExport,
   onOpenHelp,
@@ -99,6 +101,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-white/30" />}
+          </button>
+
+          {/* New Game Button */}
+          <button
+            onClick={onOpenNewProject}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-950/60 hover:bg-sky-900/60 text-sky-200 border border-sky-500/30 rounded-lg text-xs font-medium transition-colors"
+            title="Crear un nuevo proyecto desde cero"
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-sky-400" />
+            <span>Nuevo</span>
           </button>
 
           {/* Demo Loader */}

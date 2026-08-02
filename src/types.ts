@@ -16,6 +16,9 @@ export interface InventoryItem {
   name: string;
   description: string;
   icon: string; // Lucide icon name
+  imageUrl?: string; // URL or Base64 data URL
+  imageFileData?: string; // Uploaded Base64 file data
+  imageFileName?: string; // Filename for ZIP export (e.g. img/item_llave.png)
   isGameOver?: boolean; // Triggers end of game when inspected/used
 }
 
@@ -61,15 +64,23 @@ export interface Hotspot {
 
 export interface SceneTextBlock {
   id: string;
+  type?: 'portada' | 'introduccion' | 'normal';
   text: string; // Narrative text content
+  imageUrl?: string; // URL or Base64 data URL
+  imageFileData?: string; // Uploaded Base64 file data
+  imageFileName?: string; // Filename for ZIP export (e.g. img/escena_bosque.png)
+  coverMode?: 'full' | 'with_text'; // 'full' = Portada completa, 'with_text' = Acompañada de texto
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
   isGameOver?: boolean; // Marks paragraph as triggering end of game
 }
 
+export type SceneType = 'portada' | 'introduccion' | 'normal';
+
 export interface Scene {
   id: string;
   name: string;
+  type?: SceneType;
   description?: string;
   textBlocks: SceneTextBlock[];
   hotspots: Hotspot[];

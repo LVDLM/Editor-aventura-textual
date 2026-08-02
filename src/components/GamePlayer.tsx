@@ -26,11 +26,15 @@ import {
   Save,
   Skull,
   Bookmark,
+  ArrowRight,
+  ArrowDown,
+  Play,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface GamePlayerProps {
   project: GameProject;
+  updateProject?: (fn: (prev: GameProject) => GameProject) => void;
   gameState: {
     currentSceneId: string;
     inventory: string[];
@@ -55,6 +59,7 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
 
 export const GamePlayer: React.FC<GamePlayerProps> = ({
   project,
+  updateProject,
   gameState,
   setGameState,
   onReset,
@@ -64,10 +69,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null);
   const [showSaveNotification, setShowSaveNotification] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{
-    type: 'action' | 'item';
+    type: 'action' | 'item' | 'gameover';
     title?: string;
     verbIconName?: string;
     isAutosaved?: boolean;
+    isGameOver?: boolean;
+    itemImageUrl?: string;
     message: string;
   } | null>(null);
   
@@ -81,6 +88,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   const themeConfig = THEME_CONFIGS[project.theme] || THEME_CONFIGS['classic-retro'];
   const currentScene = project.scenes.find((s) => s.id === gameState.currentSceneId) || project.scenes[0];
+
+  const isSceneGameOver =
+    !!gameState.isGameOver ||
+    (currentScene?.textBlocks || []).some(
+      (b) => b.isGameOver || /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(b.text)
+    ) ||
+    ((currentScene && gameState.appendedTextsPerScene[currentScene.id]) || []).some((t) =>
+      /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(t)
+    );
 
   const checkConditions = (visibleFlags?: Record<string, boolean>, hiddenFlags?: Record<string, boolean>) => {
     if (visibleFlags) {
@@ -125,6 +141,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         title: item.name,
         verbIconName: isItemGameOver ? 'Skull' : 'Eye',
         isGameOver: isItemGameOver,
+        itemImageUrl: item.imageFileData || item.imageUrl,
         message: cleanDesc,
       });
     }
@@ -141,8 +158,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     const verbToUse = verbOverride || activeVerb || 'mirar';
     playSound('click');
 
-    // Find applicable action rule
-    const rule = hotspot.actions.find((a) => {
+    const verbObj = ALL_VERBS.find((v) => v.id === verbToUse);
+    const verbIconName = verbObj?.iconName || 'Eye';
+    const actionTitle = verbObj
+      ? `${verbObj.label}: ${hotspot.label || hotspot.word}`
+      : (hotspot.label || hotspot.word);
+
+    // Find all matching action rules for this verb
+    const matchingRules = hotspot.actions.filter((a) => {
       if (a.verb !== verbToUse) return false;
       // Check required item
       if (a.requiredItemId) {
@@ -155,6 +178,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (!checkConditions(a.visibleIfFlags, a.hiddenIfFlags)) return false;
       return true;
     });
+
+    const useKey = `${hotspot.id}_${verbToUse}`;
+    const currentUseCount = gameState.verbUseCounts?.[useKey] || 0;
+    const ruleIndex = matchingRules.length > 0 ? Math.min(currentUseCount, matchingRules.length - 1) : -1;
+    const rule = ruleIndex >= 0 ? matchingRules[ruleIndex] : null;
 
     let messageToShow: string | null = null;
 
@@ -170,6 +198,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       const itemObj = sc?.addItemId ? project.inventoryItems.find((i) => i.id === sc.addItemId) : null;
       const willPickupItem = !!(itemObj && !gameState.inventory.includes(sc!.addItemId!));
       const isAutosaveTriggered = willPickupItem || !!sc?.goToSceneId;
+      const isRuleGameOver = !!rule.isGameOver || !!rule.stateChange?.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.responseMessage || '');
 
       setGameState((prev: any) => {
         const newFlags = { ...prev.flags, ...(sc?.setFlags || {}) };
@@ -181,6 +210,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         const newUsedHotspots = currentUsedHotspots.includes(hotspot.id)
           ? currentUsedHotspots
           : [...currentUsedHotspots, hotspot.id];
+
+        const newVerbUseCounts = {
+          ...(prev.verbUseCounts || {}),
+          [useKey]: (prev.verbUseCounts?.[useKey] || 0) + 1,
+        };
 
         if (sc?.addItemId && !newInventory.includes(sc.addItemId)) {
           newInventory.push(sc.addItemId);
@@ -206,10 +240,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           { id: Date.now().toString(), type: 'response', text: rule.responseMessage || 'Acción ejecutada' },
         ];
 
-        // Trigger Autosave if item received or scene changed
+        // Trigger Autosave side-effects if item received or scene changed
         if (isAutosaveTriggered) {
-          setShowSaveNotification(true);
-          setTimeout(() => setShowSaveNotification(false), 2400);
+          setTimeout(() => {
+            setShowSaveNotification(true);
+            setTimeout(() => setShowSaveNotification(false), 2400);
+          }, 0);
 
           const currentSceneObj = project.scenes.find((s) => s.id === nextSceneId);
           const autosaveData: SaveSlotData = {
@@ -243,14 +279,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           currentSceneId: nextSceneId,
           appendedTextsPerScene: newAppended,
           usedHotspotIds: newUsedHotspots,
+          verbUseCounts: newVerbUseCounts,
+          isGameOver: prev.isGameOver || isRuleGameOver,
           history: newHistory,
         };
       });
-
-      const verbObj = ALL_VERBS.find((v) => v.id === verbToUse);
-      const verbIconName = verbObj?.iconName || 'Eye';
-
-      const isRuleGameOver = !!rule.isGameOver || !!rule.stateChange?.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.responseMessage || '') || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.stateChange?.appendStoryText || '');
 
       if (isRuleGameOver) {
         playSound('error');
@@ -270,11 +303,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           title: itemObj.name,
           verbIconName: 'Hand',
           isAutosaved: true,
+          itemImageUrl: itemObj.imageFileData || itemObj.imageUrl,
           message: messageToShow ? `${messageToShow}\n\n${itemMsg}` : itemMsg,
         });
       } else if (messageToShow) {
         setModalFeedback({
           type: 'action',
+          title: actionTitle,
           verbIconName,
           message: messageToShow.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
         });
@@ -285,9 +320,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       }
     } else {
       // Fallback message popup
-      const verbObj = ALL_VERBS.find((v) => v.id === verbToUse);
-      const verbIconName = verbObj?.iconName || 'Eye';
-
       const fallback =
         (hotspot.customDefaultResponses && hotspot.customDefaultResponses[verbToUse]) ||
         (project.defaultResponses && project.defaultResponses[verbToUse]) ||
@@ -308,6 +340,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
       setModalFeedback({
         type: 'action',
+        title: actionTitle,
         verbIconName,
         message: fallback,
       });
@@ -321,6 +354,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   const handleWordClick = (hotspot: Hotspot, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isSceneGameOver || gameState.isGameOver || modalFeedback?.isGameOver) return;
     if (activeVerb) {
       // Direct action execution
       handleExecuteAction(hotspot, activeVerb);
@@ -339,6 +373,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   // Render text with highlighted interactive words depending on difficulty mode
   const renderInteractiveText = (text: string) => {
+    if (!text) return text;
+    if (isSceneGameOver || gameState.isGameOver) return text;
     if (!currentScene || !currentScene.hotspots) return text;
 
     // Visible hotspots
@@ -352,7 +388,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     // Create a regex matching any hotspot word
     const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const sortedHotspots = [...activeHotspots].sort((a, b) => b.word.length - a.word.length);
-    const pattern = new RegExp(`\\b(${sortedHotspots.map((h) => escapeRegExp(h.word)).join('|')})\\b`, 'gi');
+    const pattern = new RegExp(`(${sortedHotspots.map((h) => escapeRegExp(h.word)).join('|')})`, 'gi');
 
     const parts = text.split(pattern);
     const isNormalMode = gameState.difficulty === 'normal';
@@ -367,13 +403,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         const isUsed = usedHotspots.includes(matchedHotspot.id);
 
         if (isNormalMode && !isUsed) {
-          // Normal mode before being used: render like standard text, clickable but without highlight styling
+          // Normal mode before being used: render like standard text, clickable but without highlight or hover indicator
           return (
             <span
               key={idx}
               onClick={(e) => handleWordClick(matchedHotspot, e)}
-              className="inline-block cursor-pointer transition-colors hover:text-amber-300 hover:underline"
-              title={`Clic para interactuar con "${matchedHotspot.label || matchedHotspot.word}"`}
+              className="inline-block cursor-pointer"
             >
               {part}
             </span>
@@ -443,7 +478,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </div>
         );
       }
-      return <React.Fragment key={index}>{renderInteractiveText(part)}</React.Fragment>;
+      return (
+        <React.Fragment key={index}>
+          {isSceneGameOver || isBlockGameOver || hasTag || gameState.isGameOver
+            ? part
+            : renderInteractiveText(part)}
+        </React.Fragment>
+      );
     });
 
     if (isBlockGameOver && !hasTag) {
@@ -612,16 +653,53 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               backgroundSize: '40px 40px',
             }}
           />
+
+          {currentScene?.type === 'portada' && (
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-widest mb-4 pb-2 border-b border-amber-500/20">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Escena de Portada</span>
+            </div>
+          )}
+
+          {currentScene?.type === 'introduccion' && (
+            <div className="flex items-center gap-2 text-xs font-bold text-sky-400 uppercase tracking-widest mb-4 pb-2 border-b border-sky-500/20">
+              <BookOpen className="w-4 h-4 text-sky-400" />
+              <span>Escena de Introducción</span>
+            </div>
+          )}
           
           {/* Main Story Text Blocks */}
-          <div className={`space-y-4 text-lg leading-relaxed ${themeConfig.textMainClass} relative z-10`}>
+          <div className={`space-y-6 text-lg leading-relaxed ${themeConfig.textMainClass} relative z-10`}>
             {currentScene?.textBlocks.map((block) => {
               if (!checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
                 return null;
               }
+              const blockImg = block.imageFileData || block.imageUrl;
+              const isPortada = block.type === 'portada' || currentScene?.type === 'portada';
+              const isIntro = block.type === 'introduccion' || currentScene?.type === 'introduccion';
+              const hasText = !!(block.text && block.text.trim().length > 0);
+
               return (
-                <div key={block.id} className="tracking-wide">
-                  {renderTextWithTags(block.text, block.isGameOver)}
+                <div
+                  key={block.id}
+                  id={`block-${block.id}`}
+                  className="tracking-wide space-y-3 transition-all"
+                >
+                  {blockImg && (
+                    <div className="w-full text-center">
+                      <img
+                        src={blockImg}
+                        alt="Ilustración"
+                        className={
+                          isPortada
+                            ? 'w-full max-h-[380px] object-cover rounded-2xl border-2 border-amber-500/50 shadow-2xl mx-auto'
+                            : 'w-full max-h-[280px] object-cover rounded-xl border border-white/10 shadow-lg mx-auto'
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {hasText && renderTextWithTags(block.text, block.isGameOver)}
                 </div>
               );
             })}
@@ -686,7 +764,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                           ? 'FIN DE PARTIDA'
                           : modalFeedback.type === 'item'
                           ? 'Objeto'
-                          : 'Resultado de la Acción')}
+                          : '')}
                     </h3>
 
                     {modalFeedback.isAutosaved && (
@@ -717,7 +795,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   </button>
                 </div>
 
-                <div className="py-2">
+                <div className="py-2 space-y-3">
+                  {modalFeedback.itemImageUrl && (
+                    <div className="w-full text-center py-1">
+                      <img
+                        src={modalFeedback.itemImageUrl}
+                        alt={modalFeedback.title || 'Objeto'}
+                        className="max-h-48 max-w-full rounded-xl border border-amber-500/40 object-contain mx-auto shadow-lg"
+                      />
+                    </div>
+                  )}
                   <p
                     className={`text-base leading-relaxed whitespace-pre-line ${
                       modalFeedback.type === 'gameover' || modalFeedback.isGameOver

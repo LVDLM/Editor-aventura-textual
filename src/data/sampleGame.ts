@@ -7,7 +7,7 @@ export const sampleGameProject: GameProject = {
   version: '1.0.0',
   description: 'Una misteriosa aventura gráfica en texto donde la observación y la deducción te permitirán escapar de una vieja mansión.',
   theme: 'classic-retro',
-  initialSceneId: 'scene_habitacion',
+  initialSceneId: 'scene_portada',
   
   defaultResponses: {
     mirar: 'Miras con atención, pero no observas nada fuera de lo normal.',
@@ -49,6 +49,69 @@ export const sampleGameProject: GameProject = {
   ],
 
   scenes: [
+    {
+      id: 'scene_portada',
+      name: 'Portada',
+      type: 'portada',
+      description: 'Pantalla de carátula del juego',
+      textBlocks: [
+        {
+          id: 'block_sample_portada',
+          type: 'portada',
+          text: 'EL MISTERIO DE LA HABITACIÓN OSCURA\n\nUna misteriosa aventura de intriga y lógica en texto.\n\nHaz clic en [Comenzar] para iniciar la historia.',
+          coverMode: 'with_text',
+        },
+      ],
+      hotspots: [
+        {
+          id: 'hotspot_portada_comenzar',
+          word: 'Comenzar',
+          label: 'Comenzar la Aventura',
+          initialVisible: true,
+          actions: [
+            {
+              id: 'act_portada_comenzar',
+              verb: 'ir_a',
+              responseMessage: 'Pasando a la introducción de la historia...',
+              stateChange: {
+                goToSceneId: 'scene_introduccion',
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'scene_introduccion',
+      name: 'Introducción',
+      type: 'introduccion',
+      description: 'Prólogo e introducción a la aventura',
+      textBlocks: [
+        {
+          id: 'block_sample_intro',
+          type: 'introduccion',
+          text: 'PRÓLOGO\n\nLa noche caía sobre la vieja mansión Blackwood. Julián llevaba horas buscando refugio de la tormenta hasta que encontró una puerta entreabierta...\n\n¿Estás listo para [Entrar] en la habitación?',
+        },
+      ],
+      hotspots: [
+        {
+          id: 'hotspot_intro_entrar',
+          word: 'Entrar',
+          label: 'Entrar a la habitación',
+          initialVisible: true,
+          actions: [
+            {
+              id: 'act_intro_entrar',
+              verb: 'ir_a',
+              responseMessage: 'Empujas la puerta y entras en la penumbra...',
+              stateChange: {
+                goToSceneId: 'scene_habitacion',
+              },
+            },
+          ],
+        },
+      ],
+    },
     {
       id: 'scene_habitacion',
       name: 'La Habitación Oscura',

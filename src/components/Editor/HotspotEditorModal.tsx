@@ -31,6 +31,12 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [appendStoryText, setAppendStoryText] = useState('');
   const [isGameOver, setIsGameOver] = useState(false);
 
+  const [duplicateConflict, setDuplicateConflict] = useState<{
+    newRule: ActionRule;
+    existingRule: ActionRule;
+    verbLabel: string;
+  } | null>(null);
+
   const handleEditAction = (action: ActionRule) => {
     setEditingActionId(action.id);
     setVerb(action.verb);
@@ -55,7 +61,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     }
   };
 
-  const handleSaveAction = () => {
+  const handleSaveAction = (forceMode?: 'replace' | 'subaction') => {
     if (!responseMessage.trim()) return;
 
     const stateChangeObj: any = {};
@@ -78,8 +84,25 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       stateChange: Object.keys(stateChangeObj).length > 0 ? stateChangeObj : undefined,
     };
 
+    const existingRule = currentHotspot.actions.find(
+      (a) => a.verb === verb && a.id !== (editingActionId || newRule.id)
+    );
+
+    if (existingRule && !forceMode) {
+      const verbObj = ALL_VERBS.find((v) => v.id === verb);
+      setDuplicateConflict({
+        newRule,
+        existingRule,
+        verbLabel: verbObj?.label || verb,
+      });
+      return;
+    }
+
     let updatedActions = [...currentHotspot.actions];
-    if (editingActionId) {
+
+    if (forceMode === 'replace') {
+      updatedActions = updatedActions.map((a) => (a.id === existingRule?.id ? newRule : a));
+    } else if (editingActionId) {
       updatedActions = updatedActions.map((a) => (a.id === editingActionId ? newRule : a));
     } else {
       updatedActions.push(newRule);
@@ -87,6 +110,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     const updated = { ...currentHotspot, actions: updatedActions };
     setCurrentHotspot(updated);
+    setDuplicateConflict(null);
     resetForm();
   };
 
@@ -350,52 +374,95 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
               <p className="text-xs text-slate-500 italic">No hay acciones específicas todavía para esta palabra.</p>
             ) : (
               <div className="space-y-2">
-                {currentHotspot.actions.map((act) => (
-                  <div
-                    key={act.id}
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-start justify-between gap-3 shadow-inner"
-                  >
-                    <div className="space-y-1 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded">
-                          {act.verb}
-                        </span>
-                        {act.requiredItemId && (
-                          <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
-                            Requiere objeto: {project.inventoryItems.find((i) => i.id === act.requiredItemId)?.name || act.requiredItemId}
-                          </span>
-                        )}
-                      </div>
+                {(() => {
+                  const grouped: Record<string, ActionRule[]> = {};
+                  const verbOrder: string[] = [];
 
-                      <p className="text-xs text-slate-200 italic font-serif">
-                        "{act.responseMessage}"
-                      </p>
+                  currentHotspot.actions.forEach((act) => {
+                    if (!grouped[act.verb]) {
+                      grouped[act.verb] = [];
+                      verbOrder.push(act.verb);
+                    }
+                    grouped[act.verb].push(act);
+                  });
 
-                      {act.stateChange && (
-                        <div className="flex items-center gap-2 text-[10px] text-amber-400/90 pt-1 flex-wrap">
-                          {act.stateChange.addItemId && <span>+ Objeto añadido</span>}
-                          {act.stateChange.setFlags && <span>🚩 Bandera cambiada</span>}
-                          {act.stateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
+                  const orderedActions: ActionRule[] = [];
+                  verbOrder.forEach((v) => {
+                    orderedActions.push(...grouped[v]);
+                  });
+
+                  return orderedActions.map((act) => {
+                    const sameVerbActions = grouped[act.verb] || [];
+                    const verbIndex = sameVerbActions.findIndex((a) => a.id === act.id);
+                    const verbObj = ALL_VERBS.find((v) => v.id === act.verb);
+                    const displayVerbName = verbObj?.label || act.verb;
+
+                    return (
+                      <div
+                        key={act.id}
+                        className={`bg-slate-950 border rounded-xl p-3.5 flex items-start justify-between gap-3 shadow-inner ${
+                          verbIndex > 0 ? 'border-indigo-500/40 ml-4' : 'border-slate-800'
+                        }`}
+                      >
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${
+                                verbIndex === 0
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                  : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono'
+                              }`}
+                            >
+                              {verbIndex === 0
+                                ? displayVerbName
+                                : `↳ ${displayVerbName} ${verbIndex + 1} (Subacción)`}
+                            </span>
+
+                            {act.isGameOver && (
+                              <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-bold">
+                                💀 Fin de Partida
+                              </span>
+                            )}
+
+                            {act.requiredItemId && (
+                              <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
+                                Requiere objeto: {project.inventoryItems.find((i) => i.id === act.requiredItemId)?.name || act.requiredItemId}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-xs text-slate-200 italic font-serif">
+                            "{act.responseMessage}"
+                          </p>
+
+                          {act.stateChange && (
+                            <div className="flex items-center gap-2 text-[10px] text-amber-400/90 pt-1 flex-wrap">
+                              {act.stateChange.addItemId && <span>+ Objeto añadido</span>}
+                              {act.stateChange.setFlags && <span>🚩 Bandera cambiada</span>}
+                              {act.stateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
+                              {act.stateChange.appendStoryText && <span>📝 Párrafo añadido</span>}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditAction(act)}
-                        className="px-2 py-1 bg-slate-900 border border-slate-800 text-slate-300 hover:text-amber-400 rounded text-xs"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAction(act.id)}
-                        className="p-1 text-slate-500 hover:text-red-400"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleEditAction(act)}
+                            className="px-2 py-1 bg-slate-900 border border-slate-800 text-slate-300 hover:text-amber-400 rounded text-xs"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAction(act.id)}
+                            className="p-1 text-slate-500 hover:text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
@@ -417,10 +484,63 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
             className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow transition-colors"
           >
             <Check className="w-4 h-4" />
-            <span>Guardar Palabra Clave</span>
+            <span>Guardar Cambios</span>
           </button>
         </div>
       </div>
+
+      {/* Duplicate Verb Conflict Modal */}
+      {duplicateConflict && (
+        <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-amber-500/60 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-400">
+              <Sparkles className="w-6 h-6 shrink-0" />
+              <h3 className="font-bold text-base text-slate-100">
+                Acción para "{duplicateConflict.verbLabel}" ya configurada
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Ya existe una regla previa para la acción <strong className="text-amber-300 uppercase">{duplicateConflict.verbLabel}</strong> en la palabra clave <strong className="text-amber-300 font-bold">"{currentHotspot.word}"</strong>:
+            </p>
+
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-300 italic">
+              "{duplicateConflict.existingRule.responseMessage}"
+            </div>
+
+            <p className="text-xs text-slate-400">
+              ¿Qué deseas hacer con la nueva acción propuesta?
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => handleSaveAction('replace')}
+                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow"
+              >
+                <span>🔄 Reemplazar Acción Existente</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveAction('subaction')}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow"
+              >
+                <ArrowRight className="w-4 h-4 text-indigo-300" />
+                <span>
+                  ➕ Agregar como Subacción ({duplicateConflict.verbLabel} {currentHotspot.actions.filter((a) => a.verb === verb).length + 1})
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDuplicateConflict(null)}
+                className="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

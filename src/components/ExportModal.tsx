@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GameProject } from '../types';
 import { generateStandaloneHTML } from '../utils/htmlExporter';
-import { Download, FileCode, Upload, X, Sparkles, CheckCircle2 } from 'lucide-react';
+import { exportProjectAsZip, projectHasImages } from '../utils/zipExporter';
+import { Download, FileCode, Upload, X, Archive, FileArchive } from 'lucide-react';
 
 interface ExportModalProps {
   project: GameProject;
@@ -14,15 +15,36 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onImportProject,
   onClose,
 }) => {
+  const [isExportingZip, setIsExportingZip] = useState(false);
+  const hasImages = projectHasImages(project);
+
   const handleExportHTML = () => {
     const html = generateStandaloneHTML(project);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${project.id || 'juego'}_juego_autonomo.html`;
+    a.download = `${project.id || 'juego'}_autonomo.html`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportZip = async () => {
+    try {
+      setIsExportingZip(true);
+      const blob = await exportProjectAsZip(project);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.id || 'juego'}_paquete_juego.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Error al generar el archivo ZIP del juego.');
+      console.error(err);
+    } finally {
+      setIsExportingZip(false);
+    }
   };
 
   const handleExportJSON = () => {
@@ -87,29 +109,61 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </p>
             </div>
           </div>
-          {/* Export HTML option */}
-          <div className="bg-slate-950 border border-amber-500/40 p-5 rounded-2xl space-y-3 shadow-inner">
+          {/* Export HTML / ZIP options */}
+          <div className="bg-slate-950 border border-amber-500/40 p-5 rounded-2xl space-y-4 shadow-inner">
             <div className="flex items-start gap-3">
               <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0">
-                <FileCode className="w-6 h-6" />
+                {hasImages ? <FileArchive className="w-6 h-6 text-amber-400" /> : <FileCode className="w-6 h-6" />}
               </div>
               <div>
                 <h4 className="font-bold text-base text-amber-300">
-                  Exportar Juego Completo en HTML Autónomo
+                  {hasImages ? 'Exportar Juego Completo (Paquete ZIP con carpeta IMG)' : 'Exportar Juego Completo en HTML Autónomo'}
                 </h4>
                 <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                  Genera un único archivo <code className="text-amber-300">.html</code> independiente que incluye el motor de lectura, los verbos, el sistema de salvado/carga y todo tu juego. Funciona sin internet ni servidor.
+                  {hasImages
+                    ? 'Tu juego incluye imágenes locales. Se generará un archivo ZIP que contiene la estructura HTML autónoma y la carpeta IMG con todas tus imágenes.'
+                    : 'Genera un único archivo .html independiente que incluye el motor de lectura, los verbos, el selector de dificultad, el sistema de salvado/carga y todo tu juego.'}
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={handleExportHTML}
-              className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              <span>Descargar HTML del Juego Independiente</span>
-            </button>
+            {hasImages ? (
+              <div className="space-y-2">
+                <button
+                  onClick={handleExportZip}
+                  disabled={isExportingZip}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition-colors disabled:opacity-50"
+                >
+                  <Archive className="w-4 h-4" />
+                  <span>{isExportingZip ? 'Generando ZIP con carpeta IMG...' : 'Descargar Juego Completo en ZIP (.zip)'}</span>
+                </button>
+                <button
+                  onClick={handleExportHTML}
+                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700 transition-colors"
+                >
+                  <FileCode className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Descargar sólo el archivo HTML autónomo</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  onClick={handleExportHTML}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Descargar HTML del Juego Independiente</span>
+                </button>
+                <button
+                  onClick={handleExportZip}
+                  disabled={isExportingZip}
+                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 font-medium rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-800 transition-colors"
+                >
+                  <Archive className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Exportar como ZIP (.zip)</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Export / Import JSON Project */}

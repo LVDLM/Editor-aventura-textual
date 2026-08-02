@@ -4,8 +4,34 @@ import { GameProject } from '../types';
  * Generates a self-contained single-file HTML game that requires no external dependencies or servers.
  * It contains the full play runtime, styles, save/load engine, and embedded project data.
  */
-export function generateStandaloneHTML(project: GameProject): string {
-  const jsonProject = JSON.stringify(project).replace(/</g, '\\u003c');
+export function generateStandaloneHTML(project: GameProject, isForZip: boolean = false): string {
+  // If exporting for ZIP, resolve image path references to img/ folder
+  const processedProject = JSON.parse(JSON.stringify(project)) as GameProject;
+  if (isForZip) {
+    for (const item of processedProject.inventoryItems) {
+      if (item.imageFileName) {
+        item.imageUrl = `img/${item.imageFileName}`;
+        item.imageFileData = undefined;
+      }
+    }
+    for (const scene of processedProject.scenes) {
+      for (const block of scene.textBlocks) {
+        if (block.imageFileName) {
+          block.imageUrl = `img/${block.imageFileName}`;
+          block.imageFileData = undefined;
+        }
+      }
+    }
+  }
+
+  // Guarantee valid initialSceneId
+  const initialSceneExists = (processedProject.scenes || []).some((s) => s.id === processedProject.initialSceneId);
+  if (!initialSceneExists && processedProject.scenes && processedProject.scenes.length > 0) {
+    const portadaScene = processedProject.scenes.find((s) => s.type === 'portada');
+    processedProject.initialSceneId = portadaScene ? portadaScene.id : processedProject.scenes[0].id;
+  }
+
+  const jsonProject = JSON.stringify(processedProject, null, 2).replace(/</g, '\\u003c');
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -92,6 +118,12 @@ export function generateStandaloneHTML(project: GameProject): string {
       background-color: rgba(234, 179, 8, 0.2);
       color: #ffffff;
       text-decoration-color: var(--accent);
+    }
+    .hotspot-plain {
+      color: inherit;
+      cursor: pointer;
+      padding: 0 1px;
+      border-radius: 4px;
     }
 
     .response-box {
@@ -201,7 +233,15 @@ export function generateStandaloneHTML(project: GameProject): string {
       <h1 id="game-title">Aventura</h1>
       <div class="author" id="game-author"></div>
     </div>
-    <div>
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+      <div class="difficulty-picker" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+        <label for="difficulty-select" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Dificultad:</label>
+        <select id="difficulty-select" onchange="changeDifficulty(this.value)" style="background: #0f172a; color: var(--accent); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; outline: none;">
+          <option value="easy">🌟 Fácil</option>
+          <option value="normal">🔍 Normal</option>
+          <option value="hard">💀 Difícil</option>
+        </select>
+      </div>
       <button class="btn" onclick="saveGame()">💾 Guardar</button>
       <button class="btn" onclick="loadGame()">📂 Cargar</button>
       <button class="btn" onclick="resetGame()">🔄 Reiniciar</button>
@@ -243,14 +283,27 @@ export function generateStandaloneHTML(project: GameProject): string {
     </div>
   </div>
 
+  <script type="application/json" id="game-data">
+${jsonProject}
+  </script>
+
   <script>
-    const PROJECT = ${jsonProject};
+    let PROJECT = {};
+    try {
+      PROJECT = JSON.parse(document.getElementById('game-data').textContent || '{}');
+    } catch (e) {
+      console.error('Error al cargar datos del proyecto:', e);
+    }
 
     let gameState = {
       currentSceneId: PROJECT.initialSceneId,
       inventory: [],
       flags: Object.assign({}, PROJECT.globalFlags || {}),
-      appendedTexts: {}
+      appendedTexts: {},
+      usedHotspotIds: [],
+      verbUseCounts: {},
+      difficulty: PROJECT.difficultyMode || 'easy',
+      isGameOver: false
     };
 
     let activeVerb = null;
@@ -259,41 +312,186 @@ export function generateStandaloneHTML(project: GameProject): string {
     document.getElementById('game-title').innerText = PROJECT.title;
     document.getElementById('game-author').innerText = 'Por ' + PROJECT.author;
 
-    function render() {
-      const scene = PROJECT.scenes.find(s => s.id === gameState.currentSceneId);
-      if (!scene) return;
+    const diffSelect = document.getElementById('difficulty-select');
+    if (diffSelect) {
+      diffSelect.value = gameState.difficulty;
+    }
 
+    function changeDifficulty(mode) {
+      gameState.difficulty = mode;
+      render();
+    }
+
+    function getActiveScene() {
+      let scene = (PROJECT.scenes || []).find(s => s.id === gameState.currentSceneId);
+      if (!scene && PROJECT.scenes && PROJECT.scenes.length > 0) {
+        const portadaScene = PROJECT.scenes.find(s => s.type === 'portada');
+        scene = portadaScene || PROJECT.scenes[0];
+        gameState.currentSceneId = scene.id;
+      }
+      return scene;
+    }
+
+    const GAME_OVER_TAG = /\\[(?:Terminar \\/ Cargar partida|Terminar|Cargar partida|Fin de partida)\\]/i;
+    const GAME_OVER_TAG_GLOBAL = /(\\[(?:Terminar \\/ Cargar partida|Terminar|Cargar partida|Fin de partida)\\])/gi;
+
+    function checkGameOverTag(str) {
+      if (!str) return false;
+      return GAME_OVER_TAG.test(str);
+    }
+
+    function stripGameOverTag(str) {
+      if (!str) return '';
+      return str.replace(GAME_OVER_TAG_GLOBAL, '').trim();
+    }
+
+    function isGameOverState() {
+      if (gameState.isGameOver) return true;
+      const scene = getActiveScene();
+      if (!scene) return false;
+      const hasBlockGameOver = (scene.textBlocks || []).some(b => b.isGameOver || checkGameOverTag(b.text));
+      if (hasBlockGameOver) return true;
+      const appended = gameState.appendedTexts[scene.id] || [];
+      const hasAppendedGameOver = appended.some(t => checkGameOverTag(t));
+      return hasAppendedGameOver;
+    }
+
+    function escapeRegExp(str) {
+      return (str || '').replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');
+    }
+
+    function escapeHTML(str) {
+      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function parseInteractiveText(text, scene) {
+      if (!text) return '';
+      if (isGameOverState()) return escapeHTML(text);
+      if (!scene || !scene.hotspots || scene.hotspots.length === 0) return escapeHTML(text);
+
+      const activeHotspots = scene.hotspots.filter(h => {
+        if (!h.initialVisible) return false;
+        return checkConditions(h.visibleIfFlags, h.hiddenIfFlags);
+      });
+
+      if (activeHotspots.length === 0) return escapeHTML(text);
+
+      const sortedHotspots = [...activeHotspots].sort((a, b) => b.word.length - a.word.length);
+      const pattern = new RegExp('(' + sortedHotspots.map(h => escapeRegExp(h.word)).join('|') + ')', 'gi');
+
+      const parts = text.split(pattern);
+      const isNormalMode = gameState.difficulty === 'normal';
+      const isHardMode = gameState.difficulty === 'hard';
+      const usedHotspots = gameState.usedHotspotIds || [];
+
+      let html = '';
+      parts.forEach(part => {
+        const matchedHotspot = sortedHotspots.find(h => h.word.toLowerCase() === part.toLowerCase());
+        if (matchedHotspot) {
+          const isUsed = usedHotspots.includes(matchedHotspot.id);
+          const safeTitle = escapeHTML(matchedHotspot.label || matchedHotspot.word);
+          const safeWord = escapeHTML(part);
+
+          if (isHardMode) {
+            html += '<span class="hotspot-plain" onclick="clickHotspot(\\\'' + matchedHotspot.id + '\\\', event)">' + safeWord + '</span>';
+          } else if (isNormalMode && !isUsed) {
+            html += '<span class="hotspot-plain" onclick="clickHotspot(\\\'' + matchedHotspot.id + '\\\', event)">' + safeWord + '</span>';
+          } else {
+            html += '<span class="hotspot" onclick="clickHotspot(\\\'' + matchedHotspot.id + '\\\', event)" title="Interactuar con ' + safeTitle + '">' + safeWord + '</span>';
+          }
+        } else {
+          html += escapeHTML(part);
+        }
+      });
+
+      return html;
+    }
+
+    function renderTextBlock(text, scene) {
+      if (checkGameOverTag(text)) {
+        const parts = text.split(GAME_OVER_TAG_GLOBAL);
+        let html = '';
+        parts.forEach(part => {
+          if (checkGameOverTag(part)) {
+            html += '<div style="margin: 1.25rem 0; padding: 1.25rem; background: #450a0a; border: 1px solid #f43f5e; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; box-shadow: 0 4px 15px rgba(244, 63, 94, 0.2);">' +
+                      '<span style="color: #fda4af; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;">💀 Fin de la partida</span>' +
+                      '<div style="display: flex; gap: 0.5rem;">' +
+                        '<button class="btn" style="background: #e11d48; color: #fff;" onclick="resetGame()">🔄 Reiniciar</button>' +
+                        '<button class="btn" onclick="loadGame()">📂 Cargar partida</button>' +
+                      '</div>' +
+                    '</div>';
+          } else if (part) {
+            html += parseInteractiveText(part, scene);
+          }
+        });
+        return html;
+      }
+      return parseInteractiveText(text, scene);
+    }
+
+    function getImageSrc(itemOrBlock) {
+      if (!itemOrBlock) return '';
+      if (itemOrBlock.imageFileName) return 'img/' + itemOrBlock.imageFileName;
+      return itemOrBlock.imageFileData || itemOrBlock.imageUrl || '';
+    }
+
+    function render() {
+      const scene = getActiveScene();
       const storyCard = document.getElementById('story-content');
+      if (!scene) {
+        if (storyCard) storyCard.innerHTML = '<p style="color: #94a3b8; font-style: italic;">No hay escenas disponibles en este juego.</p>';
+        return;
+      }
+
       let combinedHTML = '';
 
+      if (scene.type === 'portada') {
+        combinedHTML += '<div style="font-size: 0.75rem; font-weight: bold; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(245, 158, 11, 0.2); padding-bottom: 0.5rem;">✨ Escena de Portada</div>';
+      } else if (scene.type === 'introduccion') {
+        combinedHTML += '<div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(14, 165, 233, 0.2); padding-bottom: 0.5rem;">📖 Escena de Introducción</div>';
+      }
+
       // Text blocks
-      scene.textBlocks.forEach(block => {
+      (scene.textBlocks || []).forEach((block, bIdx) => {
         if (checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
-          combinedHTML += '<p style="margin-bottom: 1rem;">' + parseInteractiveText(block.text, scene) + '</p>';
+          const imgSrc = getImageSrc(block);
+          const isPortada = block.type === 'portada' || scene.type === 'portada';
+          const hasText = !!(block.text && block.text.trim().length > 0);
+
+          combinedHTML += '<div id="block-' + block.id + '" style="margin-bottom: 1.25rem;">';
+
+          if (imgSrc) {
+            if (isPortada) {
+              combinedHTML += '<div style="margin-bottom: 1rem; text-align: center;"><img src="' + escapeHTML(imgSrc) + '" alt="Portada" style="width: 100%; max-height: 380px; object-fit: cover; border-radius: 16px; border: 2px solid var(--accent); box-shadow: 0 8px 25px rgba(0,0,0,0.5);" /></div>';
+            } else {
+              combinedHTML += '<div style="margin-bottom: 1rem; text-align: center;"><img src="' + escapeHTML(imgSrc) + '" alt="Ilustración" style="display: block; width: 100%; max-height: 280px; object-fit: cover; border-radius: 12px; margin: 0 auto; border: 1px solid var(--border-color);" /></div>';
+            }
+          }
+
+          if (hasText) {
+            combinedHTML += '<p style="margin-bottom: 0.75rem;">' + renderTextBlock(block.text, scene) + '</p>';
+          }
+
+          combinedHTML += '</div>';
         }
       });
 
       // Appended texts for scene
       const appended = gameState.appendedTexts[scene.id] || [];
       appended.forEach(t => {
-        combinedHTML += '<p style="margin-bottom: 1rem; color: #fef08a;">' + parseInteractiveText(t, scene) + '</p>';
+        combinedHTML += '<p style="margin-bottom: 1rem; color: #fef08a;">' + renderTextBlock(t, scene) + '</p>';
       });
 
-      storyCard.innerHTML = combinedHTML;
+      if (!combinedHTML) {
+        combinedHTML = '<p style="color: #94a3b8; font-style: italic;">No hay texto disponible para mostrar en esta escena.</p>';
+      }
+
+      if (storyCard) storyCard.innerHTML = combinedHTML;
       renderInventory();
       updateSentenceBar();
-    }
 
-    function parseInteractiveText(text, scene) {
-      let result = text;
-      scene.hotspots.forEach(hs => {
-        if (!hs.initialVisible) return;
-        if (!checkConditions(hs.visibleIfFlags, hs.hiddenIfFlags)) return;
-
-        const regex = new RegExp('(\\\\b' + escapeRegExp(hs.word) + '\\\\b)', 'gi');
-        result = result.replace(regex, '<span class="hotspot" onclick="clickHotspot(\\'' + hs.id + '\\', event)">$1</span>');
-      });
-      return result;
+      const diffSelectEl = document.getElementById('difficulty-select');
+      if (diffSelectEl) diffSelectEl.value = gameState.difficulty;
     }
 
     function checkConditions(visibleFlags, hiddenFlags) {
@@ -322,6 +520,22 @@ export function generateStandaloneHTML(project: GameProject): string {
       selectedInventoryItem = selectedInventoryItem === id ? null : id;
       renderInventory();
       updateSentenceBar();
+
+      if (selectedInventoryItem) {
+        const item = PROJECT.inventoryItems.find(i => i.id === selectedInventoryItem);
+        if (item) {
+          const responseBox = document.getElementById('response-box');
+          responseBox.style.display = 'block';
+          const cleanDesc = stripGameOverTag(item.description || '');
+          let html = '<div style="font-weight: 700; font-size: 1.05rem; color: var(--accent); margin-bottom: 0.25rem;">📦 ' + escapeHTML(item.name) + '</div>' +
+                     '<div>' + escapeHTML(cleanDesc || 'Sin descripción.') + '</div>';
+          const itemImg = getImageSrc(item);
+          if (itemImg) {
+            html += '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImg) + '" alt="' + escapeHTML(item.name) + '" style="max-height: 180px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+          }
+          responseBox.innerHTML = html;
+        }
+      }
     }
 
     function renderInventory() {
@@ -335,7 +549,7 @@ export function generateStandaloneHTML(project: GameProject): string {
         const item = PROJECT.inventoryItems.find(i => i.id === itemId);
         if (!item) return '';
         const isSel = selectedInventoryItem === itemId ? 'selected' : '';
-        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\'' + itemId + '\\')">📦 ' + escapeHTML(item.name) + '</div>';
+        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\\'' + itemId + '\\\')">📦 ' + escapeHTML(item.name) + '</div>';
       }).join('');
     }
 
@@ -366,16 +580,23 @@ export function generateStandaloneHTML(project: GameProject): string {
     }
 
     function clickHotspot(hotspotId, event) {
-      event.stopPropagation();
-      const scene = PROJECT.scenes.find(s => s.id === gameState.currentSceneId);
+      if (event) event.stopPropagation();
+      if (isGameOverState()) return;
+
+      const scene = getActiveScene();
       if (!scene) return;
-      const hs = scene.hotspots.find(h => h.id === hotspotId);
+      const hs = (scene.hotspots || []).find(h => h.id === hotspotId);
       if (!hs) return;
+
+      if (!gameState.usedHotspotIds) gameState.usedHotspotIds = [];
+      if (!gameState.usedHotspotIds.includes(hs.id)) {
+        gameState.usedHotspotIds.push(hs.id);
+      }
 
       const verbToUse = activeVerb || 'mirar';
 
-      // Find action rule
-      const rule = hs.actions.find(a => {
+      // Find all matching action rules for this verb
+      const matchingRules = hs.actions.filter(a => {
         if (a.verb !== verbToUse) return false;
         if (a.requiredItemId && selectedInventoryItem !== a.requiredItemId && !gameState.inventory.includes(a.requiredItemId)) {
           return false;
@@ -383,17 +604,37 @@ export function generateStandaloneHTML(project: GameProject): string {
         return true;
       });
 
+      const useKey = hs.id + '_' + verbToUse;
+      const currentUseCount = gameState.verbUseCounts[useKey] || 0;
+      const ruleIndex = matchingRules.length > 0 ? Math.min(currentUseCount, matchingRules.length - 1) : -1;
+      const rule = ruleIndex >= 0 ? matchingRules[ruleIndex] : null;
+
+      gameState.verbUseCounts[useKey] = (gameState.verbUseCounts[useKey] || 0) + 1;
+
       const responseBox = document.getElementById('response-box');
       responseBox.style.display = 'block';
 
       if (rule) {
-        responseBox.innerText = rule.responseMessage;
-        
+        let msg = stripGameOverTag(rule.responseMessage || '');
+        let addedImgHtml = '';
+
+        const isRuleGameOver = !!rule.isGameOver || !!(rule.stateChange && rule.stateChange.isGameOver) || checkGameOverTag(rule.responseMessage || '');
+        if (isRuleGameOver) {
+          gameState.isGameOver = true;
+        }
+
         if (rule.stateChange) {
           const sc = rule.stateChange;
           if (sc.setFlags) Object.assign(gameState.flags, sc.setFlags);
           if (sc.addItemId && !gameState.inventory.includes(sc.addItemId)) {
             gameState.inventory.push(sc.addItemId);
+            const addedItem = PROJECT.inventoryItems.find(i => i.id === sc.addItemId);
+            if (addedItem) {
+              const itemImg = getImageSrc(addedItem);
+              if (itemImg) {
+                addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImg) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+              }
+            }
           }
           if (sc.removeItemId) {
             gameState.inventory = gameState.inventory.filter(i => i !== sc.removeItemId);
@@ -403,17 +644,21 @@ export function generateStandaloneHTML(project: GameProject): string {
               gameState.appendedTexts[gameState.currentSceneId] = [];
             }
             gameState.appendedTexts[gameState.currentSceneId].push(sc.appendStoryText);
+            if (checkGameOverTag(sc.appendStoryText)) {
+              gameState.isGameOver = true;
+            }
           }
           if (sc.goToSceneId) {
             gameState.currentSceneId = sc.goToSceneId;
           }
         }
+        responseBox.innerHTML = '<div>' + escapeHTML(msg) + '</div>' + addedImgHtml;
       } else {
         // Fallback response
         const fallback = (hs.customDefaultResponses && hs.customDefaultResponses[verbToUse]) ||
                          (PROJECT.defaultResponses && PROJECT.defaultResponses[verbToUse]) ||
                          'Eso no parece funcionar.';
-        responseBox.innerText = fallback;
+        responseBox.innerText = stripGameOverTag(fallback);
       }
 
       clearSentence();
@@ -421,18 +666,30 @@ export function generateStandaloneHTML(project: GameProject): string {
     }
 
     function saveGame() {
-      localStorage.setItem('html_adventure_save_' + PROJECT.id, JSON.stringify(gameState));
-      alert('¡Partida guardada correctamente!');
+      try {
+        localStorage.setItem('html_adventure_save_' + PROJECT.id, JSON.stringify(gameState));
+        alert('¡Partida guardada correctamente!');
+      } catch (e) {
+        alert('No se pudo guardar la partida en el almacenamiento local del navegador.');
+      }
     }
 
     function loadGame() {
-      const data = localStorage.getItem('html_adventure_save_' + PROJECT.id);
-      if (data) {
-        gameState = JSON.parse(data);
-        alert('¡Partida cargada!');
-        render();
-      } else {
-        alert('No hay ninguna partida guardada.');
+      try {
+        const data = localStorage.getItem('html_adventure_save_' + PROJECT.id);
+        if (data) {
+          gameState = JSON.parse(data);
+          if (!gameState.verbUseCounts) gameState.verbUseCounts = {};
+          if (!gameState.usedHotspotIds) gameState.usedHotspotIds = [];
+          if (!gameState.difficulty) gameState.difficulty = PROJECT.difficultyMode || 'easy';
+          if (gameState.isGameOver === undefined) gameState.isGameOver = false;
+          alert('¡Partida cargada!');
+          render();
+        } else {
+          alert('No hay ninguna partida guardada.');
+        }
+      } catch (e) {
+        alert('No se pudo acceder a la partida guardada en el almacenamiento local.');
       }
     }
 
@@ -442,20 +699,16 @@ export function generateStandaloneHTML(project: GameProject): string {
           currentSceneId: PROJECT.initialSceneId,
           inventory: [],
           flags: Object.assign({}, PROJECT.globalFlags || {}),
-          appendedTexts: {}
+          appendedTexts: {},
+          usedHotspotIds: [],
+          verbUseCounts: {},
+          difficulty: PROJECT.difficultyMode || 'easy',
+          isGameOver: false
         };
         document.getElementById('response-box').style.display = 'none';
         clearSentence();
         render();
       }
-    }
-
-    function escapeRegExp(string) {
-      return string.replace(/[.*+?^$\\{}()|[\\]\\\\]/g, '\\\\$&');
-    }
-
-    function escapeHTML(str) {
-      return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     render();
