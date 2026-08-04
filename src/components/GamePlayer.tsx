@@ -861,29 +861,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
           )}
 
-          {currentScene?.type === 'portada' && (
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-amber-400 uppercase tracking-widest mb-4 pb-2 border-b border-amber-500/20">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>Escena de Portada</span>
-              </div>
-              <button
-                onClick={() => setShowDetailsModal(true)}
-                className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs cursor-pointer shadow-sm"
-              >
-                <Info className="w-3.5 h-3.5 text-amber-400" />
-                <span>Ver más detalles</span>
-              </button>
-            </div>
-          )}
-
-          {currentScene?.type === 'introduccion' && (
-            <div className="flex items-center gap-2 text-xs font-bold text-sky-400 uppercase tracking-widest mb-4 pb-2 border-b border-sky-500/20">
-              <BookOpen className="w-4 h-4 text-sky-400" />
-              <span>Escena de Introducción</span>
-            </div>
-          )}
-          
           {/* Main Story Text Blocks */}
           <div className={`space-y-6 text-lg leading-relaxed ${themeConfig.textMainClass} relative z-10`}>
             {currentScene?.textBlocks.map((block) => {

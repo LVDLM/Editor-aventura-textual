@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
 import { HotspotEditorModal } from './HotspotEditorModal';
+import { validateProjectScenes } from '../../utils/sceneValidator';
+import { ValidationPanel } from './ValidationPanel';
 import {
   FileText,
   Plus,
@@ -21,6 +23,17 @@ import {
   ChevronDown,
   Clock,
   Skull,
+  AlertTriangle,
+  AlertCircle,
+  Link2,
+  CornerDownLeft,
+  Bold,
+  Italic,
+  Underline,
+  Type,
+  Heading1,
+  Heading2,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface SceneEditorProps {
@@ -42,6 +55,65 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   // Selection keyword helper
   const [selectedText, setSelectedText] = useState('');
   const [manualKeyword, setManualKeyword] = useState('');
+
+  // Image section visibility & textarea refs for text formatting toolbar
+  const [openImageSectionBlockIds, setOpenImageSectionBlockIds] = useState<Record<string, boolean>>({});
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+
+  const applyTextFormat = (
+    blockId: string,
+    currentText: string,
+    formatType: 'bold' | 'italic' | 'underline' | 'h1' | 'h2' | 'normal'
+  ) => {
+    const el = textareaRefs.current[blockId];
+    if (!el) return;
+
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selectedTextSegment = currentText.substring(start, end);
+
+    let replacement = '';
+    let cursorOffset = 0;
+
+    switch (formatType) {
+      case 'bold':
+        replacement = `<b>${selectedTextSegment || 'texto en negrita'}</b>`;
+        cursorOffset = selectedTextSegment ? replacement.length : 3;
+        break;
+      case 'italic':
+        replacement = `<i>${selectedTextSegment || 'texto en cursiva'}</i>`;
+        cursorOffset = selectedTextSegment ? replacement.length : 3;
+        break;
+      case 'underline':
+        replacement = `<u>${selectedTextSegment || 'texto subrayado'}</u>`;
+        cursorOffset = selectedTextSegment ? replacement.length : 3;
+        break;
+      case 'h1':
+        replacement = `<h1>${selectedTextSegment || 'Encabezado 1'}</h1>`;
+        cursorOffset = selectedTextSegment ? replacement.length : 4;
+        break;
+      case 'h2':
+        replacement = `<h2>${selectedTextSegment || 'Encabezado 2'}</h2>`;
+        cursorOffset = selectedTextSegment ? replacement.length : 4;
+        break;
+      case 'normal':
+        replacement = selectedTextSegment
+          .replace(/<\/?(h1|h2|b|i|u)>/gi, '')
+          .replace(/^(#\s*|##\s*)/, '');
+        cursorOffset = replacement.length;
+        break;
+    }
+
+    const newText = currentText.substring(0, start) + replacement + currentText.substring(end);
+    handleUpdateBlockText(blockId, newText);
+
+    setTimeout(() => {
+      if (el) {
+        el.focus();
+        el.setSelectionRange(start + cursorOffset, start + cursorOffset);
+      }
+    }, 50);
+  };
 
   const activeScene = project.scenes.find((s) => s.id === selectedSceneId) || project.scenes[0];
   const flagKeys = Object.keys(project.globalFlags || {});
@@ -438,135 +510,172 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     }));
   };
 
+  const validationIssues = validateProjectScenes(project);
+  const activeSceneIssues = validationIssues.filter((i) => i.sceneId === activeScene?.id);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      
-      {/* Scenes List Sidebar */}
-      <div className="lg:col-span-1 bg-[#0c0c0e] border border-white/10 rounded-2xl p-5 space-y-4 h-fit">
-        <div className="flex items-center justify-between border-b border-white/5 pb-3">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-amber-500" />
-            <h3 className="text-[10px] uppercase tracking-widest text-white/40 font-bold">
-              Escenas ({project.scenes.length})
-            </h3>
+    <div className="space-y-6">
+      {/* Top Validation & Audit Panel */}
+      <ValidationPanel
+        issues={validationIssues}
+        onSelectScene={setSelectedSceneId}
+        activeSceneId={activeScene?.id}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        
+        {/* Scenes List Sidebar */}
+        <div className="lg:col-span-1 bg-[#0c0c0e] border border-white/10 rounded-2xl p-5 space-y-4 h-fit">
+          <div className="flex items-center justify-between border-b border-white/5 pb-3">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-500" />
+              <h3 className="text-[10px] uppercase tracking-widest text-white/40 font-bold">
+                Escenas ({project.scenes.length})
+              </h3>
+            </div>
+          </div>
+
+          {/* Add scene */}
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={newSceneName}
+              onChange={(e) => setNewSceneName(e.target.value)}
+              className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-500 outline-none"
+              placeholder="Nombre de la escena..."
+            />
+            
+            <select
+              value={newSceneType}
+              onChange={(e) => setNewSceneType(e.target.value as any)}
+              className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/80 focus:border-amber-500 outline-none"
+            >
+              <option value="normal">Escena Normal de Aventura</option>
+              <option value="portada">🖼️ Escena de Portada</option>
+              <option value="introduccion">📖 Escena de Introducción</option>
+              <option value="qte">⚡ Escena Especial: Quick Time Event (QTE)</option>
+            </select>
+
+            <button
+              onClick={handleCreateScene}
+              className="w-full px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Añadir Escena</span>
+            </button>
+          </div>
+
+          {/* Scene list */}
+          <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
+            {project.scenes.map((scene, index) => {
+              const isSelected = scene.id === activeScene?.id;
+              const isInitial = scene.id === project.initialSceneId;
+              const isQTE = scene.type === 'qte' || !!scene.qteConfig;
+              const sceneIssues = validationIssues.filter((i) => i.sceneId === scene.id);
+              const hasUnlinked = sceneIssues.some((i) => i.type === 'unlinked');
+              const hasNoReturn = sceneIssues.some((i) => i.type === 'no_return');
+              const hasDeadEnd = sceneIssues.some((i) => i.type === 'dead_end');
+
+              return (
+                <div
+                  key={scene.id}
+                  onClick={() => setSelectedSceneId(scene.id)}
+                  className={`w-full text-left p-2.5 rounded-r-lg border-y border-r transition-all cursor-pointer flex items-center justify-between group ${
+                    isSelected
+                      ? 'bg-white/5 border-l-2 border-amber-500 border-white/10 text-white font-medium'
+                      : 'bg-black/30 border-white/5 border-l-transparent text-white/40 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs truncate max-w-[110px]">{scene.name}</span>
+                      {scene.type === 'portada' && (
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold px-1 py-0.2 rounded">
+                          PORTADA
+                        </span>
+                      )}
+                      {scene.type === 'introduccion' && (
+                        <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 font-mono font-bold px-1 py-0.2 rounded">
+                          INTRO
+                        </span>
+                      )}
+                      {isQTE && (
+                        <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded flex items-center gap-0.5 shadow-sm">
+                          ⚡ QTE
+                        </span>
+                      )}
+                      {isInitial && (
+                        <span className="text-[9px] bg-emerald-500 text-black font-mono font-bold px-1.5 py-0.2 rounded">
+                          INICIO
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Validation Warning Badges on Sidebar */}
+                    {sceneIssues.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        {hasUnlinked && (
+                          <span className="text-[9px] bg-rose-500/30 text-rose-300 border border-rose-500/40 font-mono font-bold px-1 py-0.2 rounded flex items-center gap-0.5" title="Párrafo no vinculado desde ninguna otra escena">
+                            🔴 No vinculado
+                          </span>
+                        )}
+                        {hasNoReturn && (
+                          <span className="text-[9px] bg-amber-500/30 text-amber-300 border border-amber-500/40 font-mono font-bold px-1 py-0.2 rounded flex items-center gap-0.5" title="Sin acción ni opción para regresar a la escena anterior">
+                            ⚠️ Sin retorno
+                          </span>
+                        )}
+                        {hasDeadEnd && (
+                          <span className="text-[9px] bg-amber-500/30 text-amber-300 border border-amber-500/40 font-mono font-bold px-1 py-0.2 rounded flex items-center gap-0.5" title="Sin enlaces salientes ni fin de juego">
+                            ⚠️ Sin salida
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <span className="text-[10px] text-white/30 font-normal block">
+                      {scene.hotspots.length} palabras clave
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveScene(index, 'up');
+                      }}
+                      disabled={index === 0}
+                      className="p-1 text-white/40 hover:text-amber-400 disabled:opacity-20 hover:bg-white/10 rounded transition-colors cursor-pointer"
+                      title="Mover arriba"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveScene(index, 'down');
+                      }}
+                      disabled={index === project.scenes.length - 1}
+                      className="p-1 text-white/40 hover:text-amber-400 disabled:opacity-20 hover:bg-white/10 rounded transition-colors cursor-pointer"
+                      title="Mover abajo"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteScene(scene.id);
+                      }}
+                      className="p-1 text-white/30 hover:text-rose-400 hover:bg-white/10 rounded transition-colors cursor-pointer"
+                      title="Eliminar escena"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-
-        {/* Add scene */}
-        <div className="space-y-2">
-          <input
-            type="text"
-            value={newSceneName}
-            onChange={(e) => setNewSceneName(e.target.value)}
-            className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:border-amber-500 outline-none"
-            placeholder="Nombre de la escena..."
-          />
-          
-          <select
-            value={newSceneType}
-            onChange={(e) => setNewSceneType(e.target.value as any)}
-            className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/80 focus:border-amber-500 outline-none"
-          >
-            <option value="normal">Escena Normal de Aventura</option>
-            <option value="portada">🖼️ Escena de Portada</option>
-            <option value="introduccion">📖 Escena de Introducción</option>
-            <option value="qte">⚡ Escena Especial: Quick Time Event (QTE)</option>
-          </select>
-
-          <button
-            onClick={handleCreateScene}
-            className="w-full px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Añadir Escena</span>
-          </button>
-        </div>
-
-        {/* Scene list */}
-        <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
-          {project.scenes.map((scene, index) => {
-            const isSelected = scene.id === activeScene?.id;
-            const isInitial = scene.id === project.initialSceneId;
-            const isQTE = scene.type === 'qte' || !!scene.qteConfig;
-
-            return (
-              <div
-                key={scene.id}
-                onClick={() => setSelectedSceneId(scene.id)}
-                className={`w-full text-left p-2.5 rounded-r-lg border-y border-r transition-all cursor-pointer flex items-center justify-between group ${
-                  isSelected
-                    ? 'bg-white/5 border-l-2 border-amber-500 border-white/10 text-white font-medium'
-                    : 'bg-black/30 border-white/5 border-l-transparent text-white/40 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs truncate max-w-[110px]">{scene.name}</span>
-                    {scene.type === 'portada' && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold px-1 py-0.2 rounded">
-                        PORTADA
-                      </span>
-                    )}
-                    {scene.type === 'introduccion' && (
-                      <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 font-mono font-bold px-1 py-0.2 rounded">
-                        INTRO
-                      </span>
-                    )}
-                    {isQTE && (
-                      <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded flex items-center gap-0.5 shadow-sm">
-                        ⚡ QTE
-                      </span>
-                    )}
-                    {isInitial && (
-                      <span className="text-[9px] bg-emerald-500 text-black font-mono font-bold px-1.5 py-0.2 rounded">
-                        INICIO
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10px] text-white/30 font-normal block mt-0.5">
-                    {scene.hotspots.length} palabras clave
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMoveScene(index, 'up');
-                    }}
-                    disabled={index === 0}
-                    className="p-1 text-white/40 hover:text-amber-400 disabled:opacity-20 hover:bg-white/10 rounded transition-colors"
-                    title="Mover arriba"
-                  >
-                    <ChevronUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleMoveScene(index, 'down');
-                    }}
-                    disabled={index === project.scenes.length - 1}
-                    className="p-1 text-white/40 hover:text-amber-400 disabled:opacity-20 hover:bg-white/10 rounded transition-colors"
-                    title="Mover abajo"
-                  >
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteScene(scene.id);
-                    }}
-                    className="p-1 text-white/30 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
-                    title="Eliminar escena"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Main Scene Editor & Hotspots Workspace */}
       <div className="lg:col-span-3 space-y-6">
@@ -593,6 +702,34 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               </h3>
             </div>
           </div>
+
+          {/* Active Scene Specific Validation Alerts */}
+          {activeSceneIssues.length > 0 && (
+            <div className="space-y-2 relative z-10">
+              {activeSceneIssues.map((issue) => (
+                <div
+                  key={issue.id}
+                  className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+                    issue.type === 'unlinked'
+                      ? 'bg-rose-950/50 border-rose-500/40 text-rose-200'
+                      : 'bg-amber-950/50 border-amber-500/40 text-amber-200'
+                  }`}
+                >
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                  <div className="space-y-1">
+                    <div className="font-bold flex items-center gap-2">
+                      <span>{issue.title}</span>
+                      <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-black/40 border border-current">
+                        {issue.type === 'unlinked' ? 'ERROR DE VINCULACIÓN' : 'ALERTA DE RETORNO/SALIDA'}
+                      </span>
+                    </div>
+                    <p>{issue.message}</p>
+                    <p className="font-mono text-[11px] text-amber-300">💡 {issue.suggestion}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
             <div>
@@ -1162,71 +1299,165 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     </div>
                   </div>
 
-                  {/* Image for Paragraph */}
-                  <div className="bg-black/30 border border-white/5 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                        <span className="text-amber-400">🖼️</span>
-                        <span>Imagen del Párrafo {block.type === 'portada' ? '(Portada)' : '(Escena / Lugar)'}</span>
-                      </label>
-                      {(block.imageFileData || block.imageUrl) && (
-                        <button
-                          type="button"
-                          onClick={() => handleClearBlockImage(block.id)}
-                          className="text-[10px] text-rose-400 hover:text-rose-300 underline"
-                        >
-                          Quitar Imagen
-                        </button>
+                  {/* Image for Paragraph (Expanded if image exists OR if toggled via Insertar Imagen button) */}
+                  {(block.imageFileData || block.imageUrl || openImageSectionBlockIds[block.id]) && (
+                    <div className="bg-black/40 border border-amber-500/30 rounded-xl p-3 space-y-2 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                          <ImageIcon className="w-4 h-4 text-amber-400" />
+                          <span>Imagen del Párrafo {block.type === 'portada' ? '(Portada)' : '(Escena / Lugar)'}</span>
+                        </label>
+                        {(block.imageFileData || block.imageUrl) && (
+                          <button
+                            type="button"
+                            onClick={() => handleClearBlockImage(block.id)}
+                            className="text-[10px] text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                          >
+                            Quitar Imagen
+                          </button>
+                        )}
+                      </div>
+
+                      {(block.imageFileData || block.imageUrl) ? (
+                        <div className="flex items-center gap-3 bg-slate-900/90 border border-amber-500/30 rounded-xl p-2.5">
+                          <img
+                            src={block.imageFileData || block.imageUrl}
+                            alt="Previsualización"
+                            className="w-20 h-16 object-cover rounded-lg border border-white/10 shrink-0"
+                          />
+                          <div className="text-xs space-y-1 overflow-hidden">
+                            <p className="font-semibold text-amber-300 truncate">
+                              {block.imageFileName || 'Imagen cargada'}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              Se exportará dentro de la carpeta <code className="text-amber-200">IMG/</code> si exportas en ZIP.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <label className="flex items-center justify-center gap-2 py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-xl cursor-pointer text-xs text-slate-300 transition-colors">
+                            <span>📂 Subir archivo de imagen</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleBlockImageUpload(block.id, f);
+                              }}
+                            />
+                          </label>
+                          <input
+                            type="text"
+                            value={block.imageUrl || ''}
+                            onChange={(e) => handleUpdateBlockImageUrl(block.id, e.target.value)}
+                            placeholder="O escribe URL de imagen (https://...)"
+                            className="bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-amber-500 outline-none"
+                          />
+                        </div>
                       )}
                     </div>
+                  )}
 
-                    {(block.imageFileData || block.imageUrl) ? (
-                      <div className="flex items-center gap-3 bg-slate-900/90 border border-amber-500/30 rounded-xl p-2.5">
-                        <img
-                          src={block.imageFileData || block.imageUrl}
-                          alt="Previsualización"
-                          className="w-20 h-16 object-cover rounded-lg border border-white/10 shrink-0"
-                        />
-                        <div className="text-xs space-y-1 overflow-hidden">
-                          <p className="font-semibold text-amber-300 truncate">
-                            {block.imageFileName || 'Imagen cargada'}
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Se exportará dentro de la carpeta <code className="text-amber-200">IMG/</code> si exportas en ZIP.
-                          </p>
-                        </div>
+                  {/* Text Formatting Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-[#16161d] border border-white/10 rounded-t-xl px-3 py-1.5 border-b-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Text Size Selector */}
+                      <div className="flex items-center gap-0.5 bg-black/60 p-0.5 rounded-lg border border-white/10 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => applyTextFormat(block.id, block.text, 'normal')}
+                          className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-white/10 transition-colors font-sans flex items-center gap-1 cursor-pointer"
+                          title="Texto Normal"
+                        >
+                          <Type className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Normal</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTextFormat(block.id, block.text, 'h1')}
+                          className="px-2 py-0.5 rounded text-amber-300 hover:text-amber-200 hover:bg-white/10 transition-colors font-bold flex items-center gap-1 cursor-pointer"
+                          title="Encabezado 1 (Título principal)"
+                        >
+                          <Heading1 className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Encabezado 1</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTextFormat(block.id, block.text, 'h2')}
+                          className="px-2 py-0.5 rounded text-amber-200/90 hover:text-amber-100 hover:bg-white/10 transition-colors font-semibold flex items-center gap-1 cursor-pointer"
+                          title="Encabezado 2 (Subtítulo)"
+                        >
+                          <Heading2 className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Encabezado 2</span>
+                        </button>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <label className="flex items-center justify-center gap-2 py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-xl cursor-pointer text-xs text-slate-300 transition-colors">
-                          <span>📂 Subir archivo de imagen</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) handleBlockImageUpload(block.id, f);
-                            }}
-                          />
-                        </label>
-                        <input
-                          type="text"
-                          value={block.imageUrl || ''}
-                          onChange={(e) => handleUpdateBlockImageUrl(block.id, e.target.value)}
-                          placeholder="O escribe URL de imagen (https://...)"
-                          className="bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-amber-500 outline-none"
-                        />
+
+                      <div className="h-4 w-[1px] bg-white/10 mx-0.5 hidden sm:block" />
+
+                      {/* Style Formatting Buttons */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => applyTextFormat(block.id, block.text, 'bold')}
+                          className="p-1 rounded bg-black/50 hover:bg-white/15 text-slate-200 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                          title="Formatear como Negrita (<b>)"
+                        >
+                          <Bold className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTextFormat(block.id, block.text, 'italic')}
+                          className="p-1 rounded bg-black/50 hover:bg-white/15 text-slate-200 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                          title="Formatear como Cursiva (<i>)"
+                        >
+                          <Italic className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyTextFormat(block.id, block.text, 'underline')}
+                          className="p-1 rounded bg-black/50 hover:bg-white/15 text-slate-200 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                          title="Formatear como Subrayado (<u>)"
+                        >
+                          <Underline className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Insert Image Button */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenImageSectionBlockIds((prev) => ({
+                          ...prev,
+                          [block.id]: !prev[block.id],
+                        }))
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                        block.imageFileData || block.imageUrl || openImageSectionBlockIds[block.id]
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                          : 'bg-black/50 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
+                      }`}
+                      title="Abrir u ocultar opciones de imagen de este párrafo"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Insertar Imagen</span>
+                      {(block.imageFileData || block.imageUrl) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      )}
+                    </button>
                   </div>
 
                   <textarea
+                    ref={(el) => {
+                      textareaRefs.current[block.id] = el;
+                    }}
                     rows={4}
                     value={block.text}
                     onChange={(e) => handleUpdateBlockText(block.id, e.target.value)}
                     onMouseUp={handleMouseUpTextSelection}
-                    className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-white leading-relaxed focus:border-amber-500 outline-none font-serif"
+                    className="w-full bg-black/60 border border-white/10 rounded-b-xl p-3 text-sm text-white leading-relaxed focus:border-amber-500 outline-none font-serif border-t-0"
                     placeholder={`Escribe el texto del párrafo #${index + 1}...`}
                   />
 
@@ -1399,6 +1630,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           )}
         </div>
       </div>
+    </div>
 
       {/* Hotspot Config Modal */}
       {activeHotspotForEdit && (

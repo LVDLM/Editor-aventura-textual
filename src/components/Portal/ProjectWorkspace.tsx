@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameProject, UserProfile, CloudProjectDoc, PublicationStatus } from '../../types';
 import { getUserProjects, saveProjectToCloud, updateProjectStatusInCloud, deleteProjectFromCloud } from '../../lib/firebase';
 import { generateStandaloneHTML } from '../../utils/htmlExporter';
 import { exportProjectAsZip } from '../../utils/zipExporter';
-import { Plus, Edit3, Play, CloudUpload, Send, Trash2, FileCode, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen } from 'lucide-react';
+import { Plus, Edit3, Play, CloudUpload, Send, Trash2, FileCode, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen, Upload, FileJson } from 'lucide-react';
 
 interface ProjectWorkspaceProps {
   currentUser: UserProfile | null;
@@ -29,6 +29,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   const [statusFilter, setStatusFilter] = useState<PublicationStatus | 'all'>('all');
   const [savingCloudId, setSavingCloudId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProjects = async () => {
     if (!currentUser) return;
@@ -36,6 +37,69 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
     const list = await getUserProjects(currentUser.uid);
     setCloudProjects(list);
     setLoading(false);
+  };
+
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target?.result as string) as GameProject;
+        if (parsed.scenes && (parsed.initialSceneId || parsed.title)) {
+          onSelectProject(parsed, null);
+          
+          if (currentUser) {
+            try {
+              const savedDocId = await saveProjectToCloud(
+                parsed.id || `proj_${Date.now()}`,
+                parsed,
+                {
+                  uid: currentUser.uid,
+                  displayName: currentUser.displayName,
+                  email: currentUser.email
+                },
+                'draft'
+              );
+              onSelectProject(parsed, savedDocId);
+              setMessage({
+                type: 'success',
+                text: `¡Proyecto "${parsed.title || 'Importado'}" importado desde el archivo .JSON y guardado en tu nube!`
+              });
+              await fetchProjects();
+            } catch (cloudErr) {
+              console.error(cloudErr);
+              setMessage({
+                type: 'success',
+                text: `¡Proyecto "${parsed.title || 'Importado'}" importado con éxito al editor local!`
+              });
+            }
+          } else {
+            setMessage({
+              type: 'success',
+              text: `¡Proyecto "${parsed.title || 'Importado'}" importado con éxito!`
+            });
+          }
+        } else {
+          setMessage({
+            type: 'error',
+            text: 'El archivo JSON no coincide con la estructura de un proyecto de juego (falta la lista de escenas).'
+          });
+        }
+      } catch (err) {
+        console.error(err);
+        setMessage({
+          type: 'error',
+          text: 'Error al abrir el archivo JSON. Asegúrate de que tenga un formato correcto.'
+        });
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
   useEffect(() => {
@@ -151,19 +215,34 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportJSON}
+            accept=".json,application/json"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+            title="Cargar un archivo de aventura .json exportado previamente"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Importar .JSON</span>
+          </button>
           <button
             onClick={handleSaveActiveToCloud}
             disabled={savingCloudId === 'active'}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
             title="Guardar el proyecto actualmente cargado en el editor a tu espacio en la nube"
           >
             <CloudUpload className="w-4 h-4" />
-            <span>{savingCloudId === 'active' ? 'Guardando...' : 'Guardar Actual en la Nube'}</span>
+            <span>{savingCloudId === 'active' ? 'Guardando...' : 'Guardar Actual en Nube'}</span>
           </button>
           <button
             onClick={onCreateNewProject}
-            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5"
+            className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Nuevo Proyecto</span>
@@ -228,14 +307,29 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
       {loading ? (
         <div className="py-12 text-center text-xs text-slate-400">Cargando tus proyectos guardados en la nube...</div>
       ) : filteredProjects.length === 0 ? (
-        <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-8 text-center space-y-3">
-          <p className="text-xs text-slate-400">No hay proyectos en esta sección.</p>
-          <button
-            onClick={handleSaveActiveToCloud}
-            className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold"
-          >
-            Guardar proyecto activo ({activeProject.title}) en la nube
-          </button>
+        <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-8 text-center space-y-4">
+          <FileJson className="w-10 h-10 text-amber-500/60 mx-auto" />
+          <div>
+            <p className="text-sm font-bold text-slate-200">No hay proyectos en esta categoría</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Puedes guardar tu proyecto actual en la nube o importar un archivo <code className="text-amber-300 font-mono">.json</code> exportado previamente.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+            <button
+              onClick={handleSaveActiveToCloud}
+              className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            >
+              Guardar activo ({activeProject.title}) en la nube
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Subir Archivo .JSON</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

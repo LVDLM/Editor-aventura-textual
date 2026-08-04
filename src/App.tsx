@@ -12,6 +12,9 @@ import { PublicCatalog } from './components/Portal/PublicCatalog';
 import { ProjectWorkspace } from './components/Portal/ProjectWorkspace';
 import { AdminReviewPanel } from './components/Portal/AdminReviewPanel';
 import { AuthModal } from './components/Portal/AuthModal';
+import { UserProfilePage } from './components/Portal/UserProfilePage';
+import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
+import { PrivacyBanner } from './components/Portal/PrivacyBanner';
 import { setSoundEnabled } from './utils/audio';
 import { auth, getUserProfile, createOrUpdateUserProfile } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -40,6 +43,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   // Listen for Firebase Auth state changes
   useEffect(() => {
@@ -259,13 +263,24 @@ export default function App() {
         onOpenExport={() => setShowExport(true)}
         onOpenHelp={() => setShowHelp(true)}
         onOpenAuth={() => setShowAuthModal(true)}
+        onOpenPrivacyModal={() => setShowPrivacyModal(true)}
         onLoadSampleGame={handleLoadSampleGame}
+        isTutorial={
+          project.id === sampleGameProject.id ||
+          project.id === 'sample-game-id' ||
+          project.id === 'tutorial' ||
+          project.title.toLowerCase().includes('tutorial')
+        }
+        isOwnProject={
+          !!(currentUser && (project.author === currentUser.displayName || project.authorId === currentUser.uid))
+        }
       />
 
       {/* Main View Router */}
       <main className="flex-1 flex flex-col">
         {currentView === 'catalog' && (
           <PublicCatalog
+            currentUser={currentUser}
             onPlayProject={(selectedProj) => {
               setProject(selectedProj);
               resetGameStateForProject(selectedProj);
@@ -297,6 +312,7 @@ export default function App() {
             project={project}
             updateProject={handleUpdateProject}
             onSwitchToPlay={() => setCurrentView('play')}
+            currentUser={currentUser}
           />
         )}
 
@@ -336,6 +352,33 @@ export default function App() {
             }}
           />
         )}
+
+        {currentView === 'profile' && currentUser && (
+          <UserProfilePage
+            currentUser={currentUser}
+            setCurrentUser={setCurrentUser}
+            onLoadProjectToEditor={(projData, docId) => {
+              setProject(projData);
+              setCurrentCloudDocId(docId);
+              setCurrentView('edit');
+            }}
+            onLoadGameStateToPlay={(projData, slotData) => {
+              setProject(projData);
+              setGameState({
+                currentSceneId: slotData.currentSceneId,
+                inventory: slotData.inventoryItemIds || [],
+                flags: slotData.flags || {},
+                history: slotData.narrativeHistory || [],
+                appendedTextsPerScene: slotData.appendedTextsPerScene || {},
+                usedHotspotIds: slotData.usedHotspotIds || [],
+                difficulty: slotData.difficulty || 'facil',
+              });
+              setCurrentView('play');
+            }}
+            setCurrentView={setCurrentView}
+            onOpenPrivacyModal={() => setShowPrivacyModal(true)}
+          />
+        )}
       </main>
 
       {/* Modals */}
@@ -357,7 +400,11 @@ export default function App() {
       )}
 
       {showHelp && (
-        <HelpModal onClose={() => setShowHelp(false)} />
+        <HelpModal
+          currentUser={currentUser}
+          currentView={currentView}
+          onClose={() => setShowHelp(false)}
+        />
       )}
 
       {showNewProjectModal && (
@@ -375,6 +422,16 @@ export default function App() {
           onClose={() => setShowAuthModal(false)}
         />
       )}
+
+      {showPrivacyModal && (
+        <PrivacyPolicyModal
+          isLoggedIn={!!currentUser}
+          onClose={() => setShowPrivacyModal(false)}
+          onOpenDeleteAccount={() => setCurrentView('profile')}
+        />
+      )}
+
+      <PrivacyBanner onOpenPrivacyModal={() => setShowPrivacyModal(true)} />
     </div>
   );
 }

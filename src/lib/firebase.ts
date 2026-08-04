@@ -99,6 +99,69 @@ export async function setUserRoleInDb(uid: string, role: UserRole): Promise<void
   await updateDoc(userRef, { role });
 }
 
+export async function updateUserProfileName(uid: string, newDisplayName: string): Promise<UserProfile> {
+  const userRef = doc(db, 'users', uid);
+  const trimmed = newDisplayName.trim() || 'Lector';
+  await updateDoc(userRef, { displayName: trimmed });
+  
+  if (auth.currentUser && auth.currentUser.uid === uid) {
+    try {
+      await updateProfile(auth.currentUser, { displayName: trimmed });
+    } catch (e) {
+      console.warn('Error updating auth profile:', e);
+    }
+  }
+
+  const updated = await getUserProfile(uid);
+  if (updated) return updated;
+
+  return {
+    uid,
+    email: auth.currentUser?.email || '',
+    displayName: trimmed,
+    role: 'author',
+    createdAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Delete account and all user data (RGPD / GDPR Right to be forgotten)
+ */
+export async function deleteUserAccountAndData(uid: string): Promise<void> {
+  try {
+    // 1. Delete user projects from cloud
+    const userProjects = await getUserProjects(uid);
+    for (const proj of userProjects) {
+      try {
+        await deleteProjectFromCloud(proj.id);
+      } catch (e) {
+        console.warn(`Error deleting project ${proj.id}:`, e);
+      }
+    }
+
+    // 2. Delete user profile doc from Firestore
+    const userRef = doc(db, 'users', uid);
+    await deleteDoc(userRef);
+
+    // 3. Clear local storage save slots
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('text_adventure_save_slot_')) {
+        localStorage.removeItem(key);
+      }
+    }
+
+    // 4. Delete Firebase Auth user if logged in
+    if (auth.currentUser && auth.currentUser.uid === uid) {
+      await auth.currentUser.delete();
+    }
+    await signOut(auth);
+  } catch (err) {
+    console.error('Error during account deletion:', err);
+    throw err;
+  }
+}
+
 // Projects Cloud Operations
 
 /**
@@ -179,22 +242,26 @@ export async function saveProjectToCloud(
   const existingSnap = await getDoc(ref);
   const existingData = existingSnap.exists() ? (existingSnap.data() as CloudProjectDoc) : null;
 
-  const docPayload: Partial<CloudProjectDoc> = {
+  const docPayload: Record<string, any> = {
     id: idToUse,
     title: projectData.title || 'Sin Título',
     description: projectData.description || '',
     authorId: author.uid,
-    authorName: author.displayName || 'Autor Anónimo',
+    authorName: projectData.author || author.displayName || 'Autor Anónimo',
     authorEmail: author.email || '',
     status: status,
+    allowDownload: projectData.allowDownload ?? existingData?.allowDownload ?? false,
     projectData: projectData,
     updatedAt: now,
     createdAt: existingData?.createdAt || now,
     reviewFeedback: reviewFeedback || existingData?.reviewFeedback || '',
-    publishedAt: status === 'published' ? (existingData?.publishedAt || now) : existingData?.publishedAt
+    publishedAt: status === 'published' ? (existingData?.publishedAt || now) : (existingData?.publishedAt || null)
   };
 
-  await setDoc(ref, docPayload, { merge: true });
+  // Sanitize object to remove any 'undefined' properties which cause Firestore setDoc to fail
+  const sanitizedPayload = JSON.parse(JSON.stringify(docPayload));
+
+  await setDoc(ref, sanitizedPayload, { merge: true });
   return idToUse;
 }
 

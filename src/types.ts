@@ -117,6 +117,7 @@ export interface GameProject {
   credits?: string; // Credits, image sources, collaborators, and acknowledgments
   theme: EngineTheme;
   initialSceneId: string;
+  allowDownload?: boolean; // Whether users other than author/admin can download story
   
   defaultResponses: Record<VerbType, string>;
   globalFlags: Record<string, boolean>; // Initial default flags
@@ -166,5 +167,6 @@ export interface CloudProjectDoc {
   reviewFeedback?: string;
   coverImage?: string;
   genre?: string;
+  allowDownload?: boolean; // Whether non-author users can download HTML/ZIP
 }
 

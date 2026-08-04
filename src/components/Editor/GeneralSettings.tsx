@@ -1,26 +1,55 @@
-import React from 'react';
-import { GameProject, EngineTheme, VerbType } from '../../types';
+import React, { useEffect } from 'react';
+import { GameProject, EngineTheme, VerbType, UserProfile } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
-import { Settings, Shield, BookOpen, Award } from 'lucide-react';
+import { Settings, Shield, BookOpen, Award, User, Info } from 'lucide-react';
 
 interface GeneralSettingsProps {
   project: GameProject;
   updateProject: (fn: (prev: GameProject) => GameProject) => void;
+  currentUser?: UserProfile | null;
 }
 
-export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ project, updateProject }) => {
+export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ project, updateProject, currentUser }) => {
+  // Auto-fill author if empty and user is logged in
+  useEffect(() => {
+    if (currentUser?.displayName && (!project.author || project.author === 'Autor Anónimo')) {
+      updateProject((prev) => ({
+        ...prev,
+        author: currentUser.displayName,
+      }));
+    }
+  }, [currentUser, project.author, updateProject]);
+
   return (
     <div className="space-y-6">
       {/* Basic Metadata */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-md space-y-4">
-        <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-          <Settings className="w-5 h-5 text-amber-400" />
-          <h3 className="font-bold text-slate-100 text-base">Información Principal de la Aventura</h3>
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Settings className="w-5 h-5 text-amber-400" />
+            <h3 className="font-bold text-slate-100 text-base">Información Principal y Datos del Relato</h3>
+          </div>
+          <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full font-medium">
+            Configuración y Fallback
+          </span>
+        </div>
+
+        {/* Notice about catalog title & author display */}
+        <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-200/90 flex items-start gap-3">
+          <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-amber-300">Visualización en la Biblioteca Pública y Catálogo</p>
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              El <strong className="text-amber-300">Título del Juego</strong> y el <strong className="text-amber-300">Autor / Creador</strong> configurados en esta casilla son la información oficial que aparecerá en las fichas y tarjetas de la biblioteca pública bajo la portada de tu obra cuando la publiques.
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Título del Juego</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Título del Juego <span className="text-amber-400 font-normal">(Ver en biblioteca)</span>
+            </label>
             <input
               type="text"
               value={project.title}
@@ -33,7 +62,24 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ project, updat
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Autor / Creador</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-300">
+                Autor / Creador <span className="text-amber-400 font-normal">(Ver en biblioteca)</span>
+              </label>
+              {currentUser?.displayName && project.author !== currentUser.displayName && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateProject((prev) => ({ ...prev, author: currentUser.displayName }))
+                  }
+                  className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 underline cursor-pointer"
+                  title="Copiar tu nick de usuario"
+                >
+                  <User className="w-3 h-3 text-sky-400" />
+                  <span>Usar mi nick ({currentUser.displayName})</span>
+                </button>
+              )}
+            </div>
             <input
               type="text"
               value={project.author}
@@ -41,7 +87,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ project, updat
                 updateProject((prev) => ({ ...prev, author: e.target.value }))
               }
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-amber-500"
-              placeholder="Ej: Laura Martínez"
+              placeholder={currentUser?.displayName || 'Ej: Laura Martínez'}
             />
           </div>
         </div>
@@ -127,6 +173,28 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ project, updat
               <option value="emerald-vintage">🌲 Esmeralda Vintage (Verde Oscuro)</option>
             </select>
           </div>
+        </div>
+
+        {/* Permiso de Descarga */}
+        <div className="bg-slate-950 p-4 rounded-xl border border-amber-500/30 space-y-2 mt-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={project.allowDownload ?? false}
+              onChange={(e) =>
+                updateProject((prev) => ({ ...prev, allowDownload: e.target.checked }))
+              }
+              className="w-4 h-4 mt-0.5 rounded border-slate-700 text-amber-500 focus:ring-amber-500 bg-slate-900 cursor-pointer shrink-0"
+            />
+            <div>
+              <span className="font-bold text-xs text-amber-300 block">
+                Permitir descarga libre de la historia (HTML / ZIP / JSON)
+              </span>
+              <span className="text-[11px] text-slate-400 block leading-relaxed mt-0.5">
+                Al publicar esta obra, si esta casilla está marcada, cualquier usuario diferente a ti (anónimo o registrado) podrá descargar la historia para jugarla de forma autónoma. Si no la marcas, solo tú podrás descargar los archivos.
+              </span>
+            </div>
+          </label>
         </div>
       </div>
 

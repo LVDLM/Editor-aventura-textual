@@ -1,8 +1,8 @@
 import React from 'react';
-import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle, BookOpen, Shield, User, Layers } from 'lucide-react';
+import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle, BookOpen, Shield, User, Layers, ShieldCheck } from 'lucide-react';
 import { EngineTheme, UserProfile } from '../types';
 
-export type AppView = 'catalog' | 'play' | 'edit' | 'workspace' | 'admin';
+export type AppView = 'catalog' | 'play' | 'edit' | 'workspace' | 'admin' | 'profile';
 
 interface NavbarProps {
   currentView: AppView;
@@ -18,7 +18,10 @@ interface NavbarProps {
   onOpenExport: () => void;
   onOpenHelp: () => void;
   onOpenAuth: () => void;
+  onOpenPrivacyModal?: () => void;
   onLoadSampleGame: () => void;
+  isOwnProject?: boolean;
+  isTutorial?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,8 +38,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenExport,
   onOpenHelp,
   onOpenAuth,
+  onOpenPrivacyModal,
   onLoadSampleGame,
+  isOwnProject = false,
+  isTutorial = false,
 }) => {
+  // Logic for showing the Editor tab
+  // Unregistered users (!currentUser) reading stories will NEVER see the Editor button.
+  // Registered users (currentUser) reading stories will see the Editor button ONLY if it's their own story or the tutorial.
+  const canShowEditor = React.useMemo(() => {
+    if (currentView === 'edit') return true;
+    if (!currentUser) return false;
+    if (currentView === 'play') {
+      return isOwnProject || isTutorial;
+    }
+    return true;
+  }, [currentView, currentUser, isOwnProject, isTutorial]);
   return (
     <header className="bg-[#0f0f12] border-b border-white/10 text-white px-4 sm:px-6 py-2.5 sticky top-0 z-30 shadow-xl">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -90,17 +107,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Jugar Lectura</span>
           </button>
 
-          <button
-            onClick={() => setCurrentView('edit')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              currentView === 'edit'
-                ? 'bg-white/15 text-white font-bold shadow-inner'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>Editor</span>
-          </button>
+          {canShowEditor && (
+            <button
+              onClick={() => setCurrentView('edit')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                currentView === 'edit'
+                  ? 'bg-white/15 text-white font-bold shadow-inner'
+                  : 'text-white/60 hover:text-white'
+              }`}
+              title={
+                isTutorial
+                  ? 'Ver y probar cambios en el tutorial (puedes editarlo sin sobreescribir el original en el servidor)'
+                  : 'Editar y personalizar esta historia'
+              }
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Editor</span>
+            </button>
+          )}
 
           <button
             onClick={() => setCurrentView('workspace')}
@@ -113,6 +137,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Layers className="w-3.5 h-3.5" />
             <span>Mis Proyectos</span>
           </button>
+
+          {currentUser && (
+            <button
+              onClick={() => setCurrentView('profile')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                currentView === 'profile'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Mi Perfil</span>
+            </button>
+          )}
 
           {currentUser?.role === 'admin' && (
             <button
@@ -131,12 +169,30 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls & User Auth Button */}
         <div className="flex items-center gap-2 flex-wrap">
+          {onOpenPrivacyModal && (
+            <button
+              onClick={onOpenPrivacyModal}
+              className="p-1.5 text-white/50 hover:text-emerald-400 hover:bg-white/5 rounded-xl transition-colors"
+              title="Política de Privacidad y RGPD (Unión Europea)"
+            >
+              <ShieldCheck className="w-4 h-4" />
+            </button>
+          )}
+
           {/* User Profile / Auth Button */}
           <button
-            onClick={onOpenAuth}
+            onClick={() => {
+              if (currentUser) {
+                setCurrentView('profile');
+              } else {
+                onOpenAuth();
+              }
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
               currentUser
-                ? currentUser.role === 'admin'
+                ? currentView === 'profile'
+                  ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-md font-bold'
+                  : currentUser.role === 'admin'
                   ? 'bg-rose-950/60 border-rose-500/40 text-rose-200 hover:bg-rose-900/60'
                   : 'bg-sky-950/60 border-sky-500/40 text-sky-200 hover:bg-sky-900/60'
                 : 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
@@ -180,25 +236,29 @@ export const Navbar: React.FC<NavbarProps> = ({
             {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-white/30" />}
           </button>
 
-          {/* Player Progress Save/Load */}
-          <button
-            onClick={onOpenSaveLoad}
-            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-200 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-colors"
-            title="Guardar o cargar tu progreso en la partida actual"
-          >
-            <Bookmark className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Guardar/Cargar Partida</span>
-          </button>
+          {/* Player Progress Save/Load (ONLY visible when playing the game) */}
+          {currentView === 'play' && (
+            <button
+              onClick={onOpenSaveLoad}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-200 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+              title="Guardar o cargar tu progreso en la partida actual"
+            >
+              <Bookmark className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Guardar/Cargar Partida</span>
+            </button>
+          )}
 
-          {/* Export button */}
-          <button
-            onClick={onOpenExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
-            title="Exportar archivo del juego o proyecto autónomo"
-          >
-            <FolderDown className="w-3.5 h-3.5" />
-            <span>Exportar</span>
-          </button>
+          {/* Project Save & Export Button (In Editor / Workspace mode) */}
+          {currentView === 'edit' && (
+            <button
+              onClick={onOpenExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-colors shadow-sm cursor-pointer"
+              title="Guardar proyecto en la nube, descargar JSON o exportar HTML/ZIP"
+            >
+              <FolderDown className="w-3.5 h-3.5" />
+              <span>Guardar Proyecto</span>
+            </button>
+          )}
 
           {/* Help */}
           <button

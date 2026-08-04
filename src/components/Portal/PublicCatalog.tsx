@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Search, BookOpen, Sparkles, Filter, Package, FileCode, Clock, User, ShieldAlert, Info, X, Award } from 'lucide-react';
-import { CloudProjectDoc, GameProject } from '../../types';
+import { Play, Download, Search, BookOpen, Sparkles, Filter, Package, FileCode, Clock, User, ShieldAlert, Info, X, Award, Lock } from 'lucide-react';
+import { CloudProjectDoc, GameProject, UserProfile } from '../../types';
 import { getPublishedProjects, saveProjectToCloud } from '../../lib/firebase';
 import { sampleGameProject } from '../../data/sampleGame';
 import { generateStandaloneHTML } from '../../utils/htmlExporter';
@@ -9,9 +9,10 @@ import { exportProjectAsZip } from '../../utils/zipExporter';
 interface PublicCatalogProps {
   onPlayProject: (project: GameProject) => void;
   onOpenWorkspace: () => void;
+  currentUser?: UserProfile | null;
 }
 
-export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onOpenWorkspace }) => {
+export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onOpenWorkspace, currentUser }) => {
   const [publishedProjects, setPublishedProjects] = useState<CloudProjectDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -262,41 +263,60 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
                 <div className="pt-5 space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <button
+                      onClick={() => onPlayProject(doc.projectData)}
+                      className="py-2 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-slate-950" />
+                      <span>Jugar</span>
+                    </button>
+
+                    <button
                       onClick={() => setSelectedDocModal(doc)}
                       className="py-2 px-3 bg-slate-950 hover:bg-slate-800 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       title="Ver sinopsis completa, portada e información detallada"
                     >
                       <Info className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Ver Detalles</span>
-                    </button>
-
-                    <button
-                      onClick={() => onPlayProject(doc.projectData)}
-                      className="py-2 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-slate-950" />
-                      <span>Jugar Historia</span>
+                      <span>Más detalles</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => handleDownloadHTML(doc)}
-                      className="py-1.5 px-2 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      title="Descargar archivo .html listo para abrir en cualquier navegador sin servidor"
-                    >
-                      <FileCode className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Descargar HTML</span>
-                    </button>
-                    <button
-                      onClick={() => handleDownloadZIP(doc)}
-                      className="py-1.5 px-2 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      title="Descargar paquete ZIP con archivo HTML e imágenes"
-                    >
-                      <Package className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Descargar ZIP</span>
-                    </button>
-                  </div>
+                  {/* Check download permissions */}
+                  {(() => {
+                    const isAuthor = currentUser && doc.authorId === currentUser.uid;
+                    const isAdmin = currentUser?.role === 'admin';
+                    const isAllowed = doc.allowDownload ?? doc.projectData?.allowDownload ?? false;
+                    const canDownload = isAllowed || isAuthor || isAdmin;
+
+                    if (canDownload) {
+                      return (
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => handleDownloadHTML(doc)}
+                            className="py-1.5 px-2 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Descargar archivo .html listo para abrir en cualquier navegador sin servidor"
+                          >
+                            <FileCode className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Descargar HTML</span>
+                          </button>
+                          <button
+                            onClick={() => handleDownloadZIP(doc)}
+                            className="py-1.5 px-2 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Descargar paquete ZIP con archivo HTML e imágenes"
+                          >
+                            <Package className="w-3.5 h-3.5 text-sky-400" />
+                            <span>Descargar ZIP</span>
+                          </button>
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="py-1 px-2 bg-black/40 border border-white/5 rounded-lg text-[10px] text-slate-400 italic text-center font-mono flex items-center justify-center gap-1">
+                          <Lock className="w-3 h-3 text-slate-500" />
+                          <span>Descarga restringida por el autor</span>
+                        </div>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
             );
@@ -354,9 +374,8 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
 
               {/* Synopsis Section */}
               <div className="bg-slate-950/80 p-4 rounded-xl border border-white/10 space-y-2">
-                <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  Sinopsis del Texto-Juego
+                <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider">
+                  Sinopsis
                 </h4>
                 <p className="text-slate-200 leading-relaxed whitespace-pre-line text-xs sm:text-sm">
                   {selectedDocModal.projectData?.synopsis ||
@@ -369,8 +388,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
               {/* Credits & Sources Section */}
               {selectedDocModal.projectData?.credits && (
                 <div className="bg-slate-950/80 p-4 rounded-xl border border-white/10 space-y-2">
-                  <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-amber-400" />
+                  <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider">
                     Créditos, Fuentes de Imágenes y Colaboradores
                   </h4>
                   <p className="text-slate-300 font-mono text-xs leading-relaxed whitespace-pre-line bg-slate-900 p-3 rounded-lg border border-slate-800">
@@ -401,15 +419,31 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
             {/* Modal Footer with Play Button */}
             <div className="px-6 py-4 border-t border-white/10 bg-black/40 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    handleDownloadHTML(selectedDocModal);
-                  }}
-                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <FileCode className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Descargar HTML</span>
-                </button>
+                {(() => {
+                  const isAuthor = currentUser && selectedDocModal.authorId === currentUser.uid;
+                  const isAdmin = currentUser?.role === 'admin';
+                  const isAllowed = selectedDocModal.allowDownload ?? selectedDocModal.projectData?.allowDownload ?? false;
+                  const canModalDownload = isAllowed || isAuthor || isAdmin;
+
+                  if (canModalDownload) {
+                    return (
+                      <button
+                        onClick={() => {
+                          handleDownloadHTML(selectedDocModal);
+                        }}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <FileCode className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Descargar HTML</span>
+                      </button>
+                    );
+                  }
+                  return (
+                    <span className="text-xs text-slate-400 italic flex items-center gap-1 font-mono">
+                      <Lock className="w-3.5 h-3.5 text-slate-500" /> Descarga no permitida por el autor
+                    </span>
+                  );
+                })()}
               </div>
 
               <div className="flex items-center gap-2">

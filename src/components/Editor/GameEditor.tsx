@@ -1,23 +1,27 @@
 import React, { useState } from 'react';
-import { GameProject } from '../../types';
+import { GameProject, UserProfile } from '../../types';
 import { GeneralSettings } from './GeneralSettings';
 import { SceneEditor } from './SceneEditor';
 import { InventoryManager } from './InventoryManager';
 import { FlagsManager } from './FlagsManager';
-import { FileText, Settings, Package, ToggleLeft, Play } from 'lucide-react';
+import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle } from 'lucide-react';
+import { validateProjectScenes } from '../../utils/sceneValidator';
 
 interface GameEditorProps {
   project: GameProject;
   updateProject: (fn: (prev: GameProject) => GameProject) => void;
   onSwitchToPlay: () => void;
+  currentUser?: UserProfile | null;
 }
 
 export const GameEditor: React.FC<GameEditorProps> = ({
   project,
   updateProject,
   onSwitchToPlay,
+  currentUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'scenes' | 'settings' | 'inventory' | 'flags'>('scenes');
+  const validationIssues = validateProjectScenes(project);
 
   return (
     <div className="min-h-[calc(100vh-60px)] bg-[#0a0a0c] text-white py-6 px-4">
@@ -39,7 +43,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
 
           <button
             onClick={onSwitchToPlay}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-xl text-xs flex items-center gap-2 shadow transition-colors"
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-xl text-xs flex items-center gap-2 shadow transition-colors cursor-pointer"
           >
             <Play className="w-4 h-4" />
             <span>Probar Juego Ahora</span>
@@ -50,7 +54,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
         <div className="flex items-center gap-2 border-b border-white/10 pb-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('scenes')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'scenes'
                 ? 'bg-amber-600 text-white shadow'
                 : 'text-white/40 hover:text-white hover:bg-white/5'
@@ -58,6 +62,12 @@ export const GameEditor: React.FC<GameEditorProps> = ({
           >
             <FileText className="w-4 h-4" />
             <span>1. Escenas y Texto</span>
+            {validationIssues.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 bg-amber-500 text-slate-950 font-black rounded-full text-[10px] flex items-center gap-0.5" title={`${validationIssues.length} observaciones de vinculación y retorno`}>
+                <AlertTriangle className="w-3 h-3" />
+                <span>{validationIssues.length}</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -108,7 +118,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
           <FlagsManager project={project} updateProject={updateProject} />
         )}
         {activeTab === 'settings' && (
-          <GeneralSettings project={project} updateProject={updateProject} />
+          <GeneralSettings project={project} updateProject={updateProject} currentUser={currentUser} />
         )}
       </div>
     </div>
