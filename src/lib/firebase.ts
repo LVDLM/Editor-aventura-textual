@@ -7,6 +7,8 @@ import {
   onAuthStateChanged,
   signInAnonymously,
   updateProfile,
+  GoogleAuthProvider,
+  signInWithPopup,
   User 
 } from 'firebase/auth';
 import { 
@@ -28,6 +30,9 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import { UserProfile, CloudProjectDoc, GameProject, UserRole } from '../types';
 
+// Designated Admin Emails
+export const ADMIN_EMAILS = ['lavozdelosmuertos@gmail.com', 'admin@plataforma.com'];
+
 // Initialize Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -36,13 +41,25 @@ export const auth = getAuth(app);
 const databaseId = (firebaseConfig as any).firestoreDatabaseId || undefined;
 export const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
 
+export async function signInWithGoogle(): Promise<User> {
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  return result.user;
+}
+
 // Profile Helper
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
     const userRef = doc(db, 'users', uid);
     const snap = await getDoc(userRef);
     if (snap.exists()) {
-      return snap.data() as UserProfile;
+      const data = snap.data() as UserProfile;
+      // Auto-assign admin if email matches designated admin list
+      if (data.email && ADMIN_EMAILS.includes(data.email.toLowerCase().trim()) && data.role !== 'admin') {
+        data.role = 'admin';
+        await setDoc(userRef, { role: 'admin' }, { merge: true });
+      }
+      return data;
     }
   } catch (e) {
     console.error('Error fetching user profile:', e);
@@ -57,11 +74,19 @@ export async function createOrUpdateUserProfile(
   role: UserRole = 'author'
 ): Promise<UserProfile> {
   const existing = await getUserProfile(uid);
+  const normalizedEmail = (email || '').toLowerCase().trim();
+  const isAdminEmail = ADMIN_EMAILS.includes(normalizedEmail);
+
+  let finalRole: UserRole = existing ? existing.role : role;
+  if (isAdminEmail) {
+    finalRole = 'admin';
+  }
+
   const profile: UserProfile = {
     uid,
     email: email || `${uid.substring(0, 6)}@lector.com`,
     displayName: displayName || email.split('@')[0] || 'Lector',
-    role: existing ? existing.role : role,
+    role: finalRole,
     createdAt: existing ? existing.createdAt : new Date().toISOString()
   };
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, UserCheck, Shield, Key, Mail, User, LogOut, CheckCircle, RefreshCw } from 'lucide-react';
+import { X, UserCheck, Shield, Key, Mail, User, LogOut, CheckCircle, RefreshCw, Sparkles, Globe } from 'lucide-react';
 import { UserProfile, UserRole } from '../../types';
-import { auth, createOrUpdateUserProfile, setUserRoleInDb } from '../../lib/firebase';
+import { auth, createOrUpdateUserProfile, setUserRoleInDb, signInWithGoogle, ADMIN_EMAILS } from '../../lib/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, signInAnonymously } from 'firebase/auth';
 
 interface AuthModalProps {
@@ -18,6 +18,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
   const [selectedRole, setSelectedRole] = useState<UserRole>('author');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handleGoogleAuth = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const googleUser = await signInWithGoogle();
+      const profile = await createOrUpdateUserProfile(
+        googleUser.uid,
+        googleUser.email || 'lavozdelosmuertos@gmail.com',
+        googleUser.displayName || 'Administrador',
+        'author'
+      );
+      onUserChanged(profile);
+      onClose();
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al iniciar sesión con Google. Puedes usar tu correo y contraseña alternativamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +85,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
     setLoading(true);
     try {
       const cred = await signInAnonymously(auth);
-      const name = roleToUse === 'admin' ? 'Administrador Demo' : 'Autor Registrado';
-      const fakeEmail = roleToUse === 'admin' ? 'admin@plataforma.com' : 'autor@plataforma.com';
+      const isA = roleToUse === 'admin';
+      const name = isA ? 'Administrador Principal (lavozdelosmuertos)' : 'Autor de Historias';
+      const fakeEmail = isA ? 'lavozdelosmuertos@gmail.com' : 'autor@plataforma.com';
       const profile = await createOrUpdateUserProfile(
         cred.user.uid,
         fakeEmail,
@@ -76,7 +98,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
       onClose();
     } catch (err: any) {
       console.error(err);
-      setError('Error al iniciar sesión de demostración.');
+      setError('Error al iniciar sesión de prueba.');
     } finally {
       setLoading(false);
     }
@@ -117,7 +139,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
       onClick={onClose}
     >
       <div
-        className="bg-[#0f172a] border border-amber-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-200 relative cursor-default"
+        className="bg-[#0f172a] border border-amber-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-200 relative cursor-default overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -130,73 +152,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
         {currentUser ? (
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-              <div className="w-12 h-12 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                {currentUser.role === 'admin' ? <Shield className="w-6 h-6" /> : <UserCheck className="w-6 h-6" />}
+              <div className="w-12 h-12 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                {currentUser.role === 'admin' ? <Shield className="w-6 h-6 text-rose-400" /> : <UserCheck className="w-6 h-6 text-sky-400" />}
               </div>
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <span>{currentUser.displayName}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded font-mono font-semibold ${
+              <div className="overflow-hidden">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2 flex-wrap">
+                  <span className="truncate">{currentUser.displayName}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
                     currentUser.role === 'admin' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
                   }`}>
-                    {currentUser.role === 'admin' ? 'ADMINISTRADOR' : 'AUTOR / USUARIO'}
+                    {currentUser.role === 'admin' ? 'ADMINISTRADOR' : 'AUTOR / LECTOR'}
                   </span>
                 </h2>
-                <p className="text-xs text-slate-400">{currentUser.email}</p>
+                <p className="text-xs text-slate-400 truncate">{currentUser.email}</p>
               </div>
             </div>
 
             <div className="bg-slate-900/80 p-4 rounded-xl border border-white/5 space-y-3">
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Permisos de tu cuenta</h3>
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Permisos Activos de tu Cuenta
+              </h3>
               {currentUser.role === 'admin' ? (
-                <ul className="text-xs text-slate-300 space-y-1.5">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Publicar historias directamente en la web principal.</span>
+                <ul className="text-xs text-slate-300 space-y-2">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span><strong>Acceso al Panel Admin:</strong> Tienes la pestaña exclusiva "Admin" para auditar y revisar todos los proyectos enviados por autores.</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Revisar, editar o rechazar las historias enviadas por autores.</span>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span><strong>Aprobar y Publicar:</strong> Puedes aprobar proyectos para que aparezcan en la Biblioteca Pública oficial.</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Mantener y modificar cualquier historia en desarrollo.</span>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span><strong>Modificación Directa:</strong> Puedes abrir y corregir cualquier historia en el editor o enviar notas de revisión al autor.</span>
                   </li>
                 </ul>
               ) : (
-                <ul className="text-xs text-slate-300 space-y-1.5">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-sky-400 shrink-0" />
-                    <span>Crear y mantener múltiples historias guardadas en la nube.</span>
+                <ul className="text-xs text-slate-300 space-y-2">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <span><strong>Creación y Guardado:</strong> Puedes crear historias interactivas y guardarlas en tu espacio personal en la nube.</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-sky-400 shrink-0" />
-                    <span>Solicitar la publicación de tus historias para revisión del administrador.</span>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <span><strong>Solicitud de Publicación:</strong> Puedes enviar tus historias a revisión para que el Administrador las haga públicas.</span>
                   </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-sky-400 shrink-0" />
-                    <span>Descargar los archivos HTML/ZIP de tus historias en cualquier momento.</span>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <span><strong>Limitación de Autor:</strong> No puedes publicar directamente en el catálogo público ni administrar historias ajenas.</span>
                   </li>
                 </ul>
               )}
             </div>
 
-            {/* Quick Role Switcher for Demo Evaluation */}
+            {/* Role Switcher for Live Testing */}
             <div className="bg-amber-950/30 border border-amber-500/30 p-3.5 rounded-xl space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                  <RefreshCw className="w-3.5 h-3.5" /> Probador de Roles (Demo)
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> Simulador / Cambiador de Rol
                 </span>
                 <button
                   onClick={handleToggleRoleDemo}
                   disabled={loading}
-                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg transition-colors"
+                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg transition-colors cursor-pointer"
                 >
                   Cambiar a {currentUser.role === 'admin' ? 'Autor' : 'Administrador'}
                 </button>
               </div>
               <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                Usa este botón para alternar tu rol al instante y probar tanto la perspectiva del <strong>Autor</strong> como del <strong>Administrador</strong>.
+                Utiliza este botón para alternar tu cuenta en vivo entre <strong>Autor</strong> y <strong>Administrador</strong> para verificar de inmediato las diferencias en la interfaz y las limitaciones de permisos.
               </p>
             </div>
 
@@ -204,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
               <button
                 onClick={handleLogout}
                 disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-rose-950/60 hover:bg-rose-900/60 text-rose-200 border border-rose-500/40 rounded-xl text-xs font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-rose-950/60 hover:bg-rose-900/60 text-rose-200 border border-rose-500/40 rounded-xl text-xs font-medium transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Cerrar Sesión</span>
@@ -226,10 +250,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
             </div>
 
             {error && (
-              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300">
+              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 leading-relaxed">
                 {error}
               </div>
             )}
+
+            {/* Google Quick Login Button */}
+            <div className="mb-4 space-y-2">
+              <button
+                type="button"
+                onClick={handleGoogleAuth}
+                disabled={loading}
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer border border-slate-300"
+              >
+                <Globe className="w-4 h-4 text-sky-600" />
+                <span>Continuar con Google ({ADMIN_EMAILS[0]})</span>
+              </button>
+              <div className="flex items-center gap-2 text-[11px] text-slate-500 my-3">
+                <div className="h-px bg-white/10 flex-1"></div>
+                <span>O ingresa con tu correo y contraseña</span>
+                <div className="h-px bg-white/10 flex-1"></div>
+              </div>
+            </div>
 
             <form onSubmit={handleAuth} className="space-y-4">
               {isRegistering && (
@@ -241,7 +283,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Ej: Laura Cuentacuentos"
+                      placeholder="Ej: Autor Creativo"
                       className="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-9 pr-3 text-xs text-white focus:border-amber-500 outline-none"
                     />
                   </div>
@@ -249,14 +291,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
               )}
 
               <div>
-                <label className="block text-xs text-slate-300 font-medium mb-1">Correo Electrónico</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs text-slate-300 font-medium">Correo Electrónico</label>
+                  <button
+                    type="button"
+                    onClick={() => setEmail('lavozdelosmuertos@gmail.com')}
+                    className="text-[10px] text-amber-400 hover:underline"
+                  >
+                    Usar correo Admin
+                  </button>
+                </div>
                 <div className="relative">
                   <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tu@ejemplo.com"
+                    placeholder="tu@ejemplo.com o lavozdelosmuertos@gmail.com"
                     required
                     className="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-9 pr-3 text-xs text-white focus:border-amber-500 outline-none"
                   />
@@ -278,42 +329,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
                 </div>
               </div>
 
-              {isRegistering && (
-                <div>
-                  <label className="block text-xs text-slate-300 font-medium mb-1">Tipo de Cuenta</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRole('author')}
-                      className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all ${
-                        selectedRole === 'author'
-                          ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                          : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <User className="w-4 h-4" />
-                      <span>Autor (Creador)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRole('admin')}
-                      className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all ${
-                        selectedRole === 'admin'
-                          ? 'bg-rose-500/20 border-rose-500 text-rose-300'
-                          : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Shield className="w-4 h-4" />
-                      <span>Administrador</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-lg"
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-lg cursor-pointer"
               >
                 {loading ? 'Cargando...' : isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}
               </button>
@@ -325,7 +344,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
                   setIsRegistering(!isRegistering);
                   setError(null);
                 }}
-                className="text-xs text-amber-400 hover:underline"
+                className="text-xs text-amber-400 hover:underline cursor-pointer"
               >
                 {isRegistering ? '¿Ya tienes cuenta? Inicia sesión aquí' : '¿No tienes cuenta? Regístrate gratis'}
               </button>
@@ -333,23 +352,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
 
             {/* Quick Demo Access Bar */}
             <div className="mt-6 pt-4 border-t border-white/10 space-y-2 text-center">
-              <span className="text-[11px] text-slate-400 block font-medium">Acceso Rápido de Demostración:</span>
+              <span className="text-[11px] text-slate-400 block font-medium">Acceso Rápido de Prueba (Sin contraseña):</span>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => handleAnonymousDemoLogin('author')}
                   disabled={loading}
-                  className="py-2 px-3 bg-sky-950/60 hover:bg-sky-900/60 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                  className="py-2 px-3 bg-sky-950/60 hover:bg-sky-900/60 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  title="Inicia sesión como un Autor estándar para probar crear y solicitar publicación"
                 >
-                  <User className="w-3.5 h-3.5" /> Entrar como Autor
+                  <User className="w-3.5 h-3.5 text-sky-400" /> Entrar como Autor
                 </button>
                 <button
                   type="button"
                   onClick={() => handleAnonymousDemoLogin('admin')}
                   disabled={loading}
-                  className="py-2 px-3 bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                  className="py-2 px-3 bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  title="Inicia sesión como Administrador (lavozdelosmuertos@gmail.com)"
                 >
-                  <Shield className="w-3.5 h-3.5" /> Entrar como Admin
+                  <Shield className="w-3.5 h-3.5 text-rose-400" /> Entrar como Admin
                 </button>
               </div>
             </div>
@@ -359,3 +380,4 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
     </div>
   );
 };
+
