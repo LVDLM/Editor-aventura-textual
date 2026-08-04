@@ -16,7 +16,7 @@ import { UserProfilePage } from './components/Portal/UserProfilePage';
 import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
 import { PrivacyBanner } from './components/Portal/PrivacyBanner';
 import { setSoundEnabled } from './utils/audio';
-import { auth, getUserProfile, createOrUpdateUserProfile } from './lib/firebase';
+import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
@@ -49,13 +49,23 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        const userEmail = user.email || '';
+        const isAdminEmail = userEmail && ADMIN_EMAILS.includes(userEmail.toLowerCase().trim());
         let profile = await getUserProfile(user.uid);
+
         if (!profile) {
           profile = await createOrUpdateUserProfile(
             user.uid,
-            user.email || `${user.uid.substring(0, 6)}@lector.com`,
-            user.displayName || user.email?.split('@')[0] || 'Lector',
-            'author'
+            userEmail || `${user.uid.substring(0, 6)}@lector.com`,
+            user.displayName || userEmail.split('@')[0] || 'Lector',
+            isAdminEmail ? 'admin' : 'author'
+          );
+        } else if (isAdminEmail && profile.role !== 'admin') {
+          profile = await createOrUpdateUserProfile(
+            user.uid,
+            userEmail,
+            profile.displayName || userEmail.split('@')[0] || 'Administrador',
+            'admin'
           );
         }
         setCurrentUser(profile);

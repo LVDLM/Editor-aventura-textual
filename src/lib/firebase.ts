@@ -54,11 +54,28 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     const snap = await getDoc(userRef);
     if (snap.exists()) {
       const data = snap.data() as UserProfile;
-      // Auto-assign admin if email matches designated admin list
-      if (data.email && ADMIN_EMAILS.includes(data.email.toLowerCase().trim()) && data.role !== 'admin') {
+      const effectiveEmail = (data.email || auth.currentUser?.email || '').toLowerCase().trim();
+      const isAdminEmail = effectiveEmail && ADMIN_EMAILS.includes(effectiveEmail);
+
+      let needsUpdate = false;
+      const updatePayload: Partial<UserProfile> = {};
+
+      if (isAdminEmail && data.role !== 'admin') {
         data.role = 'admin';
-        await setDoc(userRef, { role: 'admin' }, { merge: true });
+        updatePayload.role = 'admin';
+        needsUpdate = true;
       }
+
+      if (!data.email && auth.currentUser?.email) {
+        data.email = auth.currentUser.email;
+        updatePayload.email = auth.currentUser.email;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        await setDoc(userRef, updatePayload, { merge: true });
+      }
+
       return data;
     }
   } catch (e) {
@@ -74,18 +91,20 @@ export async function createOrUpdateUserProfile(
   role: UserRole = 'author'
 ): Promise<UserProfile> {
   const existing = await getUserProfile(uid);
-  const normalizedEmail = (email || '').toLowerCase().trim();
+  const normalizedEmail = (email || auth.currentUser?.email || '').toLowerCase().trim();
   const isAdminEmail = ADMIN_EMAILS.includes(normalizedEmail);
 
-  let finalRole: UserRole = existing ? existing.role : role;
-  if (isAdminEmail) {
+  let finalRole: UserRole = role;
+  if (isAdminEmail || role === 'admin') {
     finalRole = 'admin';
+  } else if (existing) {
+    finalRole = existing.role;
   }
 
   const profile: UserProfile = {
     uid,
-    email: email || `${uid.substring(0, 6)}@lector.com`,
-    displayName: displayName || email.split('@')[0] || 'Lector',
+    email: email || auth.currentUser?.email || `${uid.substring(0, 6)}@lector.com`,
+    displayName: displayName || auth.currentUser?.displayName || email.split('@')[0] || 'Lector',
     role: finalRole,
     createdAt: existing ? existing.createdAt : new Date().toISOString()
   };

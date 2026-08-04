@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, CloudProjectDoc, GameProject, SaveSlotData } from '../../types';
+import { UserProfile, CloudProjectDoc, GameProject, SaveSlotData, UserRole } from '../../types';
 import {
   updateUserProfileName,
   getUserProjects,
   deleteProjectFromCloud,
   deleteUserAccountAndData,
+  setUserRoleInDb,
   auth,
 } from '../../lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -70,6 +71,23 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Role switching state
+  const [isChangingRole, setIsChangingRole] = useState(false);
+
+  const handleToggleRole = async (targetRole: UserRole) => {
+    setIsChangingRole(true);
+    setErrorMsg(null);
+    try {
+      await setUserRoleInDb(currentUser.uid, targetRole);
+      setCurrentUser({ ...currentUser, role: targetRole });
+    } catch (err) {
+      console.error('Error changing role:', err);
+      setErrorMsg('No se pudo cambiar el rol. Inténtalo de nuevo.');
+    } finally {
+      setIsChangingRole(false);
+    }
+  };
 
   useEffect(() => {
     loadUserPublications();
@@ -291,6 +309,104 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
               </div>
             </div>
           </form>
+        </div>
+
+        {/* Section 1.5: Selector de Rol y Permisos de Cuenta */}
+        <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <Shield className="w-5 h-5 text-amber-400" />
+              <div>
+                <h2 className="font-bold text-white text-base">Tipo de Perfil de Usuario y Permisos</h2>
+                <p className="text-[11px] text-slate-400">
+                  Selecciona tu rol para alternar entre el modo Autor / Lector y el modo Administrador de la plataforma.
+                </p>
+              </div>
+            </div>
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                currentUser.role === 'admin'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                  : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+              }`}
+            >
+              Rol Actual: {currentUser.role === 'admin' ? '🛡️ Administrador' : '✍️ Autor / Lector'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Card Autor / Lector */}
+            <div
+              className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
+                currentUser.role === 'author'
+                  ? 'bg-sky-950/40 border-sky-500/60 ring-1 ring-sky-500/40'
+                  : 'bg-slate-950/60 border-white/5 opacity-80 hover:opacity-100'
+              }`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sky-300 text-sm flex items-center gap-1.5">
+                    <User className="w-4 h-4" /> Perfil Autor / Lector
+                  </h3>
+                  {currentUser.role === 'author' && (
+                    <span className="text-[10px] bg-sky-500/20 text-sky-300 font-bold px-2 py-0.5 rounded-full border border-sky-500/40">
+                      Activo
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Ideal para jugar aventuras narrativas, crear tus propias historias en el editor, guardarlas en la nube y solicitar su publicación en el catálogo.
+                </p>
+              </div>
+
+              {currentUser.role !== 'author' && (
+                <button
+                  onClick={() => handleToggleRole('author')}
+                  disabled={isChangingRole}
+                  className="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition-colors shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isChangingRole && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Cambiar a Rol Autor / Lector</span>
+                </button>
+              )}
+            </div>
+
+            {/* Card Administrador */}
+            <div
+              className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
+                currentUser.role === 'admin'
+                  ? 'bg-rose-950/40 border-rose-500/60 ring-1 ring-rose-500/40'
+                  : 'bg-slate-950/60 border-white/5 opacity-80 hover:opacity-100'
+              }`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-rose-300 text-sm flex items-center gap-1.5">
+                    <Shield className="w-4 h-4" /> Perfil Administrador
+                  </h3>
+                  {currentUser.role === 'admin' && (
+                    <span className="text-[10px] bg-rose-500/20 text-rose-300 font-bold px-2 py-0.5 rounded-full border border-rose-500/40">
+                      Activo
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Acceso completo al panel de moderación <strong>"Admin"</strong> en el menú superior para auditar, revisar, publicar o rechazar relatos enviados por la comunidad.
+                </p>
+              </div>
+
+              {currentUser.role !== 'admin' && (
+                <button
+                  onClick={() => handleToggleRole('admin')}
+                  disabled={isChangingRole}
+                  className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition-colors shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isChangingRole && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Cambiar a Rol Administrador</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Section 2: Historial de Publicaciones */}
