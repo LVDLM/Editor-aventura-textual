@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { GameProject, Scene, Hotspot, SceneTextBlock } from '../../types';
+import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep } from '../../types';
+import { ALL_VERBS } from '../../utils/verbs';
 import { HotspotEditorModal } from './HotspotEditorModal';
 import {
   FileText,
@@ -18,6 +19,8 @@ import {
   Sliders,
   ChevronUp,
   ChevronDown,
+  Clock,
+  Skull,
 } from 'lucide-react';
 
 interface SceneEditorProps {
@@ -34,7 +37,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
   // New scene form
   const [newSceneName, setNewSceneName] = useState('');
-  const [newSceneType, setNewSceneType] = useState<'normal' | 'portada' | 'introduccion'>('normal');
+  const [newSceneType, setNewSceneType] = useState<'normal' | 'portada' | 'introduccion' | 'qte'>('normal');
   
   // Selection keyword helper
   const [selectedText, setSelectedText] = useState('');
@@ -93,13 +96,31 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           ],
         },
       ];
+    } else if (newSceneType === 'qte') {
+      defaultText = `⚡ ¡EVENTO DE TIEMPO RÁPIDO!\n\nUna trampa o amenaza inminente se aproxima. ¡Debes actuar antes de que el contador llegue a cero!\n\nHaz clic en [Esquivar] rápidamente.`;
+      const hsId = `hotspot_esquivar_${timestamp}`;
+      hotspots = [
+        {
+          id: hsId,
+          word: 'Esquivar',
+          label: '¡Esquivar el golpe!',
+          initialVisible: true,
+          actions: [
+            {
+              id: `act_esquivar_${timestamp}`,
+              verb: 'mirar',
+              responseMessage: '¡Lograste reaccionar a tiempo!',
+            },
+          ],
+        },
+      ];
     }
 
     const newScene: Scene = {
       id: sceneId,
-      name,
+      name: name || (newSceneType === 'qte' ? 'Escena QTE' : 'Nueva Escena'),
       type: newSceneType,
-      description: newSceneType === 'portada' ? 'Carátula inicial' : newSceneType === 'introduccion' ? 'Prólogo narrativo' : 'Escena de aventura',
+      description: newSceneType === 'portada' ? 'Carátula inicial' : newSceneType === 'introduccion' ? 'Prólogo narrativo' : newSceneType === 'qte' ? 'Evento de tiempo rápido' : 'Escena de aventura',
       textBlocks: [
         {
           id: `block_${timestamp}`,
@@ -108,6 +129,20 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
         },
       ],
       hotspots,
+      qteConfig: newSceneType === 'qte' ? {
+        timeLimitSeconds: 10,
+        sequence: [
+          {
+            id: `qte_step_${timestamp}`,
+            hotspotId: `hotspot_esquivar_${timestamp}`,
+            word: 'Esquivar',
+            label: '¡Haz clic en Esquivar a tiempo!',
+          },
+        ],
+        onSuccessMessage: '¡Reaccionaste a tiempo con éxito!',
+        onFailMessage: '¡No fuiste lo suficientemente rápido!',
+        isFailGameOver: true,
+      } : undefined,
     };
 
     updateProject((prev) => ({
@@ -435,6 +470,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
             <option value="normal">Escena Normal de Aventura</option>
             <option value="portada">🖼️ Escena de Portada</option>
             <option value="introduccion">📖 Escena de Introducción</option>
+            <option value="qte">⚡ Escena Especial: Quick Time Event (QTE)</option>
           </select>
 
           <button
@@ -451,6 +487,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           {project.scenes.map((scene, index) => {
             const isSelected = scene.id === activeScene?.id;
             const isInitial = scene.id === project.initialSceneId;
+            const isQTE = scene.type === 'qte' || !!scene.qteConfig;
 
             return (
               <div
@@ -473,6 +510,11 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     {scene.type === 'introduccion' && (
                       <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 font-mono font-bold px-1 py-0.2 rounded">
                         INTRO
+                      </span>
+                    )}
+                    {isQTE && (
+                      <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded flex items-center gap-0.5 shadow-sm">
+                        ⚡ QTE
                       </span>
                     )}
                     {isInitial && (
@@ -572,12 +614,38 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
             <div>
               <label className="block text-[10px] uppercase font-bold text-white/40 mb-1">Tipo / Función de la Escena</label>
               <select
-                value={activeScene?.type || 'normal'}
+                value={activeScene?.type || (activeScene?.qteConfig ? 'qte' : 'normal')}
                 onChange={(e) => {
                   const type = e.target.value as any;
                   updateProject((prev) => ({
                     ...prev,
-                    scenes: prev.scenes.map((s) => (s.id === activeScene.id ? { ...s, type } : s)),
+                    scenes: prev.scenes.map((s) => {
+                      if (s.id !== activeScene.id) return s;
+                      if (type === 'qte' && !s.qteConfig) {
+                        const firstHs = s.hotspots[0];
+                        return {
+                          ...s,
+                          type,
+                          qteConfig: {
+                            timeLimitSeconds: 10,
+                            sequence: firstHs
+                              ? [
+                                  {
+                                    id: `qte_${Date.now()}`,
+                                    hotspotId: firstHs.id,
+                                    word: firstHs.word,
+                                    label: `¡Haz clic en ${firstHs.word} a tiempo!`,
+                                  },
+                                ]
+                              : [],
+                            onSuccessMessage: '¡Completaste el evento de tiempo con éxito!',
+                            onFailMessage: '¡No lograste reaccionar a tiempo!',
+                            isFailGameOver: true,
+                          },
+                        };
+                      }
+                      return { ...s, type };
+                    }),
                   }));
                 }}
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white font-medium focus:border-amber-500 outline-none"
@@ -585,9 +653,373 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 <option value="normal">🏰 Escena Normal de Aventura</option>
                 <option value="portada">🖼️ Escena de Portada (Carátula)</option>
                 <option value="introduccion">📖 Escena de Introducción (Prólogo)</option>
+                <option value="qte">⚡ Escena Especial: Quick Time Event (QTE)</option>
               </select>
             </div>
           </div>
+
+          {/* Quick Time Event (QTE) Configuration Panel */}
+          {(activeScene?.type === 'qte' || activeScene?.qteConfig) && (
+            <div className="bg-gradient-to-br from-amber-950/60 via-red-950/40 to-slate-900 border-2 border-amber-500/60 rounded-2xl p-5 shadow-2xl space-y-4 relative z-10">
+              <div className="flex items-center justify-between border-b border-amber-500/30 pb-3">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h4 className="font-bold text-amber-300 text-sm">Configuración de Quick Time Event (QTE)</h4>
+                    <p className="text-xs text-white/50">El jugador debe realizar las acciones requeridas en orden dentro del tiempo límite.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateProject((prev) => ({
+                      ...prev,
+                      scenes: prev.scenes.map((s) =>
+                        s.id === activeScene.id
+                          ? { ...s, type: s.type === 'qte' ? 'normal' : s.type, qteConfig: undefined }
+                          : s
+                      ),
+                    }));
+                  }}
+                  className="text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 border border-rose-500/30 px-2.5 py-1 rounded-lg transition-colors"
+                >
+                  Quitar QTE
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-amber-300 mb-1">
+                    ⏱️ Tiempo Límite (Segundos)
+                  </label>
+                  <input
+                    type="number"
+                    min={3}
+                    max={60}
+                    value={activeScene?.qteConfig?.timeLimitSeconds || 10}
+                    onChange={(e) => {
+                      const secs = Math.max(1, parseInt(e.target.value) || 10);
+                      updateProject((prev) => ({
+                        ...prev,
+                        scenes: prev.scenes.map((s) => {
+                          if (s.id !== activeScene.id) return s;
+                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                          return {
+                            ...s,
+                            qteConfig: { ...prevConfig, timeLimitSeconds: secs },
+                          };
+                        }),
+                      }));
+                    }}
+                    className="w-full bg-black/60 border border-amber-500/40 rounded-xl px-3 py-2 text-sm text-amber-200 font-bold outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-emerald-400 mb-1">
+                    ✅ Escena Destino en Éxito
+                  </label>
+                  <select
+                    value={activeScene?.qteConfig?.onSuccessSceneId || ''}
+                    onChange={(e) => {
+                      const scId = e.target.value;
+                      updateProject((prev) => ({
+                        ...prev,
+                        scenes: prev.scenes.map((s) => {
+                          if (s.id !== activeScene.id) return s;
+                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                          return { ...s, qteConfig: { ...prevConfig, onSuccessSceneId: scId } };
+                        }),
+                      }));
+                    }}
+                    className="w-full bg-black/60 border border-emerald-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                  >
+                    <option value="">(Permanecer en esta escena)</option>
+                    {project.scenes.map((sc) => (
+                      <option key={sc.id} value={sc.id}>
+                        {sc.name} ({sc.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-rose-400 mb-1">
+                    ❌ Escena Destino en Fallo
+                  </label>
+                  <select
+                    value={activeScene?.qteConfig?.onFailSceneId || ''}
+                    onChange={(e) => {
+                      const scId = e.target.value;
+                      updateProject((prev) => ({
+                        ...prev,
+                        scenes: prev.scenes.map((s) => {
+                          if (s.id !== activeScene.id) return s;
+                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                          return { ...s, qteConfig: { ...prevConfig, onFailSceneId: scId } };
+                        }),
+                      }));
+                    }}
+                    className="w-full bg-black/60 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                  >
+                    <option value="">(Ninguna escena / Ver mensaje)</option>
+                    {project.scenes.map((sc) => (
+                      <option key={sc.id} value={sc.id}>
+                        {sc.name} ({sc.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-emerald-300/80 mb-1">
+                    Mensaje al Completar con Éxito
+                  </label>
+                  <input
+                    type="text"
+                    value={activeScene?.qteConfig?.onSuccessMessage || ''}
+                    placeholder="¡Reaccionaste a tiempo y lograste esquivar el peligro!"
+                    onChange={(e) => {
+                      const msg = e.target.value;
+                      updateProject((prev) => ({
+                        ...prev,
+                        scenes: prev.scenes.map((s) => {
+                          if (s.id !== activeScene.id) return s;
+                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                          return { ...s, qteConfig: { ...prevConfig, onSuccessMessage: msg } };
+                        }),
+                      }));
+                    }}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-rose-300/80 mb-1">
+                    Mensaje al Fallar o Agotarse el Tiempo
+                  </label>
+                  <input
+                    type="text"
+                    value={activeScene?.qteConfig?.onFailMessage || ''}
+                    placeholder="No fuiste lo suficientemente rápido..."
+                    onChange={(e) => {
+                      const msg = e.target.value;
+                      updateProject((prev) => ({
+                        ...prev,
+                        scenes: prev.scenes.map((s) => {
+                          if (s.id !== activeScene.id) return s;
+                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                          return { ...s, qteConfig: { ...prevConfig, onFailMessage: msg } };
+                        }),
+                      }));
+                    }}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-rose-300 font-bold">
+                  <input
+                    type="checkbox"
+                    checked={!!activeScene?.qteConfig?.isFailGameOver}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      updateProject((prev) => ({
+                        ...prev,
+                        scenes: prev.scenes.map((s) => {
+                          if (s.id !== activeScene.id) return s;
+                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                          return { ...s, qteConfig: { ...prevConfig, isFailGameOver: checked } };
+                        }),
+                      }));
+                    }}
+                    className="accent-rose-500 w-4 h-4 rounded cursor-pointer"
+                  />
+                  <span>💀 Activar Pantalla de Fin de Partida al Fallar</span>
+                </label>
+              </div>
+
+              <div className="space-y-3 pt-2 border-t border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <span>📋 Secuencia de Acciones Requeridas ({activeScene?.qteConfig?.sequence?.length || 0})</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstHotspot = activeScene.hotspots[0];
+                      const newStep: QTEStep = {
+                        id: `qte_step_${Date.now()}`,
+                        hotspotId: firstHotspot?.id,
+                        word: firstHotspot?.word,
+                        label: firstHotspot ? `¡Interactuar con ${firstHotspot.word}!` : '¡Siguiente acción!',
+                      };
+                      updateProject((prev) => ({
+                        ...prev,
+                        scenes: prev.scenes.map((s) => {
+                          if (s.id !== activeScene.id) return s;
+                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                          return {
+                            ...s,
+                            qteConfig: { ...prevConfig, sequence: [...(prevConfig.sequence || []), newStep] },
+                          };
+                        }),
+                      }));
+                    }}
+                    className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Añadir Paso a la Secuencia</span>
+                  </button>
+                </div>
+
+                {(activeScene?.qteConfig?.sequence || []).length === 0 ? (
+                  <div className="p-3 bg-black/40 border border-dashed border-white/20 rounded-xl text-center text-xs text-white/40">
+                    Añade los pasos que el jugador deberá realizar secuencialmente antes de que se agote el tiempo.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {activeScene?.qteConfig?.sequence.map((step, idx) => (
+                      <div
+                        key={step.id}
+                        className="flex flex-wrap items-center gap-2 bg-black/50 border border-amber-500/30 rounded-xl p-2.5 text-xs"
+                      >
+                        <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-black flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+
+                        <div className="flex-1 min-w-[140px]">
+                          <select
+                            value={step.hotspotId || ''}
+                            onChange={(e) => {
+                              const hsId = e.target.value;
+                              const selectedHs = activeScene.hotspots.find((h) => h.id === hsId);
+                              updateProject((prev) => ({
+                                ...prev,
+                                scenes: prev.scenes.map((s) => {
+                                  if (s.id !== activeScene.id || !s.qteConfig) return s;
+                                  return {
+                                    ...s,
+                                    qteConfig: {
+                                      ...s.qteConfig,
+                                      sequence: s.qteConfig.sequence.map((st) =>
+                                        st.id === step.id
+                                          ? {
+                                              ...st,
+                                              hotspotId: hsId,
+                                              word: selectedHs?.word,
+                                              label: selectedHs ? `¡Hacer clic en ${selectedHs.word}!` : st.label,
+                                            }
+                                          : st
+                                      ),
+                                    },
+                                  };
+                                }),
+                              }));
+                            }}
+                            className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white outline-none"
+                          >
+                            <option value="">(Cualquier palabra interactiva)</option>
+                            {activeScene.hotspots.map((hs) => (
+                              <option key={hs.id} value={hs.id}>
+                                Palabra: "{hs.word}"
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="w-28">
+                          <select
+                            value={step.expectedVerb || ''}
+                            onChange={(e) => {
+                              const v = (e.target.value as VerbType) || undefined;
+                              updateProject((prev) => ({
+                                ...prev,
+                                scenes: prev.scenes.map((s) => {
+                                  if (s.id !== activeScene.id || !s.qteConfig) return s;
+                                  return {
+                                    ...s,
+                                    qteConfig: {
+                                      ...s.qteConfig,
+                                      sequence: s.qteConfig.sequence.map((st) =>
+                                        st.id === step.id ? { ...st, expectedVerb: v } : st
+                                      ),
+                                    },
+                                  };
+                                }),
+                              }));
+                            }}
+                            className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white outline-none"
+                          >
+                            <option value="">Cualquier verbo</option>
+                            {ALL_VERBS.map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex-1 min-w-[160px]">
+                          <input
+                            type="text"
+                            value={step.label}
+                            placeholder="Instrucción en pantalla..."
+                            onChange={(e) => {
+                              const l = e.target.value;
+                              updateProject((prev) => ({
+                                ...prev,
+                                scenes: prev.scenes.map((s) => {
+                                  if (s.id !== activeScene.id || !s.qteConfig) return s;
+                                  return {
+                                    ...s,
+                                    qteConfig: {
+                                      ...s.qteConfig,
+                                      sequence: s.qteConfig.sequence.map((st) =>
+                                        st.id === step.id ? { ...st, label: l } : st
+                                      ),
+                                    },
+                                  };
+                                }),
+                              }));
+                            }}
+                            className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white outline-none"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateProject((prev) => ({
+                              ...prev,
+                              scenes: prev.scenes.map((s) => {
+                                if (s.id !== activeScene.id || !s.qteConfig) return s;
+                                return {
+                                  ...s,
+                                  qteConfig: {
+                                    ...s.qteConfig,
+                                    sequence: s.qteConfig.sequence.filter((st) => st.id !== step.id),
+                                  },
+                                };
+                              }),
+                            }));
+                          }}
+                          className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 rounded-lg"
+                          title="Eliminar paso"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between bg-black/30 border border-white/5 rounded-xl p-3 relative z-10">
             <div className="flex items-center gap-2">

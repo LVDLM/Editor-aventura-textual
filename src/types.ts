@@ -75,7 +75,25 @@ export interface SceneTextBlock {
   isGameOver?: boolean; // Marks paragraph as triggering end of game
 }
 
-export type SceneType = 'portada' | 'introduccion' | 'normal';
+export type SceneType = 'portada' | 'introduccion' | 'normal' | 'qte';
+
+export interface QTEStep {
+  id: string;
+  hotspotId?: string; // Target hotspot ID in the scene
+  word?: string; // Word or target label
+  label: string; // Step instruction e.g., "¡Agacharse a la derecha!", "¡Usar palanca!"
+  expectedVerb?: VerbType; // Required verb (e.g., 'usar', 'empujar', 'mirar' or undefined for any click)
+}
+
+export interface QTEConfig {
+  timeLimitSeconds: number; // Duration of the event in seconds (e.g. 10)
+  sequence: QTEStep[]; // Ordered list of required actions
+  onSuccessSceneId?: string; // Target scene on success
+  onSuccessMessage?: string; // Custom narrative message on success
+  onFailSceneId?: string; // Target scene on fail/timeout
+  onFailMessage?: string; // Custom message on fail/timeout
+  isFailGameOver?: boolean; // Triggers Game Over on fail
+}
 
 export interface Scene {
   id: string;
@@ -84,6 +102,7 @@ export interface Scene {
   description?: string;
   textBlocks: SceneTextBlock[];
   hotspots: Hotspot[];
+  qteConfig?: QTEConfig;
 }
 
 export type EngineTheme = 'classic-retro' | 'modern-dark' | 'sepia-parchment' | 'cyber-terminal' | 'emerald-vintage';
@@ -94,6 +113,8 @@ export interface GameProject {
   author: string;
   version: string;
   description: string;
+  synopsis?: string; // Detailed story synopsis shown in library and cover details
+  credits?: string; // Credits, image sources, collaborators, and acknowledgments
   theme: EngineTheme;
   initialSceneId: string;
   
@@ -117,3 +138,33 @@ export interface SaveSlotData {
   usedHotspotIds?: string[];
   difficulty?: 'facil' | 'normal';
 }
+
+export type UserRole = 'admin' | 'author';
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  createdAt: string;
+}
+
+export type PublicationStatus = 'draft' | 'pending_review' | 'published' | 'rejected';
+
+export interface CloudProjectDoc {
+  id: string;
+  title: string;
+  description: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  status: PublicationStatus;
+  projectData: GameProject;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string;
+  reviewFeedback?: string;
+  coverImage?: string;
+  genre?: string;
+}
+

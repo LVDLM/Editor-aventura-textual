@@ -225,6 +225,95 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
     .btn:hover { background-color: #475569; }
     
     .empty-inv { font-size: 0.85rem; color: var(--text-muted); font-style: italic; }
+
+    /* Modal Popup Styles */
+    .popup-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 1rem;
+      animation: popupFadeIn 0.2s ease-out;
+    }
+    .popup-card {
+      background-color: #0f172a;
+      border: 2px solid var(--accent);
+      border-radius: 16px;
+      max-width: 480px;
+      width: 100%;
+      padding: 1.5rem;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.7);
+      color: var(--text-main);
+      position: relative;
+      animation: popupSlideUp 0.2s ease-out;
+    }
+    .popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .popup-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .popup-close-x {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.25rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0.2rem 0.5rem;
+    }
+    .popup-close-x:hover { color: #ffffff; }
+    .popup-body {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 1.25rem;
+      color: #e2e8f0;
+    }
+    .popup-img-wrap {
+      margin-top: 0.75rem;
+      text-align: center;
+    }
+    .popup-img-wrap img {
+      max-height: 180px;
+      max-width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--accent);
+      margin: 0 auto;
+      display: block;
+    }
+    .popup-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .popup-btn {
+      background-color: var(--accent);
+      color: #0f172a;
+      border: none;
+      font-weight: 700;
+      padding: 0.5rem 1.25rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: transform 0.1s ease;
+    }
+    .popup-btn:hover {
+      transform: scale(1.02);
+      filter: brightness(1.1);
+    }
+    @keyframes popupFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes popupSlideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 <body>
@@ -244,6 +333,7 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
       </div>
       <button class="btn" onclick="saveGame()">💾 Guardar</button>
       <button class="btn" onclick="loadGame()">📂 Cargar</button>
+      <button class="btn" onclick="toggleDetailsModal()" style="border-color: rgba(245, 158, 11, 0.4); color: #fde047; background: rgba(245, 158, 11, 0.1);">ℹ️ Detalles y Créditos</button>
       <button class="btn" onclick="resetGame()">🔄 Reiniciar</button>
     </div>
   </header>
@@ -279,6 +369,20 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
         <div class="inventory-list" id="inventory-list">
           <span class="empty-inv">Tu inventario está vacío.</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Popup for Interactive Feedback -->
+  <div id="popup-modal" class="popup-overlay" style="display: none;" onclick="closePopupOnBackdrop(event)">
+    <div class="popup-card" onclick="event.stopPropagation()">
+      <div class="popup-header">
+        <div class="popup-title" id="popup-title">Mensaje</div>
+        <button class="popup-close-x" onclick="closePopupModal()">✕</button>
+      </div>
+      <div class="popup-body" id="popup-body"></div>
+      <div class="popup-actions">
+        <button class="popup-btn" onclick="closePopupModal()">Entendido</button>
       </div>
     </div>
   </div>
@@ -508,6 +612,44 @@ ${jsonProject}
       return true;
     }
 
+    function showPopupModal(title, message, imageSrc, iconSymbol) {
+      const modal = document.getElementById('popup-modal');
+      const titleEl = document.getElementById('popup-title');
+      const bodyEl = document.getElementById('popup-body');
+      if (!modal || !bodyEl) return;
+
+      let headerHtml = '';
+      if (iconSymbol) {
+        headerHtml += '<span style="font-size: 1.25rem; margin-right: 0.4rem; display: inline-flex; align-items: center;">' + iconSymbol + '</span>';
+      }
+      if (title) {
+        headerHtml += '<span>' + escapeHTML(title) + '</span>';
+      }
+      if (titleEl) titleEl.innerHTML = headerHtml;
+
+      let content = '<div>' + message + '</div>';
+      if (imageSrc) {
+        content += '<div class="popup-img-wrap"><img src="' + escapeHTML(imageSrc) + '" alt="Imagen" /></div>';
+      }
+      bodyEl.innerHTML = content;
+      modal.style.display = 'flex';
+    }
+
+    function closePopupModal() {
+      const modal = document.getElementById('popup-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function toggleDetailsModal() {
+      const syn = PROJECT.synopsis || PROJECT.description || 'Sin sinopsis registrada.';
+      const creds = PROJECT.credits ? ('<div style="margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 0.8rem;"><strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Créditos y Fuentes:</strong>' + escapeHTML(PROJECT.credits).replace(/\n/g, '<br/>') + '</div>') : '';
+      showPopupModal('📖 Detalles de la Historia', '<div style="font-size: 0.95rem; line-height: 1.6;"><strong>' + escapeHTML(PROJECT.title) + '</strong> por <em>' + escapeHTML(PROJECT.author) + '</em></div><div style="margin-top: 0.75rem; font-size: 0.9rem; color: #cbd5e1;">' + escapeHTML(syn).replace(/\n/g, '<br/>') + '</div>' + creds, null, '✨');
+    }
+
+    function closePopupOnBackdrop(e) {
+      if (e && e.target && e.target.id === 'popup-modal') closePopupModal();
+    }
+
     function selectVerb(verb) {
       activeVerb = verb;
       document.querySelectorAll('.verb-btn').forEach(b => b.classList.remove('active'));
@@ -534,6 +676,7 @@ ${jsonProject}
             html += '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImg) + '" alt="' + escapeHTML(item.name) + '" style="max-height: 180px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
           }
           responseBox.innerHTML = html;
+          showPopupModal(escapeHTML(item.name), escapeHTML(cleanDesc || 'Sin descripción.'), itemImg, '📦');
         }
       }
     }
@@ -617,6 +760,7 @@ ${jsonProject}
       if (rule) {
         let msg = stripGameOverTag(rule.responseMessage || '');
         let addedImgHtml = '';
+        let itemImgSrc = '';
 
         const isRuleGameOver = !!rule.isGameOver || !!(rule.stateChange && rule.stateChange.isGameOver) || checkGameOverTag(rule.responseMessage || '');
         if (isRuleGameOver) {
@@ -630,9 +774,9 @@ ${jsonProject}
             gameState.inventory.push(sc.addItemId);
             const addedItem = PROJECT.inventoryItems.find(i => i.id === sc.addItemId);
             if (addedItem) {
-              const itemImg = getImageSrc(addedItem);
-              if (itemImg) {
-                addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImg) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+              itemImgSrc = getImageSrc(addedItem);
+              if (itemImgSrc) {
+                addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
               }
             }
           }
@@ -653,12 +797,55 @@ ${jsonProject}
           }
         }
         responseBox.innerHTML = '<div>' + escapeHTML(msg) + '</div>' + addedImgHtml;
+
+        const VERB_ICONS = {
+          mirar: '👁️',
+          examinar: '🔍',
+          coger: '✋',
+          tomar: '✋',
+          usar: '⚙️',
+          hablar: '💬',
+          ir: '🚪',
+          abrir: '📂',
+          empujar: '🫸',
+          tirar: '🫷',
+          dar: '🎁',
+          combinar: '🧩'
+        };
+        const actionIcon = VERB_ICONS[verbToUse] || '👁️';
+
+        if (isRuleGameOver) {
+          showPopupModal('FIN DE PARTIDA', escapeHTML(msg), itemImgSrc, '💀');
+        } else if (itemImgSrc) {
+          showPopupModal('Objeto', escapeHTML(msg), itemImgSrc, '📦');
+        } else {
+          // Action message: no text header, ONLY the verb icon
+          showPopupModal('', escapeHTML(msg), itemImgSrc, actionIcon);
+        }
       } else {
         // Fallback response
+        const VERB_ICONS = {
+          mirar: '👁️',
+          examinar: '🔍',
+          coger: '✋',
+          tomar: '✋',
+          usar: '⚙️',
+          hablar: '💬',
+          ir: '🚪',
+          abrir: '📂',
+          empujar: '🫸',
+          tirar: '🫷',
+          dar: '🎁',
+          combinar: '🧩'
+        };
+        const actionIcon = VERB_ICONS[verbToUse] || '👁️';
+
         const fallback = (hs.customDefaultResponses && hs.customDefaultResponses[verbToUse]) ||
                          (PROJECT.defaultResponses && PROJECT.defaultResponses[verbToUse]) ||
                          'Eso no parece funcionar.';
-        responseBox.innerText = stripGameOverTag(fallback);
+        const cleanFb = stripGameOverTag(fallback);
+        responseBox.innerText = cleanFb;
+        showPopupModal('', escapeHTML(cleanFb), null, actionIcon);
       }
 
       clearSentence();
@@ -668,9 +855,9 @@ ${jsonProject}
     function saveGame() {
       try {
         localStorage.setItem('html_adventure_save_' + PROJECT.id, JSON.stringify(gameState));
-        alert('¡Partida guardada correctamente!');
+        showPopupModal('💾 Guardar Partida', '¡Partida guardada correctamente en este navegador!');
       } catch (e) {
-        alert('No se pudo guardar la partida en el almacenamiento local del navegador.');
+        showPopupModal('⚠️ Error', 'No se pudo guardar la partida en el almacenamiento local del navegador.');
       }
     }
 
@@ -683,13 +870,13 @@ ${jsonProject}
           if (!gameState.usedHotspotIds) gameState.usedHotspotIds = [];
           if (!gameState.difficulty) gameState.difficulty = PROJECT.difficultyMode || 'easy';
           if (gameState.isGameOver === undefined) gameState.isGameOver = false;
-          alert('¡Partida cargada!');
+          showPopupModal('📂 Cargar Partida', '¡Partida cargada correctamente!');
           render();
         } else {
-          alert('No hay ninguna partida guardada.');
+          showPopupModal('📂 Cargar Partida', 'No hay ninguna partida guardada en este navegador.');
         }
       } catch (e) {
-        alert('No se pudo acceder a la partida guardada en el almacenamiento local.');
+        showPopupModal('⚠️ Error', 'No se pudo acceder a la partida guardada en el almacenamiento local.');
       }
     }
 

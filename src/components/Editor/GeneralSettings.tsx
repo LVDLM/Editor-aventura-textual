@@ -1,7 +1,7 @@
 import React from 'react';
 import { GameProject, EngineTheme, VerbType } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
-import { Settings, Shield, Sliders } from 'lucide-react';
+import { Settings, Shield, BookOpen, Award } from 'lucide-react';
 
 interface GeneralSettingsProps {
   project: GameProject;
@@ -47,15 +47,49 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({ project, updat
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">Descripción Breve</label>
+          <label className="block text-xs font-semibold text-amber-300 mb-1 flex items-center gap-1.5">
+            <BookOpen className="w-4 h-4 text-amber-400" />
+            <span>Sinopsis / Descripción del Texto-Juego</span>
+          </label>
+          <p className="text-[11px] text-slate-400 mb-1.5">
+            Esta información acompañará a la portada de tu obra en la biblioteca de textos-juego y al seleccionar el título.
+          </p>
           <textarea
-            rows={2}
-            value={project.description}
-            onChange={(e) =>
-              updateProject((prev) => ({ ...prev, description: e.target.value }))
-            }
+            rows={3}
+            value={project.synopsis || project.description}
+            onChange={(e) => {
+              const val = e.target.value;
+              updateProject((prev) => ({
+                ...prev,
+                synopsis: val,
+                description: val,
+              }));
+            }}
             className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-amber-500"
-            placeholder="Describe brevemente de qué trata la aventura..."
+            placeholder="Escribe la sinopsis completa o resumen que atrape a los lectores..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-amber-300 mb-1 flex items-center gap-1.5">
+            <Award className="w-4 h-4 text-amber-400" />
+            <span>Créditos Finales, Fuentes de Imágenes y Colaboradores</span>
+          </label>
+          <p className="text-[11px] text-slate-400 mb-1.5">
+            Información de créditos que acompañará la portada de tu historia. Los jugadores podrán verla al pulsar &quot;Ver más detalles&quot;.
+          </p>
+          <textarea
+            rows={4}
+            value={project.credits || ''}
+            onChange={(e) => {
+              const val = e.target.value;
+              updateProject((prev) => ({
+                ...prev,
+                credits: val,
+              }));
+            }}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:ring-1 focus:ring-amber-500 font-mono text-xs"
+            placeholder="Ejemplo:&#10;• Guion y Dirección: Laura Martínez&#10;• Ilustraciones: Diseñadas en Midjourney / Unsplash&#10;• Música y Sonido: Biblioteca de efectos Freesound.org&#10;• Colaboradores: Carlos R., Elena M."
           />
         </div>
 

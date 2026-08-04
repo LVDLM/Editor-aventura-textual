@@ -29,6 +29,8 @@ import {
   ArrowRight,
   ArrowDown,
   Play,
+  Info,
+  Award,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -78,6 +80,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     message: string;
   } | null>(null);
   
+  // Details & Credits modal state
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+
   // Direct click word context menu modal
   const [contextMenu, setContextMenu] = useState<{
     hotspotId: string;
@@ -86,8 +91,112 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     y: number;
   } | null>(null);
 
+  // Quick Time Event (QTE) State
+  const [qteTimeLeft, setQteTimeLeft] = useState<number>(0);
+  const [qteStepIndex, setQteStepIndex] = useState<number>(0);
+  const [qteStatus, setQteStatus] = useState<'active' | 'success' | 'failed' | 'idle'>('idle');
+  const [qteMistakeMsg, setQteMistakeMsg] = useState<string | null>(null);
+
   const themeConfig = THEME_CONFIGS[project.theme] || THEME_CONFIGS['classic-retro'];
   const currentScene = project.scenes.find((s) => s.id === gameState.currentSceneId) || project.scenes[0];
+
+  const isQTEScene = (currentScene?.type === 'qte' || !!currentScene?.qteConfig) && !!currentScene?.qteConfig?.sequence?.length;
+
+  useEffect(() => {
+    setQteMistakeMsg(null);
+    if (currentScene && (currentScene.type === 'qte' || currentScene.qteConfig) && currentScene.qteConfig?.sequence?.length) {
+      const timeLimit = currentScene.qteConfig.timeLimitSeconds || 10;
+      setQteTimeLeft(timeLimit);
+      setQteStepIndex(0);
+      setQteStatus('active');
+    } else {
+      setQteStatus('idle');
+    }
+  }, [gameState.currentSceneId, currentScene?.id]);
+
+  useEffect(() => {
+    if (qteStatus !== 'active' || !currentScene?.qteConfig) return;
+
+    const interval = setInterval(() => {
+      setQteTimeLeft((prev) => {
+        if (prev <= 0.1) {
+          clearInterval(interval);
+          handleQTEFail('¡Tiempo agotado!');
+          return 0;
+        }
+        return +(prev - 0.1).toFixed(1);
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [qteStatus, gameState.currentSceneId, currentScene?.id]);
+
+  const handleQTEFail = (reasonMsg?: string) => {
+    setQteStatus('failed');
+    playSound('error');
+    const config = currentScene?.qteConfig;
+    const failMsg = reasonMsg || config?.onFailMessage || '¡No lograste reaccionar a tiempo!';
+
+    if (config?.isFailGameOver) {
+      setGameState((prev: any) => ({ ...prev, isGameOver: true }));
+      setModalFeedback({
+        type: 'gameover',
+        title: '⚡ ¡EVENTO DE TIEMPO FALLADO!',
+        verbIconName: 'Skull',
+        isGameOver: true,
+        message: failMsg,
+      });
+    } else if (config?.onFailSceneId) {
+      setModalFeedback({
+        type: 'action',
+        title: '⚡ ¡TIEMPO AGOTADO!',
+        verbIconName: 'Zap',
+        message: `${failMsg}\n\n(Avanzando a la siguiente escena...)`,
+      });
+      setTimeout(() => {
+        setGameState((prev: any) => ({
+          ...prev,
+          currentSceneId: config.onFailSceneId,
+        }));
+      }, 1200);
+    } else {
+      setModalFeedback({
+        type: 'action',
+        title: '⚡ EVENTO FALLADO',
+        verbIconName: 'Zap',
+        message: failMsg,
+      });
+    }
+  };
+
+  const handleQTESuccess = () => {
+    setQteStatus('success');
+    playSound('pickup');
+    const config = currentScene?.qteConfig;
+    const successMsg = config?.onSuccessMessage || '¡Sucesión completada a tiempo con éxito!';
+
+    if (config?.onSuccessSceneId) {
+      setModalFeedback({
+        type: 'action',
+        title: '⚡ ¡EVENTO COMPLETADO CON ÉXITO!',
+        verbIconName: 'Zap',
+        message: `${successMsg}\n\n(Avanzando a la siguiente escena...)`,
+      });
+      setTimeout(() => {
+        setGameState((prev: any) => ({
+          ...prev,
+          currentSceneId: config.onSuccessSceneId,
+        }));
+      }, 1200);
+    } else {
+      setModalFeedback({
+        type: 'action',
+        title: '⚡ ¡ÉXITO EN EL EVENTO!',
+        verbIconName: 'Zap',
+        message: successMsg,
+      });
+    }
+  };
 
   const isSceneGameOver =
     !!gameState.isGameOver ||
@@ -157,6 +266,46 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const handleExecuteAction = (hotspot: Hotspot, verbOverride?: VerbType) => {
     const verbToUse = verbOverride || activeVerb || 'mirar';
     playSound('click');
+
+    // If Quick Time Event (QTE) is currently active on this scene
+    if (qteStatus === 'active' && currentScene?.qteConfig && currentScene.qteConfig.sequence.length > 0) {
+      const expectedStep = currentScene.qteConfig.sequence[qteStepIndex];
+      if (expectedStep) {
+        const isHotspotMatch = !expectedStep.hotspotId || expectedStep.hotspotId === hotspot.id;
+        const isWordMatch = !expectedStep.word || expectedStep.word.toLowerCase() === hotspot.word.toLowerCase();
+        const isVerbMatch = !expectedStep.expectedVerb || expectedStep.expectedVerb === verbToUse;
+
+        if ((isHotspotMatch || isWordMatch) && isVerbMatch) {
+          setQteMistakeMsg(null);
+          const nextStep = qteStepIndex + 1;
+          if (nextStep >= currentScene.qteConfig.sequence.length) {
+            handleQTESuccess();
+          } else {
+            setQteStepIndex(nextStep);
+            playSound('pickup');
+          }
+        } else {
+          // Wrong action in QTE sequence -> Penalize time & show inline HUD feedback
+          playSound('error');
+          const penalty = 2.5;
+          setQteMistakeMsg(`⚠️ ¡Acción o verbo incorrecto! (-${penalty}s)`);
+          setTimeout(() => setQteMistakeMsg(null), 1800);
+
+          let isTimeOut = false;
+          setQteTimeLeft((prev) => {
+            const pen = Math.max(0, +(prev - penalty).toFixed(1));
+            if (pen <= 0) isTimeOut = true;
+            return pen;
+          });
+
+          if (isTimeOut || qteTimeLeft - penalty <= 0) {
+            handleQTEFail('¡Acción incorrecta y tiempo agotado!');
+          }
+        }
+      }
+      // Return early during active QTE so standard useless action modals do not interrupt countdown
+      return;
+    }
 
     const verbObj = ALL_VERBS.find((v) => v.id === verbToUse);
     const verbIconName = verbObj?.iconName || 'Eye';
@@ -605,6 +754,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
 
             <button
+              onClick={() => setShowDetailsModal(true)}
+              className="text-xs text-amber-300 hover:text-amber-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 transition-colors cursor-pointer"
+              title="Ver detalles, sinopsis y créditos del autor"
+            >
+              <Info className="w-3.5 h-3.5 text-amber-400" />
+              <span>Detalles y Créditos</span>
+            </button>
+
+            <button
               onClick={onReset}
               className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 transition-colors"
             >
@@ -654,10 +812,68 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             }}
           />
 
+          {/* Quick Time Event (QTE) Live HUD Banner */}
+          {isQTEScene && qteStatus === 'active' && currentScene?.qteConfig && (
+            <div className="bg-gradient-to-r from-amber-950/90 via-red-950/90 to-amber-950/90 border-2 border-amber-500/70 rounded-2xl p-4 shadow-2xl space-y-3 mb-6 animate-pulse-subtle relative z-20">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-amber-300 font-black text-xs sm:text-sm uppercase tracking-wider">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-amber-400 animate-bounce shrink-0" />
+                  <span>⚡ QUICK TIME EVENT EN CURSO</span>
+                </div>
+                <div className={`font-mono text-base sm:text-lg px-3 py-1 rounded-xl border font-black flex items-center gap-1.5 ${
+                  qteTimeLeft <= 3
+                    ? 'bg-rose-600 text-white border-rose-400 animate-ping'
+                    : 'bg-black/70 text-amber-300 border-amber-500/50'
+                }`}>
+                  <span>⏱️</span>
+                  <span>{qteTimeLeft.toFixed(1)}s</span>
+                </div>
+              </div>
+
+              {/* Countdown Progress Bar */}
+              <div className="w-full h-3.5 bg-black/70 rounded-full overflow-hidden border border-amber-500/40 p-0.5 shadow-inner">
+                <div
+                  className={`h-full rounded-full transition-all duration-100 ${
+                    qteTimeLeft <= 3 ? 'bg-rose-500' : qteTimeLeft <= 6 ? 'bg-amber-400' : 'bg-emerald-400'
+                  }`}
+                  style={{
+                    width: `${Math.max(0, Math.min(100, (qteTimeLeft / (currentScene.qteConfig.timeLimitSeconds || 10)) * 100))}%`,
+                  }}
+                />
+              </div>
+
+              {/* Mistake warning message indicator */}
+              {qteMistakeMsg && (
+                <div className="bg-rose-600/90 text-white font-bold text-xs px-3 py-1.5 rounded-xl border border-rose-400 shadow-md flex items-center justify-center gap-2 animate-bounce">
+                  <span>{qteMistakeMsg}</span>
+                </div>
+              )}
+
+              {/* Step indicator */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-t border-amber-500/20 pt-2">
+                <span className="text-amber-200/80 font-medium">
+                  Paso <strong className="text-amber-300 text-sm font-black">{qteStepIndex + 1}</strong> de {currentScene.qteConfig.sequence.length}:
+                </span>
+                <span className="bg-amber-500/20 text-amber-200 border border-amber-500/50 px-3 py-1 rounded-full font-bold shadow-sm">
+                  {currentScene.qteConfig.sequence[qteStepIndex]?.label || '¡Realiza la acción requerida!'}
+                </span>
+              </div>
+            </div>
+          )}
+
           {currentScene?.type === 'portada' && (
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-widest mb-4 pb-2 border-b border-amber-500/20">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Escena de Portada</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-amber-400 uppercase tracking-widest mb-4 pb-2 border-b border-amber-500/20">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>Escena de Portada</span>
+              </div>
+              <button
+                onClick={() => setShowDetailsModal(true)}
+                className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs cursor-pointer shadow-sm"
+              >
+                <Info className="w-3.5 h-3.5 text-amber-400" />
+                <span>Ver más detalles</span>
+              </button>
             </div>
           )}
 
@@ -722,7 +938,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         <AnimatePresence>
           {modalFeedback && (
             <div
-              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
               onClick={() => setModalFeedback(null)}
             >
               <motion.div
@@ -730,7 +946,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.92, y: 15 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-lg p-6 rounded-2xl border ${
+                className={`w-full max-w-lg p-6 rounded-2xl border cursor-default ${
                   modalFeedback.type === 'gameover' || modalFeedback.isGameOver
                     ? 'border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.35)] bg-slate-950/95'
                     : modalFeedback.type === 'item'
@@ -750,22 +966,24 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       </div>
                     )}
 
-                    <h3
-                      className={`font-bold text-base ${
-                        modalFeedback.type === 'gameover' || modalFeedback.isGameOver
-                          ? 'text-rose-300'
-                          : modalFeedback.type === 'item'
-                          ? 'text-amber-300'
-                          : themeConfig.textMainClass
-                      }`}
-                    >
-                      {modalFeedback.title ||
-                        (modalFeedback.type === 'gameover' || modalFeedback.isGameOver
-                          ? 'FIN DE PARTIDA'
-                          : modalFeedback.type === 'item'
-                          ? 'Objeto'
-                          : '')}
-                    </h3>
+                    {modalFeedback.type !== 'action' && (
+                      <h3
+                        className={`font-bold text-base ${
+                          modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                            ? 'text-rose-300'
+                            : modalFeedback.type === 'item'
+                            ? 'text-amber-300'
+                            : themeConfig.textMainClass
+                        }`}
+                      >
+                        {modalFeedback.title ||
+                          (modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                            ? 'FIN DE PARTIDA'
+                            : modalFeedback.type === 'item'
+                            ? 'Objeto'
+                            : '')}
+                      </h3>
+                    )}
 
                     {modalFeedback.isAutosaved && (
                       <motion.div
@@ -997,6 +1215,98 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </motion.div>
         </>
       )}
+
+      {/* Details and Credits Modal */}
+      <AnimatePresence>
+        {showDetailsModal && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+            onClick={() => setShowDetailsModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden cursor-default text-slate-200"
+            >
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+                <div className="flex items-center gap-2.5">
+                  <BookOpen className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h3 className="font-bold text-slate-100 text-base">{project.title}</h3>
+                    <p className="text-xs text-slate-400">Por {project.author || 'Autor anónimo'} • v{project.version || '1.0'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm leading-relaxed">
+                {/* Synopsis */}
+                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                  <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4" />
+                    Sinopsis de la Historia
+                  </h4>
+                  <p className="text-slate-200 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+                    {project.synopsis || project.description || 'Sin sinopsis disponible.'}
+                  </p>
+                </div>
+
+                {/* Credits */}
+                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                  <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Award className="w-4 h-4" />
+                    Créditos Finales, Fuentes de Imágenes y Colaboradores
+                  </h4>
+                  {project.credits ? (
+                    <p className="text-slate-300 text-xs font-mono leading-relaxed whitespace-pre-line bg-slate-900 p-3 rounded-lg border border-slate-800">
+                      {project.credits}
+                    </p>
+                  ) : (
+                    <p className="text-slate-500 italic text-xs">
+                      No se han registrado créditos adicionales para este texto-juego.
+                    </p>
+                  )}
+                </div>
+
+                {/* Technical Specs */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="block text-slate-400 text-[10px] uppercase font-bold">Estilo Visual</span>
+                    <span className="font-bold text-slate-200 text-xs capitalize">{project.theme}</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                    <span className="block text-slate-400 text-[10px] uppercase font-bold">Escenas</span>
+                    <span className="font-bold text-slate-200 text-xs">{project.scenes.length} escenas</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center col-span-2 sm:col-span-1">
+                    <span className="block text-slate-400 text-[10px] uppercase font-bold">Objetos</span>
+                    <span className="font-bold text-slate-200 text-xs">{project.inventoryItems.length} objetos</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-3.5 border-t border-slate-800 bg-slate-950 flex items-center justify-end">
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

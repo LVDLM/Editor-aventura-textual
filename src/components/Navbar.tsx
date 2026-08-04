@@ -1,10 +1,13 @@
 import React from 'react';
-import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle } from 'lucide-react';
-import { EngineTheme } from '../types';
+import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle, BookOpen, Shield, User, Layers } from 'lucide-react';
+import { EngineTheme, UserProfile } from '../types';
+
+export type AppView = 'catalog' | 'play' | 'edit' | 'workspace' | 'admin';
 
 interface NavbarProps {
-  mode: 'play' | 'edit';
-  setMode: (mode: 'play' | 'edit') => void;
+  currentView: AppView;
+  setCurrentView: (view: AppView) => void;
+  currentUser: UserProfile | null;
   gameTitle: string;
   theme: EngineTheme;
   setTheme: (theme: EngineTheme) => void;
@@ -14,12 +17,14 @@ interface NavbarProps {
   onOpenSaveLoad: () => void;
   onOpenExport: () => void;
   onOpenHelp: () => void;
+  onOpenAuth: () => void;
   onLoadSampleGame: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  mode,
-  setMode,
+  currentView,
+  setCurrentView,
+  currentUser,
   gameTitle,
   theme,
   setTheme,
@@ -29,124 +34,176 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSaveLoad,
   onOpenExport,
   onOpenHelp,
+  onOpenAuth,
   onLoadSampleGame,
 }) => {
   return (
-    <header className="bg-[#0f0f12] border-b border-white/10 text-white px-4 sm:px-6 py-3 sticky top-0 z-30 shadow-xl">
+    <header className="bg-[#0f0f12] border-b border-white/10 text-white px-4 sm:px-6 py-2.5 sticky top-0 z-30 shadow-xl">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         {/* Brand & App Title */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-amber-500 rounded flex items-center justify-center text-black font-bold shadow-md">
+          <button
+            onClick={() => setCurrentView('catalog')}
+            className="w-8 h-8 bg-amber-500 hover:bg-amber-400 rounded-lg flex items-center justify-center text-slate-950 font-extrabold shadow-md transition-all shrink-0"
+            title="Ir a la Biblioteca Principal"
+          >
             N
-          </div>
+          </button>
           <div>
-            <h1 className="text-base sm:text-lg font-medium tracking-tight text-white flex items-center gap-2">
-              <span>Narrativa Engine</span>
-              <span className="text-[10px] sm:text-xs text-amber-500/90 font-mono px-2 py-0.5 rounded bg-black/40 border border-white/5">
-                v1.0.4
+            <h1 className="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-2">
+              <span className="cursor-pointer hover:text-amber-400 transition-colors" onClick={() => setCurrentView('catalog')}>
+                Lecturas Interactivas
+              </span>
+              <span className="text-[10px] text-amber-500 font-mono px-1.5 py-0.5 rounded bg-black/40 border border-white/10">
+                Web &amp; Editor
               </span>
             </h1>
-            <p className="text-xs text-white/40 truncate max-w-[200px] sm:max-w-xs" title={gameTitle}>
-              {gameTitle || 'Nueva Aventura'}
+            <p className="text-[11px] text-white/50 truncate max-w-[160px] sm:max-w-xs" title={gameTitle}>
+              {currentView === 'play' || currentView === 'edit' ? gameTitle : 'Plataforma de Historias'}
             </p>
           </div>
         </div>
 
-        {/* Mode Switcher */}
-        <div className="flex items-center bg-black/40 rounded-lg p-1 border border-white/5">
+        {/* Platform Navigation Tabs */}
+        <div className="flex items-center bg-black/60 rounded-xl p-1 border border-white/10 flex-wrap">
           <button
-            onClick={() => setMode('play')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
-              mode === 'play'
-                ? 'bg-white/10 text-white font-semibold shadow-inner'
-                : 'text-white/40 hover:text-white'
+            onClick={() => setCurrentView('catalog')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              currentView === 'catalog'
+                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
+                : 'text-white/60 hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Biblioteca</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentView('play')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              currentView === 'play'
+                ? 'bg-white/15 text-white font-bold shadow-inner'
+                : 'text-white/60 hover:text-white'
             }`}
           >
             <Play className="w-3.5 h-3.5" />
-            <span>Jugar</span>
+            <span>Jugar Lectura</span>
           </button>
+
           <button
-            onClick={() => setMode('edit')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
-              mode === 'edit'
-                ? 'bg-white/10 text-white font-semibold shadow-inner'
-                : 'text-white/40 hover:text-white'
+            onClick={() => setCurrentView('edit')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              currentView === 'edit'
+                ? 'bg-white/15 text-white font-bold shadow-inner'
+                : 'text-white/60 hover:text-white'
             }`}
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span>Editor</span>
           </button>
+
+          <button
+            onClick={() => setCurrentView('workspace')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              currentView === 'workspace'
+                ? 'bg-sky-500 text-slate-950 font-bold shadow-md'
+                : 'text-white/60 hover:text-white'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Mis Proyectos</span>
+          </button>
+
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => setCurrentView('admin')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                currentView === 'admin'
+                  ? 'bg-rose-500 text-white font-bold shadow-md'
+                  : 'text-rose-300/80 hover:text-rose-200 bg-rose-950/40'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Admin</span>
+            </button>
+          )}
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls & User Auth Button */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Theme Selector */}
-          <select
-            value={theme}
-            onChange={(e) => setTheme(e.target.value as EngineTheme)}
-            className="bg-black/40 border border-white/10 text-white/80 text-xs rounded-lg px-2.5 py-1.5 focus:border-amber-500 outline-none cursor-pointer"
-            title="Cambiar Estilo Visual"
+          {/* User Profile / Auth Button */}
+          <button
+            onClick={onOpenAuth}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+              currentUser
+                ? currentUser.role === 'admin'
+                  ? 'bg-rose-950/60 border-rose-500/40 text-rose-200 hover:bg-rose-900/60'
+                  : 'bg-sky-950/60 border-sky-500/40 text-sky-200 hover:bg-sky-900/60'
+                : 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
+            }`}
           >
-            <option value="classic-retro">🕹️ LucasArts Retro</option>
-            <option value="modern-dark">🌙 Oscuro Elegante</option>
-            <option value="sepia-parchment">📜 Pergamino Sepia</option>
-            <option value="cyber-terminal">💻 Terminal Cyber</option>
-            <option value="emerald-vintage">🌲 Esmeralda Vintage</option>
-          </select>
+            {currentUser ? (
+              <>
+                {currentUser.role === 'admin' ? <Shield className="w-3.5 h-3.5 text-rose-400" /> : <User className="w-3.5 h-3.5 text-sky-400" />}
+                <span className="truncate max-w-[100px]">{currentUser.displayName}</span>
+              </>
+            ) : (
+              <>
+                <User className="w-3.5 h-3.5" />
+                <span>Iniciar Sesión</span>
+              </>
+            )}
+          </button>
+
+          {/* Theme Selector (when in play mode) */}
+          {(currentView === 'play' || currentView === 'edit') && (
+            <select
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as EngineTheme)}
+              className="bg-black/40 border border-white/10 text-white/80 text-xs rounded-xl px-2.5 py-1.5 focus:border-amber-500 outline-none cursor-pointer"
+              title="Cambiar Estilo Visual"
+            >
+              <option value="classic-retro">🕹️ LucasArts Retro</option>
+              <option value="modern-dark">🌙 Oscuro Elegante</option>
+              <option value="sepia-parchment">📜 Pergamino Sepia</option>
+              <option value="cyber-terminal">💻 Terminal Cyber</option>
+              <option value="emerald-vintage">🌲 Esmeralda Vintage</option>
+            </select>
+          )}
 
           {/* Audio toggle */}
           <button
             onClick={toggleSound}
-            className="p-2 rounded-lg bg-black/40 border border-white/10 text-white/60 hover:text-amber-400 transition-colors"
+            className="p-2 rounded-xl bg-black/40 border border-white/10 text-white/60 hover:text-amber-400 transition-colors"
             title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-white/30" />}
           </button>
 
-          {/* New Game Button */}
-          <button
-            onClick={onOpenNewProject}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-950/60 hover:bg-sky-900/60 text-sky-200 border border-sky-500/30 rounded-lg text-xs font-medium transition-colors"
-            title="Crear un nuevo proyecto desde cero"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-sky-400" />
-            <span>Nuevo</span>
-          </button>
-
-          {/* Demo Loader */}
-          <button
-            onClick={onLoadSampleGame}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 rounded-lg text-xs font-medium transition-colors"
-            title="Cargar Juego de Ejemplo"
-          >
-            <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-            <span>Demo</span>
-          </button>
-
           {/* Player Progress Save/Load */}
           <button
             onClick={onOpenSaveLoad}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-200 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors"
-            title="Guardar o cargar el progreso actual de tu jugador"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-200 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-colors"
+            title="Guardar o cargar tu progreso en la partida actual"
           >
             <Bookmark className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Progreso Partida</span>
+            <span>Guardar/Cargar Partida</span>
           </button>
 
-          {/* Editor Project Save/Export */}
+          {/* Export button */}
           <button
             onClick={onOpenExport}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs sm:text-sm font-medium transition-colors shadow-sm"
-            title="Guardar archivo del proyecto (.json) o exportar juego autónomo (.html)"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-colors shadow-sm"
+            title="Exportar archivo del juego o proyecto autónomo"
           >
-            <FolderDown className="w-4 h-4" />
-            <span>Proyecto (Editor / HTML)</span>
+            <FolderDown className="w-3.5 h-3.5" />
+            <span>Exportar</span>
           </button>
 
           {/* Help */}
           <button
             onClick={onOpenHelp}
-            className="p-2 rounded-lg bg-black/40 border border-white/10 text-white/40 hover:text-white transition-colors"
+            className="p-2 rounded-xl bg-black/40 border border-white/10 text-white/40 hover:text-white transition-colors"
             title="Guía y Ayuda"
           >
             <HelpCircle className="w-4 h-4" />

@@ -1,18 +1,26 @@
-import React, { useState } from 'react';
-import { GameProject, EngineTheme } from './types';
+import React, { useState, useEffect } from 'react';
+import { GameProject, EngineTheme, UserProfile } from './types';
 import { sampleGameProject } from './data/sampleGame';
-import { Navbar } from './components/Navbar';
+import { Navbar, AppView } from './components/Navbar';
 import { GamePlayer } from './components/GamePlayer';
 import { GameEditor } from './components/Editor/GameEditor';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { ExportModal } from './components/ExportModal';
 import { HelpModal } from './components/HelpModal';
 import { NewProjectModal } from './components/NewProjectModal';
+import { PublicCatalog } from './components/Portal/PublicCatalog';
+import { ProjectWorkspace } from './components/Portal/ProjectWorkspace';
+import { AdminReviewPanel } from './components/Portal/AdminReviewPanel';
+import { AuthModal } from './components/Portal/AuthModal';
 import { setSoundEnabled } from './utils/audio';
+import { auth, getUserProfile, createOrUpdateUserProfile } from './lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
   const [project, setProject] = useState<GameProject>(sampleGameProject);
-  const [mode, setMode] = useState<'play' | 'edit'>('play');
+  const [currentCloudDocId, setCurrentCloudDocId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<AppView>('catalog');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [soundEnabled, setSoundState] = useState<boolean>(true);
 
   // Active game runtime state
@@ -31,6 +39,41 @@ export default function App() {
   const [showExport, setShowExport] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Listen for Firebase Auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        let profile = await getUserProfile(user.uid);
+        if (!profile) {
+          profile = await createOrUpdateUserProfile(
+            user.uid,
+            user.email || `${user.uid.substring(0, 6)}@lector.com`,
+            user.displayName || user.email?.split('@')[0] || 'Lector',
+            'author'
+          );
+        }
+        setCurrentUser(profile);
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const resetGameStateForProject = (proj: GameProject) => {
+    setGameState({
+      currentSceneId: proj.initialSceneId || (proj.scenes && proj.scenes[0]?.id) || '',
+      inventory: [],
+      flags: { ...proj.globalFlags },
+      appendedTextsPerScene: {},
+      history: [],
+      usedHotspotIds: [],
+      difficulty: gameState.difficulty || 'facil',
+    });
+  };
 
   const toggleSound = () => {
     const next = !soundEnabled;
@@ -43,9 +86,9 @@ export default function App() {
     const freshProject: GameProject = {
       id: `juego_${timestamp}`,
       title: 'Mi Nueva Aventura',
-      author: 'Autor',
+      author: currentUser?.displayName || 'Autor',
       version: '1.0.0',
-      description: 'Escribe la sinopsis de tu juego.',
+      description: 'Escribe aquí la sinopsis de tu historia interactiva.',
       theme: 'classic-retro',
       initialSceneId: 'escena_portada',
       defaultResponses: {
@@ -165,28 +208,13 @@ export default function App() {
     };
 
     setProject(freshProject);
-    setGameState({
-      currentSceneId: freshProject.initialSceneId,
-      inventory: [],
-      flags: {},
-      appendedTextsPerScene: {},
-      history: [],
-      usedHotspotIds: [],
-      difficulty: gameState.difficulty || 'facil',
-    });
-    setMode('edit');
+    setCurrentCloudDocId(null);
+    resetGameStateForProject(freshProject);
+    setCurrentView('edit');
   };
 
   const handleResetGame = () => {
-    setGameState((prev) => ({
-      currentSceneId: project.initialSceneId,
-      inventory: [],
-      flags: { ...project.globalFlags },
-      appendedTextsPerScene: {},
-      history: [],
-      usedHotspotIds: [],
-      difficulty: prev.difficulty || 'facil',
-    }));
+    resetGameStateForProject(project);
   };
 
   const handleUpdateProject = (fn: (prev: GameProject) => GameProject) => {
@@ -199,39 +227,26 @@ export default function App() {
   const handleLoadSampleGame = () => {
     if (confirm('¿Quieres cargar el juego de demostración "El Misterio de la Habitación Oscura"? Se reemplazarán los cambios no guardados en el editor.')) {
       setProject(sampleGameProject);
-      setGameState({
-        currentSceneId: sampleGameProject.initialSceneId,
-        inventory: [],
-        flags: { ...sampleGameProject.globalFlags },
-        appendedTextsPerScene: {},
-        history: [],
-        usedHotspotIds: [],
-        difficulty: gameState.difficulty || 'facil',
-      });
-      setMode('play');
+      setCurrentCloudDocId(null);
+      resetGameStateForProject(sampleGameProject);
+      setCurrentView('play');
     }
   };
 
   const handleImportProject = (imported: GameProject) => {
     setProject(imported);
-    setGameState({
-      currentSceneId: imported.initialSceneId,
-      inventory: [],
-      flags: { ...imported.globalFlags },
-      appendedTextsPerScene: {},
-      history: [],
-      usedHotspotIds: [],
-      difficulty: gameState.difficulty || 'facil',
-    });
+    setCurrentCloudDocId(null);
+    resetGameStateForProject(imported);
   };
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-[#d1d1d1] flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
       
-      {/* Navigation Header */}
+      {/* Platform Top Header */}
       <Navbar
-        mode={mode}
-        setMode={setMode}
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        currentUser={currentUser}
         gameTitle={project.title}
         theme={project.theme}
         setTheme={(newTheme: EngineTheme) =>
@@ -243,12 +258,30 @@ export default function App() {
         onOpenSaveLoad={() => setShowSaveLoad(true)}
         onOpenExport={() => setShowExport(true)}
         onOpenHelp={() => setShowHelp(true)}
+        onOpenAuth={() => setShowAuthModal(true)}
         onLoadSampleGame={handleLoadSampleGame}
       />
 
-      {/* Main Mode Container */}
+      {/* Main View Router */}
       <main className="flex-1 flex flex-col">
-        {mode === 'play' ? (
+        {currentView === 'catalog' && (
+          <PublicCatalog
+            onPlayProject={(selectedProj) => {
+              setProject(selectedProj);
+              resetGameStateForProject(selectedProj);
+              setCurrentView('play');
+            }}
+            onOpenWorkspace={() => {
+              if (!currentUser) {
+                setShowAuthModal(true);
+              } else {
+                setCurrentView('workspace');
+              }
+            }}
+          />
+        )}
+
+        {currentView === 'play' && (
           <GamePlayer
             project={project}
             updateProject={handleUpdateProject}
@@ -257,11 +290,50 @@ export default function App() {
             onReset={handleResetGame}
             onOpenSaveLoad={() => setShowSaveLoad(true)}
           />
-        ) : (
+        )}
+
+        {currentView === 'edit' && (
           <GameEditor
             project={project}
             updateProject={handleUpdateProject}
-            onSwitchToPlay={() => setMode('play')}
+            onSwitchToPlay={() => setCurrentView('play')}
+          />
+        )}
+
+        {currentView === 'workspace' && (
+          <ProjectWorkspace
+            currentUser={currentUser}
+            activeProject={project}
+            onSelectProject={(selectedProj, docId) => {
+              setProject(selectedProj);
+              setCurrentCloudDocId(docId);
+              resetGameStateForProject(selectedProj);
+            }}
+            onOpenEditor={() => setCurrentView('edit')}
+            onPlayProject={(selectedProj) => {
+              setProject(selectedProj);
+              resetGameStateForProject(selectedProj);
+              setCurrentView('play');
+            }}
+            onCreateNewProject={handleCreateNewProject}
+            onOpenAuth={() => setShowAuthModal(true)}
+          />
+        )}
+
+        {currentView === 'admin' && (
+          <AdminReviewPanel
+            currentUser={currentUser}
+            onSelectProject={(selectedProj, docId) => {
+              setProject(selectedProj);
+              setCurrentCloudDocId(docId);
+              resetGameStateForProject(selectedProj);
+            }}
+            onOpenEditor={() => setCurrentView('edit')}
+            onPlayProject={(selectedProj) => {
+              setProject(selectedProj);
+              resetGameStateForProject(selectedProj);
+              setCurrentView('play');
+            }}
           />
         )}
       </main>
@@ -293,6 +365,14 @@ export default function App() {
           onConfirmNewProject={handleCreateNewProject}
           onOpenSaveExport={() => setShowExport(true)}
           onClose={() => setShowNewProjectModal(false)}
+        />
+      )}
+
+      {showAuthModal && (
+        <AuthModal
+          currentUser={currentUser}
+          onUserChanged={setCurrentUser}
+          onClose={() => setShowAuthModal(false)}
         />
       )}
     </div>
