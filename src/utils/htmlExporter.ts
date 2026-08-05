@@ -101,6 +101,7 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
       line-height: 1.8;
       font-size: 1.15rem;
+      white-space: pre-line;
     }
 
     .hotspot {

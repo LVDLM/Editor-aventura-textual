@@ -107,6 +107,22 @@ export interface Scene {
 
 export type EngineTheme = 'classic-retro' | 'modern-dark' | 'sepia-parchment' | 'cyber-terminal' | 'emerald-vintage';
 
+export const GENRE_TAGS = [
+  'aventura',
+  'ciencia-ficción',
+  'drama',
+  'erótica',
+  'fantasía',
+  'humor',
+  'misterio',
+  'otros',
+  'policiaca',
+  'romántica',
+  'terror',
+] as const;
+
+export type GenreTag = typeof GENRE_TAGS[number];
+
 export interface GameProject {
   id: string;
   title: string;
@@ -118,6 +134,7 @@ export interface GameProject {
   theme: EngineTheme;
   initialSceneId: string;
   allowDownload?: boolean; // Whether users other than author/admin can download story
+  genreTags?: string[]; // Genre tags chosen by author/admin
   
   defaultResponses: Record<VerbType, string>;
   globalFlags: Record<string, boolean>; // Initial default flags
@@ -167,6 +184,7 @@ export interface CloudProjectDoc {
   reviewFeedback?: string;
   coverImage?: string;
   genre?: string;
+  genreTags?: string[];
   allowDownload?: boolean; // Whether non-author users can download HTML/ZIP
 }
 

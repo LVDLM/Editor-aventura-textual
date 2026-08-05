@@ -34,6 +34,9 @@ import {
   Award,
   ChevronUp,
   ChevronDown,
+  Volume2,
+  VolumeX,
+  Palette,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -54,6 +57,8 @@ interface GamePlayerProps {
   onOpenSaveLoad?: () => void;
   isHeaderCollapsed?: boolean;
   setIsHeaderCollapsed?: (collapsed: boolean) => void;
+  soundEnabled?: boolean;
+  toggleSound?: () => void;
 }
 
 const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
@@ -73,6 +78,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   onOpenSaveLoad,
   isHeaderCollapsed: propIsHeaderCollapsed,
   setIsHeaderCollapsed: propSetIsHeaderCollapsed,
+  soundEnabled = true,
+  toggleSound,
 }) => {
   const [activeVerb, setActiveVerb] = useState<VerbType | null>(null);
   const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null);
@@ -109,6 +116,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [qteMistakeMsg, setQteMistakeMsg] = useState<string | null>(null);
 
   const themeConfig = THEME_CONFIGS[project.theme] || THEME_CONFIGS['classic-retro'];
+  const isSepia = project.theme === 'sepia-parchment';
   const currentScene = project.scenes.find((s) => s.id === gameState.currentSceneId) || project.scenes[0];
 
   const isQTEScene = (currentScene?.type === 'qte' || !!currentScene?.qteConfig) && !!currentScene?.qteConfig?.sequence?.length;
@@ -569,7 +577,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             <span
               key={idx}
               onClick={(e) => handleWordClick(matchedHotspot, e)}
-              className="inline-block cursor-pointer hover:text-amber-300 transition-colors"
+              className="inline cursor-pointer hover:text-amber-300 transition-colors"
             >
               {part}
             </span>
@@ -580,7 +588,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             <span
               key={idx}
               onClick={(e) => handleWordClick(matchedHotspot, e)}
-              className={`${themeConfig.hotspotClass} ${themeConfig.hotspotHoverClass} inline-block cursor-pointer transition-colors duration-150`}
+              className={`${themeConfig.hotspotClass} ${themeConfig.hotspotHoverClass} inline cursor-pointer transition-colors duration-150`}
               title={`Clic para interactuar con "${matchedHotspot.label || matchedHotspot.word}"`}
             >
               {part}
@@ -588,23 +596,35 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           );
         }
       }
-      return <span key={idx}>{part}</span>;
+      return <React.Fragment key={idx}>{part}</React.Fragment>;
     });
   };
 
-  // Parses HTML formatting tags (h1, h2, b, i, u, p, etc.) and renders styled elements while maintaining interactive hotspot words
+  // Parses HTML formatting tags (h1, h2, b, i, u, p, etc.) and renders styled elements while maintaining interactive hotspot words and line breaks
   const renderFormattedAndInteractiveText = (rawText: string) => {
     if (!rawText) return null;
 
+    const normalizedText = rawText.replace(/\r\n/g, '\n');
+
     if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
-      return renderInteractiveText(rawText);
+      return (
+        <div className="whitespace-pre-line leading-relaxed">
+          {renderInteractiveText(normalizedText)}
+        </div>
+      );
     }
 
     try {
       const parser = new DOMParser();
-      const doc = parser.parseFromString(`<div>${rawText}</div>`, 'text/html');
+      const doc = parser.parseFromString(`<div>${normalizedText}</div>`, 'text/html');
       const container = doc.body.firstChild;
-      if (!container) return renderInteractiveText(rawText);
+      if (!container) {
+        return (
+          <div className="whitespace-pre-line leading-relaxed">
+            {renderInteractiveText(normalizedText)}
+          </div>
+        );
+      }
 
       const renderNode = (node: Node, keyIndex: string): React.ReactNode => {
         if (node.nodeType === Node.TEXT_NODE) {
@@ -674,12 +694,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         return null;
       };
 
-      return Array.from(container.childNodes).map((childNode, i) =>
-        renderNode(childNode, `root-${i}`)
+      return (
+        <div className="whitespace-pre-line leading-relaxed">
+          {Array.from(container.childNodes).map((childNode, i) =>
+            renderNode(childNode, `root-${i}`)
+          )}
+        </div>
       );
     } catch (e) {
       console.error('Error parsing formatted text:', e);
-      return renderInteractiveText(rawText);
+      return (
+        <div className="whitespace-pre-line leading-relaxed">
+          {renderInteractiveText(normalizedText)}
+        </div>
+      );
     }
   };
 
@@ -818,7 +846,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         {!isHeaderCollapsed && (
           <>
             {/* Mobile Top Minimal Bar */}
-            <div className="md:hidden flex items-center justify-between gap-2 p-2.5 bg-slate-950/90 border border-slate-800/80 rounded-2xl mb-2 shadow-lg">
+            <div className={`md:hidden flex items-center justify-between gap-2 p-2.5 rounded-2xl mb-2 shadow-lg border ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
               {onOpenSaveLoad && (
                 <button
                   onClick={onOpenSaveLoad}
@@ -830,16 +858,29 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               )}
 
               <div className="flex items-center gap-1.5">
+                {toggleSound && (
+                  <button
+                    onClick={toggleSound}
+                    className={`p-2 rounded-xl border cursor-pointer transition-colors ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                    title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
+                  >
+                    {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-500" /> : <VolumeX className={`w-4 h-4 ${themeConfig.textMutedClass}`} />}
+                  </button>
+                )}
                 <button
                   onClick={() => setShowDetailsModal(true)}
-                  className="p-2 text-amber-400 hover:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl cursor-pointer"
+                  className={`p-2 rounded-xl border cursor-pointer transition-colors ${
+                    isSepia
+                      ? 'bg-[#822b16]/15 border-[#822b16]/40 text-[#822b16] hover:bg-[#822b16]/25'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                  }`}
                   title="Detalles y Créditos"
                 >
                   <Info className="w-4 h-4" />
                 </button>
                 <button
                   onClick={onReset}
-                  className="p-2 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 rounded-xl cursor-pointer"
+                  className={`p-2 rounded-xl border cursor-pointer transition-colors ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                   title="Reiniciar"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -848,7 +889,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
 
             {/* PC Scene Header with Difficulty Selector */}
-            <div className="hidden md:flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className={`hidden md:flex flex-wrap items-center justify-between gap-3 border-b pb-3 ${themeConfig.cardBorderClass}`}>
               <div className="flex items-center gap-2">
                 <Compass className={`w-5 h-5 ${themeConfig.accentClass}`} />
                 <h2 className={`font-bold text-xl ${themeConfig.textMainClass}`}>
@@ -856,19 +897,51 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 </h2>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Audio Toggle Button (In text-game header) */}
+                {toggleSound && (
+                  <button
+                    onClick={toggleSound}
+                    className={`p-2 rounded-xl border transition-colors cursor-pointer flex items-center justify-center ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                    title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
+                  >
+                    {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-500" /> : <VolumeX className={`w-4 h-4 ${themeConfig.textMutedClass}`} />}
+                  </button>
+                )}
+
+                {/* Visual Style Selector (Test / Play mode) */}
+                <div className={`flex items-center gap-1.5 border rounded-xl px-2.5 py-1 text-xs shadow-inner ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
+                  <Palette className={`w-3.5 h-3.5 ${themeConfig.accentClass} shrink-0`} />
+                  <select
+                    value={project.theme}
+                    onChange={(e) => {
+                      if (updateProject) {
+                        updateProject((prev) => ({ ...prev, theme: e.target.value as any }));
+                      }
+                    }}
+                    className={`bg-transparent text-xs focus:outline-none cursor-pointer font-medium ${themeConfig.buttonTextClass}`}
+                    title="Estilo Visual del Texto-Juego (Modo Prueba)"
+                  >
+                    <option value="classic-retro" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>🕹️ LucasArts Retro</option>
+                    <option value="modern-dark" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>🌙 Oscuro Elegante</option>
+                    <option value="sepia-parchment" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>📜 Pergamino Sepia</option>
+                    <option value="cyber-terminal" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>💻 Terminal Cyber</option>
+                    <option value="emerald-vintage" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>🌲 Esmeralda Vintage</option>
+                  </select>
+                </div>
+
                 {/* Difficulty Selector */}
-                <div className="flex items-center bg-slate-950/80 border border-slate-800 rounded-xl p-1 text-xs shadow-inner">
-                  <span className="text-[10px] uppercase font-mono font-bold text-slate-400 px-2 flex items-center gap-1">
-                    <Shield className="w-3 h-3 text-amber-400" />
+                <div className={`flex items-center border rounded-xl p-1 text-xs shadow-inner ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
+                  <span className={`text-[10px] uppercase font-mono font-bold ${themeConfig.textMutedClass} px-2 flex items-center gap-1`}>
+                    <Shield className={`w-3 h-3 ${themeConfig.accentClass}`} />
                     Modo:
                   </span>
                   <button
                     onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'facil' }))}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       (gameState.difficulty || 'facil') === 'facil'
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} shadow`
+                        : `${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`
                     }`}
                     title="Modo Fácil: Palabras con acción destacadas siempre"
                   >
@@ -878,8 +951,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'normal' }))}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       gameState.difficulty === 'normal'
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} shadow`
+                        : `${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`
                     }`}
                     title="Modo Normal: Palabras sin destacar hasta ser usadas"
                   >
@@ -889,8 +962,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'dificil' }))}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       gameState.difficulty === 'dificil'
-                        ? 'bg-amber-500 text-slate-950 shadow'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} shadow`
+                        : `${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`
                     }`}
                     title="Modo Difícil: Las palabras usables no están marcadas ni quedan marcadas tras usarse"
                   >
@@ -900,16 +973,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
                 <button
                   onClick={() => setShowDetailsModal(true)}
-                  className="text-xs text-amber-300 hover:text-amber-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 transition-colors cursor-pointer"
+                  className={`text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-colors cursor-pointer ${
+                    isSepia
+                      ? 'bg-[#822b16]/12 border-[#822b16]/40 text-[#822b16] hover:bg-[#822b16]/20 font-bold'
+                      : 'text-amber-300 hover:text-amber-200 bg-amber-500/10 border-amber-500/30'
+                  }`}
                   title="Ver detalles, sinopsis y créditos del autor"
                 >
-                  <Info className="w-3.5 h-3.5 text-amber-400" />
+                  <Info className={`w-3.5 h-3.5 ${isSepia ? 'text-[#822b16]' : 'text-amber-400'}`} />
                   <span>Detalles y Créditos</span>
                 </button>
 
                 <button
                   onClick={onReset}
-                  className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 transition-colors cursor-pointer"
+                  className={`text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Reiniciar</span>
@@ -920,19 +997,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         )}
 
         {/* Sentence Builder Bar (LucasArts Style Command Bar) */}
-        <div className={`p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.accentBgClass} flex items-center justify-between gap-3 shadow-sm`}>
-          <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide text-amber-300">
-            <span className="text-amber-400 text-xs font-semibold uppercase tracking-wider">Acción:</span>
-            <span>
+        <div className={`p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} flex items-center justify-between gap-3 shadow-sm`}>
+          <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide">
+            <span className={`text-xs font-semibold uppercase tracking-wider ${themeConfig.accentClass}`}>Acción:</span>
+            <span className={themeConfig.actionBoxTextClass}>
               {activeVerb ? activeVerb.toUpperCase() : 'SELECCIONAR ACCIÓN...'}
             </span>
             {selectedItemObj && (
-              <span className="text-amber-200">
+              <span className={themeConfig.accentClass}>
                 [{selectedItemObj.name}]
               </span>
             )}
             {!activeVerb && !selectedItemObj && (
-              <span className="text-xs font-normal text-slate-400 italic hidden sm:inline">
+              <span className={`text-xs font-normal ${themeConfig.textMutedClass} italic hidden sm:inline`}>
                 (Haz clic en un verbo abajo o en una palabra destacada)
               </span>
             )}
@@ -941,7 +1018,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           {(activeVerb || selectedItemObj) && (
             <button
               onClick={handleClearCommand}
-              className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+              className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
             >
               Cancelar
             </button>
@@ -1227,10 +1304,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <button
                     key={v.id}
                     onClick={() => handleSelectVerb(v.id)}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 border ${
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 border cursor-pointer ${
                       isActive
                         ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 shadow-md scale-[1.02]`
-                        : 'bg-slate-950/70 border-slate-800 text-slate-300 hover:border-amber-500/50 hover:text-amber-300'
+                        : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
                     }`}
                   >
                     {getVerbIcon(v.iconName)}
@@ -1251,9 +1328,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               </div>
 
               {gameState.inventory.length === 0 ? (
-                <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl">
-                  <Box className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-                  <p className="text-xs text-slate-500 italic">No llevas ningún objeto todavía.</p>
+                <div className={`text-center py-6 border border-dashed rounded-xl ${themeConfig.cardBorderClass}`}>
+                  <Box className={`w-7 h-7 mx-auto mb-2 ${themeConfig.textMutedClass}`} />
+                  <p className={`text-xs italic ${themeConfig.textMutedClass}`}>No llevas ningún objeto todavía.</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -1267,10 +1344,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       <button
                         key={itemId}
                         onClick={() => handleSelectInventoryItem(itemId)}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium border transition-all ${
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow'
-                            : 'bg-slate-950/60 border-slate-800 text-slate-200 hover:border-amber-500/40 hover:text-amber-300'
+                            ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 font-bold shadow`
+                            : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
                         }`}
                         title={item.description}
                       >
@@ -1278,7 +1355,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                           <IconComp className="w-4 h-4 shrink-0" />
                           <span className="truncate">{item.name}</span>
                         </div>
-                        {isSelected && <span className="text-[10px] uppercase font-extrabold tracking-wider bg-slate-950 text-amber-400 px-1.5 py-0.5 rounded">Usando</span>}
+                        {isSelected && <span className={`text-[10px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${isSepia ? 'bg-[#3b2d1d] text-[#fbf5e8]' : 'bg-slate-950 text-amber-400'}`}>Usando</span>}
                       </button>
                     );
                   })}
@@ -1287,9 +1364,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
 
             {selectedItemObj && (
-              <div className="mt-3 p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-300 text-xs">
-                <p className="font-semibold text-amber-300 mb-0.5">{selectedItemObj.name}</p>
-                <p className="text-[11px] text-slate-400 leading-tight">{selectedItemObj.description}</p>
+              <div className={`mt-3 p-2.5 rounded-lg border text-xs ${themeConfig.actionBoxBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}>
+                <p className={`font-semibold mb-0.5 ${themeConfig.accentClass}`}>{selectedItemObj.name}</p>
+                <p className={`text-[11px] leading-tight ${themeConfig.textMutedClass}`}>{selectedItemObj.description}</p>
               </div>
             )}
           </div>
@@ -1353,20 +1430,28 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden cursor-default text-slate-200"
+              className={`border rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden cursor-default ${
+                isSepia
+                  ? 'bg-[#f5ebd7] border-[#822b16]/40 text-[#3b2d1d]'
+                  : 'bg-slate-900 border-amber-500/40 text-slate-200'
+              }`}
             >
               {/* Header */}
-              <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className={`px-6 py-4 border-b flex items-center justify-between ${
+                isSepia ? 'bg-[#e4d2ad] border-[#c2aa79]' : 'bg-slate-950 border-slate-800'
+              }`}>
                 <div className="flex items-center gap-2.5">
-                  <BookOpen className="w-5 h-5 text-amber-400" />
+                  <BookOpen className={`w-5 h-5 ${isSepia ? 'text-[#822b16]' : 'text-amber-400'}`} />
                   <div>
-                    <h3 className="font-bold text-slate-100 text-base">{project.title}</h3>
-                    <p className="text-xs text-slate-400">Por {project.author || 'Autor anónimo'} • v{project.version || '1.0'}</p>
+                    <h3 className={`font-bold text-base ${isSepia ? 'text-[#3b2d1d]' : 'text-slate-100'}`}>{project.title}</h3>
+                    <p className={`text-xs ${isSepia ? 'text-[#786146]' : 'text-slate-400'}`}>Por {project.author || 'Autor anónimo'} • v{project.version || '1.0'}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isSepia ? 'text-[#786146] hover:text-[#3b2d1d] hover:bg-[#ebdcb9]' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1375,28 +1460,40 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               {/* Content */}
               <div className="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm leading-relaxed">
                 {/* Synopsis */}
-                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                  <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <div className={`space-y-2 p-4 rounded-xl border ${
+                  isSepia ? 'bg-[#ebdcb9] border-[#c2aa79]' : 'bg-slate-950/60 border-slate-800'
+                }`}>
+                  <h4 className={`font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 ${
+                    isSepia ? 'text-[#822b16]' : 'text-amber-400'
+                  }`}>
                     <Sparkles className="w-4 h-4" />
                     Sinopsis de la Historia
                   </h4>
-                  <p className="text-slate-200 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+                  <p className={`text-xs sm:text-sm leading-relaxed whitespace-pre-line ${
+                    isSepia ? 'text-[#3b2d1d]' : 'text-slate-200'
+                  }`}>
                     {project.synopsis || project.description || 'Sin sinopsis disponible.'}
                   </p>
                 </div>
 
                 {/* Credits */}
-                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                  <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <div className={`space-y-2 p-4 rounded-xl border ${
+                  isSepia ? 'bg-[#ebdcb9] border-[#c2aa79]' : 'bg-slate-950/60 border-slate-800'
+                }`}>
+                  <h4 className={`font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 ${
+                    isSepia ? 'text-[#822b16]' : 'text-amber-400'
+                  }`}>
                     <Award className="w-4 h-4" />
                     Créditos Finales, Fuentes de Imágenes y Colaboradores
                   </h4>
                   {project.credits ? (
-                    <p className="text-slate-300 text-xs font-mono leading-relaxed whitespace-pre-line bg-slate-900 p-3 rounded-lg border border-slate-800">
+                    <p className={`text-xs font-mono leading-relaxed whitespace-pre-line p-3 rounded-lg border ${
+                      isSepia ? 'bg-[#dfceaa] border-[#c2aa79] text-[#3b2d1d]' : 'bg-slate-900 border-slate-800 text-slate-300'
+                    }`}>
                       {renderTextWithLinks(project.credits)}
                     </p>
                   ) : (
-                    <p className="text-slate-500 italic text-xs">
+                    <p className={`italic text-xs ${isSepia ? 'text-[#786146]' : 'text-slate-500'}`}>
                       No se han registrado créditos adicionales para este texto-juego.
                     </p>
                   )}
@@ -1404,22 +1501,30 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
                 {/* Technical Specs */}
                 <div className="grid grid-cols-2 gap-3 pt-2">
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
-                    <span className="block text-slate-400 text-[10px] uppercase font-bold">Escenas</span>
-                    <span className="font-bold text-slate-200 text-xs">{project.scenes.length} escenas</span>
+                  <div className={`p-3 rounded-xl border text-center ${
+                    isSepia ? 'bg-[#ebdcb9] border-[#c2aa79]' : 'bg-slate-950 border-slate-800'
+                  }`}>
+                    <span className={`block text-[10px] uppercase font-bold ${isSepia ? 'text-[#786146]' : 'text-slate-400'}`}>Escenas</span>
+                    <span className={`font-bold text-xs ${isSepia ? 'text-[#3b2d1d]' : 'text-slate-200'}`}>{project.scenes.length} escenas</span>
                   </div>
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
-                    <span className="block text-slate-400 text-[10px] uppercase font-bold">Objetos</span>
-                    <span className="font-bold text-slate-200 text-xs">{project.inventoryItems.length} objetos</span>
+                  <div className={`p-3 rounded-xl border text-center ${
+                    isSepia ? 'bg-[#ebdcb9] border-[#c2aa79]' : 'bg-slate-950 border-slate-800'
+                  }`}>
+                    <span className={`block text-[10px] uppercase font-bold ${isSepia ? 'text-[#786146]' : 'text-slate-400'}`}>Objetos</span>
+                    <span className={`font-bold text-xs ${isSepia ? 'text-[#3b2d1d]' : 'text-slate-200'}`}>{project.inventoryItems.length} objetos</span>
                   </div>
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-3.5 border-t border-slate-800 bg-slate-950 flex items-center justify-end">
+              <div className={`px-6 py-3.5 border-t flex items-center justify-end ${
+                isSepia ? 'bg-[#e4d2ad] border-[#c2aa79]' : 'bg-slate-950 border-slate-800'
+              }`}>
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  className={`px-4 py-2 font-bold rounded-xl text-xs transition-colors cursor-pointer ${
+                    isSepia ? 'bg-[#822b16] hover:bg-[#6b2210] text-[#fbf5e8]' : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                  }`}
                 >
                   Cerrar
                 </button>

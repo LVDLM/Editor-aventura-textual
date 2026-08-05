@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle, BookOpen, Shield, User, Layers, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle, BookOpen, Shield, User, Layers, ShieldCheck, ChevronDown, ChevronUp, Sun, Moon } from 'lucide-react';
 import { EngineTheme, UserProfile } from '../types';
 
 export type AppView = 'catalog' | 'play' | 'edit' | 'workspace' | 'admin' | 'profile';
@@ -24,6 +24,8 @@ interface NavbarProps {
   isTutorial?: boolean;
   isHeaderCollapsed?: boolean;
   setIsHeaderCollapsed?: (collapsed: boolean) => void;
+  webAspect?: 'clean' | 'classic';
+  onAspectChange?: (aspect: 'clean' | 'classic') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,7 +48,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   isTutorial = false,
   isHeaderCollapsed = false,
   setIsHeaderCollapsed,
+  webAspect = 'clean',
+  onAspectChange,
 }) => {
+  const isClean = webAspect === 'clean';
+
   // Logic for showing the Editor tab
   const canShowEditor = React.useMemo(() => {
     if (currentView === 'edit') return true;
@@ -60,7 +66,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   // Render ultra-compact top bar when collapsed
   if (isHeaderCollapsed) {
     return (
-      <header className="bg-slate-950/95 border-b border-white/10 text-white px-3 sm:px-6 py-1 sticky top-0 z-30 shadow-lg backdrop-blur-md flex items-center justify-between gap-2 min-h-[42px]">
+      <header className={`border-b px-3 sm:px-6 py-1 sticky top-0 z-30 shadow-lg backdrop-blur-md flex items-center justify-between gap-2 min-h-[42px] transition-colors duration-300 ${
+        isClean ? 'bg-white/95 border-slate-200 text-slate-800' : 'bg-slate-950/95 border-white/10 text-white'
+      }`}>
         {/* Left: Save Game Button (when playing) or Current Title */}
         <div className="flex items-center gap-2">
           {currentView === 'play' ? (
@@ -73,8 +81,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Guardar Partida</span>
             </button>
           ) : (
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+            <div className={`flex items-center gap-2 text-xs font-semibold ${isClean ? 'text-slate-700' : 'text-slate-300'}`}>
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
               <span className="truncate max-w-[180px] sm:max-w-xs">{gameTitle || 'Textoaventura'}</span>
             </div>
           )}
@@ -82,21 +90,35 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Center/Right: Audio & Expand Arrow Button */}
         <div className="flex items-center gap-2">
+          {onAspectChange && (
+            <button
+              onClick={() => onAspectChange(isClean ? 'classic' : 'clean')}
+              className={`p-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                isClean ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+              }`}
+              title={isClean ? 'Cambiar a Estilo Web Oscuro Clásico' : 'Cambiar a Estilo Web Luminoso'}
+            >
+              {isClean ? <Moon className="w-3.5 h-3.5 text-slate-600" /> : <Sun className="w-3.5 h-3.5 text-amber-400" />}
+            </button>
+          )}
+
           <button
             onClick={toggleSound}
-            className="p-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 transition-colors cursor-pointer"
+            className={`p-1 rounded-lg transition-colors cursor-pointer ${
+              isClean ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-white/5 hover:bg-white/10 text-white/70'
+            }`}
             title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
           >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-400" /> : <VolumeX className="w-3.5 h-3.5 text-white/30" />}
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-500" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
           </button>
 
           {setIsHeaderCollapsed && (
             <button
               onClick={() => setIsHeaderCollapsed(false)}
-              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm"
+              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm"
               title="Desplegar encabezados y menú principal de la web"
             >
-              <ChevronDown className="w-4 h-4 text-amber-400 animate-bounce" />
+              <ChevronDown className="w-4 h-4 text-amber-500 animate-bounce" />
               <span className="hidden sm:inline">Desplegar Encabezados</span>
             </button>
           )}
@@ -104,67 +126,62 @@ export const Navbar: React.FC<NavbarProps> = ({
       </header>
     );
   }
+
   return (
-    <header className="bg-[#0f0f12] border-b border-white/10 text-white px-4 sm:px-6 py-2.5 sticky top-0 z-30 shadow-xl">
+    <header className={`border-b px-4 sm:px-6 py-2.5 sticky top-0 z-30 shadow-md transition-colors duration-300 ${
+      isClean
+        ? 'bg-white/95 border-slate-200 text-slate-900 backdrop-blur-md'
+        : 'bg-[#0f0f12] border-white/10 text-white'
+    }`}>
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         {/* Brand & App Title */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setCurrentView('catalog')}
-            className="w-8 h-8 bg-amber-500 hover:bg-amber-400 rounded-lg flex items-center justify-center text-slate-950 font-extrabold shadow-md transition-all shrink-0"
+            className="w-8 h-8 bg-amber-500 hover:bg-amber-400 rounded-lg flex items-center justify-center text-slate-950 font-extrabold shadow-md transition-all shrink-0 cursor-pointer"
             title="Ir a la Biblioteca Principal"
           >
             N
           </button>
           <div>
-            <h1 className="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-2">
-              <span className="cursor-pointer hover:text-amber-400 transition-colors" onClick={() => setCurrentView('catalog')}>
+            <h1 className="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2">
+              <span className={`cursor-pointer transition-colors ${isClean ? 'text-slate-900 hover:text-amber-600' : 'text-white hover:text-amber-400'}`} onClick={() => setCurrentView('catalog')}>
                 Textoaventura: Lecturas interactivas
               </span>
             </h1>
-            <p className="text-[11px] text-white/50 truncate max-w-[160px] sm:max-w-xs" title={gameTitle}>
+            <p className={`text-[11px] truncate max-w-[160px] sm:max-w-xs ${isClean ? 'text-slate-500' : 'text-white/50'}`} title={gameTitle}>
               {currentView === 'play' || currentView === 'edit' ? gameTitle : 'Plataforma de Historias'}
             </p>
           </div>
         </div>
 
         {/* Platform Navigation Tabs */}
-        <div className="flex items-center bg-black/60 rounded-xl p-1 border border-white/10 flex-wrap">
+        <div className={`flex items-center rounded-xl p-1 border flex-wrap ${
+          isClean ? 'bg-slate-100 border-slate-200' : 'bg-black/60 border-white/10'
+        }`}>
           <button
             onClick={() => setCurrentView('catalog')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               currentView === 'catalog'
                 ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : 'text-white/60 hover:text-white'
+                : isClean ? 'text-slate-600 hover:text-slate-900' : 'text-white/60 hover:text-white'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span>Biblioteca</span>
           </button>
 
-          <button
-            onClick={() => setCurrentView('play')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              currentView === 'play'
-                ? 'bg-white/15 text-white font-bold shadow-inner'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Play className="w-3.5 h-3.5" />
-            <span>Jugar Lectura</span>
-          </button>
-
           {canShowEditor && (
             <button
               onClick={() => setCurrentView('edit')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 currentView === 'edit'
-                  ? 'bg-white/15 text-white font-bold shadow-inner'
-                  : 'text-white/60 hover:text-white'
+                  ? isClean ? 'bg-slate-200 text-slate-900 font-bold shadow-sm' : 'bg-white/15 text-white font-bold shadow-inner'
+                  : isClean ? 'text-slate-600 hover:text-slate-900' : 'text-white/60 hover:text-white'
               }`}
               title={
                 isTutorial
-                  ? 'Ver y probar cambios en el tutorial (puedes editarlo sin sobreescribir el original en el servidor)'
+                  ? 'Ver y probar cambios en el tutorial'
                   : 'Editar y personalizar esta historia'
               }
             >
@@ -175,47 +192,35 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <button
             onClick={() => setCurrentView('workspace')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               currentView === 'workspace'
                 ? 'bg-sky-500 text-slate-950 font-bold shadow-md'
-                : 'text-white/60 hover:text-white'
+                : isClean ? 'text-slate-600 hover:text-slate-900' : 'text-white/60 hover:text-white'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Mis Proyectos</span>
           </button>
-
-          {currentUser && (
-            <button
-              onClick={() => setCurrentView('profile')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                currentView === 'profile'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-md'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Mi Perfil</span>
-            </button>
-          )}
-
-          {currentUser?.role === 'admin' && (
-            <button
-              onClick={() => setCurrentView('admin')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                currentView === 'admin'
-                  ? 'bg-rose-500 text-white font-bold shadow-md'
-                  : 'text-rose-300/80 hover:text-rose-200 bg-rose-950/40'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Admin</span>
-            </button>
-          )}
         </div>
 
         {/* Action Controls & User Auth Button */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Global Web Aspect Selector Button */}
+          {onAspectChange && (
+            <button
+              onClick={() => onAspectChange(isClean ? 'classic' : 'clean')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                isClean
+                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
+                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+              }`}
+              title={isClean ? 'Cambiar estilo de la web a Oscuro Clásico' : 'Cambiar estilo de la web a Luminoso y Diáfano'}
+            >
+              {isClean ? <Moon className="w-3.5 h-3.5 text-slate-700" /> : <Sun className="w-3.5 h-3.5 text-amber-400" />}
+              <span className="hidden md:inline">{isClean ? 'Modo Oscuro' : 'Modo Claro'}</span>
+            </button>
+          )}
+
           {/* User Profile / Auth Button */}
           <button
             onClick={() => {
@@ -225,19 +230,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onOpenAuth();
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
               currentUser
                 ? currentView === 'profile'
                   ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-md font-bold'
                   : currentUser.role === 'admin'
-                  ? 'bg-rose-950/60 border-rose-500/40 text-rose-200 hover:bg-rose-900/60'
-                  : 'bg-sky-950/60 border-sky-500/40 text-sky-200 hover:bg-sky-900/60'
-                : 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
+                  ? 'bg-rose-100 border-rose-300 text-rose-900 hover:bg-rose-200'
+                  : 'bg-sky-100 border-sky-300 text-sky-900 hover:bg-sky-200'
+                : 'bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30'
             }`}
           >
             {currentUser ? (
               <>
-                {currentUser.role === 'admin' ? <Shield className="w-3.5 h-3.5 text-rose-400" /> : <User className="w-3.5 h-3.5 text-sky-400" />}
+                {currentUser.role === 'admin' ? <Shield className="w-3.5 h-3.5 text-rose-600" /> : <User className="w-3.5 h-3.5 text-sky-600" />}
                 <span className="truncate max-w-[100px]">{currentUser.displayName}</span>
               </>
             ) : (
@@ -248,72 +253,74 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* Theme Selector (when in play mode) */}
-          {(currentView === 'play' || currentView === 'edit') && (
-            <select
-              value={theme}
-              onChange={(e) => setTheme(e.target.value as EngineTheme)}
-              className="bg-black/40 border border-white/10 text-white/80 text-xs rounded-xl px-2.5 py-1.5 focus:border-amber-500 outline-none cursor-pointer"
-              title="Cambiar Estilo Visual"
+          {/* Single Admin / Lector View Toggle Button for Administrators */}
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => {
+                if (currentView === 'admin') {
+                  setCurrentView('catalog');
+                } else {
+                  setCurrentView('admin');
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm ${
+                currentView === 'admin'
+                  ? 'bg-rose-600 border-rose-500 text-white shadow-md'
+                  : isClean
+                  ? 'bg-sky-100 border-sky-300 text-sky-900 hover:bg-sky-200'
+                  : 'bg-sky-950/50 border-sky-700/60 text-sky-300 hover:bg-sky-900/60'
+              }`}
+              title={
+                currentView === 'admin'
+                  ? 'Ver la web como lector registrado (Lector)'
+                  : 'Ver panel de administración (Admin)'
+              }
             >
-              <option value="classic-retro">🕹️ LucasArts Retro</option>
-              <option value="modern-dark">🌙 Oscuro Elegante</option>
-              <option value="sepia-parchment">📜 Pergamino Sepia</option>
-              <option value="cyber-terminal">💻 Terminal Cyber</option>
-              <option value="emerald-vintage">🌲 Esmeralda Vintage</option>
-            </select>
+              {currentView === 'admin' ? (
+                <>
+                  <Shield className="w-3.5 h-3.5 text-white" />
+                  <span>Admin</span>
+                </>
+              ) : (
+                <>
+                  <User className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                  <span>Lector</span>
+                </>
+              )}
+            </button>
           )}
-
-          {/* Audio toggle */}
-          <button
-            onClick={toggleSound}
-            className="p-2 rounded-xl bg-black/40 border border-white/10 text-white/60 hover:text-amber-400 transition-colors"
-            title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-white/30" />}
-          </button>
 
           {/* Player Progress Save/Load (ONLY visible when playing the game) */}
           {currentView === 'play' && (
             <button
               onClick={onOpenSaveLoad}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/40 text-emerald-200 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm"
               title="Guardar o cargar tu progreso en la partida actual"
             >
-              <Bookmark className="w-3.5 h-3.5 text-emerald-400" />
+              <Bookmark className="w-3.5 h-3.5 text-emerald-200" />
               <span>Guardar/Cargar Partida</span>
-            </button>
-          )}
-
-          {/* Project Save & Export Button (In Editor / Workspace mode) */}
-          {currentView === 'edit' && (
-            <button
-              onClick={onOpenExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-colors shadow-sm cursor-pointer"
-              title="Guardar proyecto en la nube, descargar JSON o exportar HTML/ZIP"
-            >
-              <FolderDown className="w-3.5 h-3.5" />
-              <span>Guardar Proyecto</span>
             </button>
           )}
 
           {/* Help */}
           <button
             onClick={onOpenHelp}
-            className="p-2 rounded-xl bg-black/40 border border-white/10 text-white/40 hover:text-white transition-colors cursor-pointer"
+            className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+              isClean ? 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900' : 'bg-black/40 border-white/10 text-white/40 hover:text-white'
+            }`}
             title="Guía y Ayuda"
           >
             <HelpCircle className="w-4 h-4" />
           </button>
 
-          {/* Recoger Encabezados (Modo Lectura Enfocada) */}
+          {/* Recoger Encabezados */}
           {setIsHeaderCollapsed && (
             <button
               onClick={() => setIsHeaderCollapsed(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm ml-1"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm ml-1"
               title="Recoger encabezados de la web y de la lectura para pantalla completa de texto y botones"
             >
-              <ChevronUp className="w-4 h-4 text-amber-400" />
+              <ChevronUp className="w-4 h-4 text-amber-500" />
               <span className="hidden sm:inline">Recoger Encabezados</span>
             </button>
           )}

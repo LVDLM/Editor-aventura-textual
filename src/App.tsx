@@ -26,6 +26,16 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [soundEnabled, setSoundState] = useState<boolean>(true);
 
+  // Global web aspect selector state: 'clean' vs 'classic'
+  const [webAspect, setWebAspect] = useState<'clean' | 'classic'>(() => {
+    return (localStorage.getItem('portal_web_aspect') as 'clean' | 'classic') || 'clean';
+  });
+
+  const handleAspectChange = (aspect: 'clean' | 'classic') => {
+    setWebAspect(aspect);
+    localStorage.setItem('portal_web_aspect', aspect);
+  };
+
   // Active game runtime state
   const [gameState, setGameState] = useState({
     currentSceneId: sampleGameProject.initialSceneId,
@@ -255,7 +265,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-[#d1d1d1] flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
+      webAspect === 'clean' ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0a0a0c] text-[#d1d1d1]'
+    } selection:bg-amber-500 selection:text-slate-950`}>
       
       {/* Platform Top Header */}
       <Navbar
@@ -278,6 +290,8 @@ export default function App() {
         onLoadSampleGame={handleLoadSampleGame}
         isHeaderCollapsed={isHeaderCollapsed}
         setIsHeaderCollapsed={setIsHeaderCollapsed}
+        webAspect={webAspect}
+        onAspectChange={handleAspectChange}
         isTutorial={
           project.id === sampleGameProject.id ||
           project.id === 'sample-game-id' ||
@@ -294,6 +308,8 @@ export default function App() {
         {currentView === 'catalog' && (
           <PublicCatalog
             currentUser={currentUser}
+            webAspect={webAspect}
+            onAspectChange={handleAspectChange}
             onPlayProject={(selectedProj) => {
               setProject(selectedProj);
               resetGameStateForProject(selectedProj);
@@ -319,6 +335,8 @@ export default function App() {
             onOpenSaveLoad={() => setShowSaveLoad(true)}
             isHeaderCollapsed={isHeaderCollapsed}
             setIsHeaderCollapsed={setIsHeaderCollapsed}
+            soundEnabled={soundEnabled}
+            toggleSound={() => setSoundState(!soundEnabled)}
           />
         )}
 
@@ -327,7 +345,9 @@ export default function App() {
             project={project}
             updateProject={handleUpdateProject}
             onSwitchToPlay={() => setCurrentView('play')}
+            onOpenExport={() => setShowExport(true)}
             currentUser={currentUser}
+            webAspect={webAspect}
           />
         )}
 
@@ -399,6 +419,7 @@ export default function App() {
       {!isHeaderCollapsed && (
         <Footer
           variant={currentView === 'play' ? 'published' : 'web'}
+          webAspect={webAspect}
           onOpenPrivacyModal={() => setShowPrivacyModal(true)}
         />
       )}
