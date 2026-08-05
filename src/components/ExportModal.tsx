@@ -1,22 +1,62 @@
 import React, { useState } from 'react';
-import { GameProject } from '../types';
+import { GameProject, UserProfile } from '../types';
 import { generateStandaloneHTML } from '../utils/htmlExporter';
 import { exportProjectAsZip, projectHasImages } from '../utils/zipExporter';
-import { Download, FileCode, Upload, X, Archive, FileArchive } from 'lucide-react';
+import { saveProjectToCloud } from '../lib/firebase';
+import { Download, FileCode, Upload, X, Archive, FileArchive, Cloud } from 'lucide-react';
 
 interface ExportModalProps {
   project: GameProject;
   onImportProject: (project: GameProject) => void;
   onClose: () => void;
+  currentUser?: UserProfile | null;
+  onOpenAuth?: () => void;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
   project,
   onImportProject,
   onClose,
+  currentUser,
+  onOpenAuth,
 }) => {
   const [isExportingZip, setIsExportingZip] = useState(false);
+  const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [cloudMessage, setCloudMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const hasImages = projectHasImages(project);
+
+  const handleSaveToCloud = async () => {
+    if (!currentUser) {
+      if (onOpenAuth) onOpenAuth();
+      return;
+    }
+    setIsSavingCloud(true);
+    setCloudMessage(null);
+    try {
+      await saveProjectToCloud(
+        project.id,
+        project,
+        {
+          uid: currentUser.uid,
+          displayName: currentUser.displayName,
+          email: currentUser.email,
+        },
+        'draft'
+      );
+      setCloudMessage({
+        type: 'success',
+        text: `¡Proyecto "${project.title}" guardado exitosamente en la nube!`,
+      });
+    } catch (err) {
+      console.error(err);
+      setCloudMessage({
+        type: 'error',
+        text: 'Error al guardar el proyecto en la nube. Inténtalo de nuevo.',
+      });
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
 
   const handleExportHTML = () => {
     const html = generateStandaloneHTML(project);
@@ -105,13 +145,78 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Content */}
         <div className="p-6 space-y-5">
+          {/* Cloud Save Section */}
+          <div className="bg-slate-950 border border-amber-500/50 p-4 sm:p-5 rounded-2xl space-y-3 shadow-lg">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white flex flex-wrap items-center gap-2">
+                    <span>Guardar Proyecto en la Nube</span>
+                    {currentUser && (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono">
+                        {currentUser.displayName || currentUser.email}
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Sincroniza la estructura de tu historia en tu cuenta para acceder y continuar editando desde cualquier lugar.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {cloudMessage && (
+              <div
+                className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                  cloudMessage.type === 'success'
+                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-rose-950/80 text-rose-300 border border-rose-500/40'
+                }`}
+              >
+                <span>{cloudMessage.type === 'success' ? '✅' : '❌'}</span>
+                <span>{cloudMessage.text}</span>
+              </div>
+            )}
+
+            {currentUser ? (
+              <button
+                onClick={handleSaveToCloud}
+                disabled={isSavingCloud}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                <Cloud className="w-4 h-4" />
+                <span>{isSavingCloud ? 'Guardando en la nube...' : 'Guardar en la Nube (Mi Cuenta)'}</span>
+              </button>
+            ) : (
+              <div className="flex items-center justify-between gap-3 bg-amber-950/30 border border-amber-500/30 p-3 rounded-xl">
+                <p className="text-xs text-amber-200/90">
+                  Inicia sesión con tu cuenta para guardar tu proyecto directamente en la nube.
+                </p>
+                {onOpenAuth && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenAuth();
+                    }}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                  >
+                    Iniciar Sesión
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Clarification Notice Banner */}
-          <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200/90 flex items-start gap-2.5">
+          <div className="bg-amber-950/20 border border-white/10 rounded-xl p-3 text-xs text-slate-300 flex items-start gap-2.5">
             <span className="text-base shrink-0">🛠️</span>
             <div className="space-y-0.5">
-              <p className="font-semibold text-amber-300">Guardado de diseño de juego (Editor)</p>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Este panel te permite guardar la estructura completa de tu juego (escenas, palabras clave, respuestas, objetos) en formato JSON o exportarla como web ejecutable HTML. <strong className="text-emerald-300">Esto NO guarda el progreso de la partida de un jugador</strong> (para eso usa "Progreso Partida").
+              <p className="font-semibold text-amber-300 text-xs">Guardado del Diseño del Juego (Editor)</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Este panel te permite guardar la historia en la nube o descargar la estructura completa en JSON/HTML. <strong className="text-amber-200">Esto NO guarda el progreso de la partida de un jugador</strong> (para eso usa "Guardar/Cargar Partida").
               </p>
             </div>
           </div>

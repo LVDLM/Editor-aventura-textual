@@ -551,9 +551,9 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/80 focus:border-amber-500 outline-none"
             >
               <option value="normal">Escena Normal de Aventura</option>
-              <option value="portada">🖼️ Escena de Portada</option>
-              <option value="introduccion">📖 Escena de Introducción</option>
-              <option value="qte">⚡ Escena Especial: Quick Time Event (QTE)</option>
+              <option value="portada">Escena de Portada</option>
+              <option value="introduccion">Escena de Introducción</option>
+              <option value="qte">Escena Especial: Quick Time Event (QTE)</option>
             </select>
 
             <button
@@ -787,10 +787,10 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 }}
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white font-medium focus:border-amber-500 outline-none"
               >
-                <option value="normal">🏰 Escena Normal de Aventura</option>
-                <option value="portada">🖼️ Escena de Portada (Carátula)</option>
-                <option value="introduccion">📖 Escena de Introducción (Prólogo)</option>
-                <option value="qte">⚡ Escena Especial: Quick Time Event (QTE)</option>
+                <option value="normal">Escena Normal de Aventura</option>
+                <option value="portada">Escena de Portada (Carátula)</option>
+                <option value="introduccion">Escena de Introducción (Prólogo)</option>
+                <option value="qte">Escena Especial: Quick Time Event (QTE)</option>
               </select>
             </div>
           </div>

@@ -120,7 +120,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-950 border border-amber-500/20 p-6 sm:p-10 shadow-2xl">
         <div className="relative z-10 max-w-3xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5" /> Portal de Lecturas Interactivas
+            Portal de Lecturas Interactivas
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
             Descubre y juega a increíbles Aventuras de Texto
@@ -151,22 +151,6 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
             placeholder="Buscar por título, autor o sinopsis..."
             className="w-full bg-slate-950 border border-white/10 rounded-xl py-2 pl-9 pr-3 text-xs text-white focus:border-amber-500 outline-none"
           />
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-slate-400 hidden sm:block" />
-          <select
-            value={selectedTheme}
-            onChange={(e) => setSelectedTheme(e.target.value)}
-            className="bg-slate-950 border border-white/10 text-xs text-slate-300 rounded-xl px-3 py-2 outline-none focus:border-amber-500 w-full sm:w-auto cursor-pointer"
-          >
-            <option value="all">Todos los Estilos Visuales</option>
-            <option value="classic-retro">LucasArts Retro</option>
-            <option value="modern-dark">Oscuro Elegante</option>
-            <option value="sepia-parchment">Pergamino Sepia</option>
-            <option value="cyber-terminal">Terminal Cyber</option>
-            <option value="emerald-vintage">Esmeralda Vintage</option>
-          </select>
         </div>
       </div>
 
@@ -239,7 +223,6 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
                         <span>Por <strong>{doc.authorName}</strong></span>
                       </p>
                     </div>
-                    {getThemeBadge(theme)}
                   </div>
 
                   {/* Synopsis text preview */}
@@ -365,7 +348,6 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-xl font-extrabold text-white">{selectedDocModal.title}</h2>
-                  {getThemeBadge(selectedDocModal.projectData?.theme || 'classic-retro')}
                 </div>
                 <p className="text-xs text-amber-400 font-medium">
                   Autor / Creador: <strong className="text-amber-200">{selectedDocModal.authorName}</strong>

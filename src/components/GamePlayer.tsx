@@ -580,6 +580,97 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     });
   };
 
+  // Parses HTML formatting tags (h1, h2, b, i, u, p, etc.) and renders styled elements while maintaining interactive hotspot words
+  const renderFormattedAndInteractiveText = (rawText: string) => {
+    if (!rawText) return null;
+
+    if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+      return renderInteractiveText(rawText);
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${rawText}</div>`, 'text/html');
+      const container = doc.body.firstChild;
+      if (!container) return renderInteractiveText(rawText);
+
+      const renderNode = (node: Node, keyIndex: string): React.ReactNode => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.nodeValue || '';
+          return <React.Fragment key={keyIndex}>{renderInteractiveText(text)}</React.Fragment>;
+        }
+
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          const tagName = el.tagName.toLowerCase();
+          const children = Array.from(el.childNodes).map((child, i) =>
+            renderNode(child, `${keyIndex}-${i}`)
+          );
+
+          switch (tagName) {
+            case 'h1':
+              return (
+                <h1 key={keyIndex} className="text-2xl sm:text-3xl font-extrabold text-amber-300 my-3 tracking-tight border-b border-amber-500/20 pb-1">
+                  {children}
+                </h1>
+              );
+            case 'h2':
+              return (
+                <h2 key={keyIndex} className="text-xl sm:text-2xl font-bold text-amber-200 my-2.5">
+                  {children}
+                </h2>
+              );
+            case 'h3':
+              return (
+                <h3 key={keyIndex} className="text-lg font-bold text-amber-100 my-2">
+                  {children}
+                </h3>
+              );
+            case 'b':
+            case 'strong':
+              return (
+                <strong key={keyIndex} className="font-bold text-amber-100">
+                  {children}
+                </strong>
+              );
+            case 'i':
+            case 'em':
+              return (
+                <em key={keyIndex} className="italic text-slate-200">
+                  {children}
+                </em>
+              );
+            case 'u':
+              return (
+                <u key={keyIndex} className="underline decoration-amber-500/50 underline-offset-4">
+                  {children}
+                </u>
+              );
+            case 'p':
+              return (
+                <p key={keyIndex} className="my-2 leading-relaxed">
+                  {children}
+                </p>
+              );
+            case 'br':
+              return <br key={keyIndex} />;
+            default:
+              return <span key={keyIndex}>{children}</span>;
+          }
+        }
+
+        return null;
+      };
+
+      return Array.from(container.childNodes).map((childNode, i) =>
+        renderNode(childNode, `root-${i}`)
+      );
+    } catch (e) {
+      console.error('Error parsing formatted text:', e);
+      return renderInteractiveText(rawText);
+    }
+  };
+
   // Parses [Terminar / Cargar partida] or similar bracket tags into interactive End Game action bars
   const renderTextWithTags = (rawText: string, isBlockGameOver?: boolean) => {
     if (!rawText) return null;
@@ -629,9 +720,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       }
       return (
         <React.Fragment key={index}>
-          {isSceneGameOver || isBlockGameOver || hasTag || gameState.isGameOver
-            ? part
-            : renderInteractiveText(part)}
+          {renderFormattedAndInteractiveText(part)}
         </React.Fragment>
       );
     });
@@ -1255,16 +1344,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 </div>
 
                 {/* Technical Specs */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
-                    <span className="block text-slate-400 text-[10px] uppercase font-bold">Estilo Visual</span>
-                    <span className="font-bold text-slate-200 text-xs capitalize">{project.theme}</span>
-                  </div>
+                <div className="grid grid-cols-2 gap-3 pt-2">
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="block text-slate-400 text-[10px] uppercase font-bold">Escenas</span>
                     <span className="font-bold text-slate-200 text-xs">{project.scenes.length} escenas</span>
                   </div>
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center col-span-2 sm:col-span-1">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
                     <span className="block text-slate-400 text-[10px] uppercase font-bold">Objetos</span>
                     <span className="font-bold text-slate-200 text-xs">{project.inventoryItems.length} objetos</span>
                   </div>

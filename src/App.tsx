@@ -406,6 +406,8 @@ export default function App() {
           project={project}
           onImportProject={handleImportProject}
           onClose={() => setShowExport(false)}
+          currentUser={currentUser}
+          onOpenAuth={() => setShowAuthModal(true)}
         />
       )}
 

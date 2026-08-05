@@ -69,10 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <h1 className="text-sm sm:text-base font-bold tracking-tight text-white flex items-center gap-2">
               <span className="cursor-pointer hover:text-amber-400 transition-colors" onClick={() => setCurrentView('catalog')}>
-                Lecturas Interactivas
-              </span>
-              <span className="text-[10px] text-amber-500 font-mono px-1.5 py-0.5 rounded bg-black/40 border border-white/10">
-                Web &amp; Editor
+                Textoaventura: Lecturas interactivas
               </span>
             </h1>
             <p className="text-[11px] text-white/50 truncate max-w-[160px] sm:max-w-xs" title={gameTitle}>
