@@ -264,7 +264,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
             onClick={handleCreateOrUpdateItem}
             className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-colors"
           >
-            {editingItemId ? <Sparkles className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {!editingItemId && <Plus className="w-4 h-4" />}
             <span>{editingItemId ? 'Guardar Cambios' : 'Añadir Objeto al Juego'}</span>
           </button>
 

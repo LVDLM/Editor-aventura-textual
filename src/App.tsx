@@ -14,7 +14,7 @@ import { AdminReviewPanel } from './components/Portal/AdminReviewPanel';
 import { AuthModal } from './components/Portal/AuthModal';
 import { UserProfilePage } from './components/Portal/UserProfilePage';
 import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
-import { PrivacyBanner } from './components/Portal/PrivacyBanner';
+import { Footer } from './components/Footer';
 import { setSoundEnabled } from './utils/audio';
 import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -37,13 +37,14 @@ export default function App() {
     difficulty: 'facil' as 'facil' | 'normal',
   });
 
-  // Modals state
+  // Modals and UI Focus state
   const [showSaveLoad, setShowSaveLoad] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
 
   // Listen for Firebase Auth state changes
   useEffect(() => {
@@ -275,6 +276,8 @@ export default function App() {
         onOpenAuth={() => setShowAuthModal(true)}
         onOpenPrivacyModal={() => setShowPrivacyModal(true)}
         onLoadSampleGame={handleLoadSampleGame}
+        isHeaderCollapsed={isHeaderCollapsed}
+        setIsHeaderCollapsed={setIsHeaderCollapsed}
         isTutorial={
           project.id === sampleGameProject.id ||
           project.id === 'sample-game-id' ||
@@ -287,7 +290,7 @@ export default function App() {
       />
 
       {/* Main View Router */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col min-h-0">
         {currentView === 'catalog' && (
           <PublicCatalog
             currentUser={currentUser}
@@ -314,6 +317,8 @@ export default function App() {
             setGameState={setGameState}
             onReset={handleResetGame}
             onOpenSaveLoad={() => setShowSaveLoad(true)}
+            isHeaderCollapsed={isHeaderCollapsed}
+            setIsHeaderCollapsed={setIsHeaderCollapsed}
           />
         )}
 
@@ -391,6 +396,13 @@ export default function App() {
         )}
       </main>
 
+      {!isHeaderCollapsed && (
+        <Footer
+          variant={currentView === 'play' ? 'published' : 'web'}
+          onOpenPrivacyModal={() => setShowPrivacyModal(true)}
+        />
+      )}
+
       {/* Modals */}
       {showSaveLoad && (
         <SaveLoadModal
@@ -442,8 +454,6 @@ export default function App() {
           onOpenDeleteAccount={() => setCurrentView('profile')}
         />
       )}
-
-      <PrivacyBanner onOpenPrivacyModal={() => setShowPrivacyModal(true)} />
     </div>
   );
 }

@@ -326,9 +326,9 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
       <div class="difficulty-picker" style="display: inline-flex; align-items: center; gap: 0.4rem;">
         <label for="difficulty-select" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Dificultad:</label>
         <select id="difficulty-select" onchange="changeDifficulty(this.value)" style="background: #0f172a; color: var(--accent); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; outline: none;">
-          <option value="easy">🌟 Fácil</option>
+          <option value="facil">🌟 Fácil</option>
           <option value="normal">🔍 Normal</option>
-          <option value="hard">💀 Difícil</option>
+          <option value="dificil">💀 Difícil</option>
         </select>
       </div>
       <button class="btn" onclick="saveGame()">💾 Guardar</button>
@@ -485,7 +485,7 @@ ${jsonProject}
 
       const parts = text.split(pattern);
       const isNormalMode = gameState.difficulty === 'normal';
-      const isHardMode = gameState.difficulty === 'hard';
+      const isHardMode = gameState.difficulty === 'hard' || gameState.difficulty === 'dificil';
       const usedHotspots = gameState.usedHotspotIds || [];
 
       let html = '';
@@ -640,9 +640,15 @@ ${jsonProject}
       if (modal) modal.style.display = 'none';
     }
 
+    function formatTextWithLinks(str) {
+      if (!str) return '';
+      const escaped = escapeHTML(str);
+      return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$1</a>');
+    }
+
     function toggleDetailsModal() {
       const syn = PROJECT.synopsis || PROJECT.description || 'Sin sinopsis registrada.';
-      const creds = PROJECT.credits ? ('<div style="margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 0.8rem;"><strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Créditos y Fuentes:</strong>' + escapeHTML(PROJECT.credits).replace(/\n/g, '<br/>') + '</div>') : '';
+      const creds = PROJECT.credits ? ('<div style="margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 0.8rem;"><strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Créditos y Fuentes:</strong>' + formatTextWithLinks(PROJECT.credits).replace(/\n/g, '<br/>') + '</div>') : '';
       showPopupModal('📖 Detalles de la Historia', '<div style="font-size: 0.95rem; line-height: 1.6;"><strong>' + escapeHTML(PROJECT.title) + '</strong> por <em>' + escapeHTML(PROJECT.author) + '</em></div><div style="margin-top: 0.75rem; font-size: 0.9rem; color: #cbd5e1;">' + escapeHTML(syn).replace(/\n/g, '<br/>') + '</div>' + creds, null, '✨');
     }
 

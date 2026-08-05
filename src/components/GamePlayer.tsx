@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GameProject, Hotspot, VerbType, InventoryItem, SaveSlotData } from '../types';
 import { THEME_CONFIGS } from '../utils/themeStyles';
+import { renderTextWithLinks } from '../utils/textUtils';
 import { ALL_VERBS } from '../utils/verbs';
 import { playSound } from '../utils/audio';
 import {
@@ -31,6 +32,8 @@ import {
   Play,
   Info,
   Award,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -44,11 +47,13 @@ interface GamePlayerProps {
     appendedTextsPerScene: Record<string, string[]>;
     history: { id: string; type: 'story' | 'response' | 'system'; text: string }[];
     usedHotspotIds?: string[];
-    difficulty?: 'facil' | 'normal';
+    difficulty?: 'facil' | 'normal' | 'dificil';
   };
   setGameState: React.Dispatch<React.SetStateAction<any>>;
   onReset: () => void;
   onOpenSaveLoad?: () => void;
+  isHeaderCollapsed?: boolean;
+  setIsHeaderCollapsed?: (collapsed: boolean) => void;
 }
 
 const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
@@ -66,6 +71,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   setGameState,
   onReset,
   onOpenSaveLoad,
+  isHeaderCollapsed: propIsHeaderCollapsed,
+  setIsHeaderCollapsed: propSetIsHeaderCollapsed,
 }) => {
   const [activeVerb, setActiveVerb] = useState<VerbType | null>(null);
   const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null);
@@ -82,6 +89,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   
   // Details & Credits modal state
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  // Collapsible Header State
+  const [localIsHeaderCollapsed, setLocalIsHeaderCollapsed] = useState(false);
+  const isHeaderCollapsed = propIsHeaderCollapsed !== undefined ? propIsHeaderCollapsed : localIsHeaderCollapsed;
+  const setIsHeaderCollapsed = propSetIsHeaderCollapsed || setLocalIsHeaderCollapsed;
 
   // Direct click word context menu modal
   const [contextMenu, setContextMenu] = useState<{
@@ -541,6 +552,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     const parts = text.split(pattern);
     const isNormalMode = gameState.difficulty === 'normal';
+    const isHardMode = gameState.difficulty === 'dificil';
     const usedHotspots = gameState.usedHotspotIds || [];
 
     return parts.map((part, idx) => {
@@ -551,13 +563,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (matchedHotspot) {
         const isUsed = usedHotspots.includes(matchedHotspot.id);
 
-        if (isNormalMode && !isUsed) {
-          // Normal mode before being used: render like standard text, clickable but without highlight or hover indicator
+        if (isHardMode || (isNormalMode && !isUsed)) {
+          // Hard mode or Normal mode before being used: render like standard text, clickable but without highlight
           return (
             <span
               key={idx}
               onClick={(e) => handleWordClick(matchedHotspot, e)}
-              className="inline-block cursor-pointer"
+              className="inline-block cursor-pointer hover:text-amber-300 transition-colors"
             >
               {part}
             </span>
@@ -802,69 +814,115 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Scene Header with Difficulty Selector */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <Compass className={`w-5 h-5 ${themeConfig.accentClass}`} />
-            <h2 className={`font-bold text-xl ${themeConfig.textMainClass}`}>
-              {currentScene?.name || 'Escena'}
-            </h2>
-          </div>
+        {/* Mobile & Desktop Header Controls when expanded */}
+        {!isHeaderCollapsed && (
+          <>
+            {/* Mobile Top Minimal Bar */}
+            <div className="md:hidden flex items-center justify-between gap-2 p-2.5 bg-slate-950/90 border border-slate-800/80 rounded-2xl mb-2 shadow-lg">
+              {onOpenSaveLoad && (
+                <button
+                  onClick={onOpenSaveLoad}
+                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Guardar Partida</span>
+                </button>
+              )}
 
-          <div className="flex items-center gap-3">
-            {/* Difficulty Selector */}
-            <div className="flex items-center bg-slate-950/80 border border-slate-800 rounded-xl p-1 text-xs shadow-inner">
-              <span className="text-[10px] uppercase font-mono font-bold text-slate-400 px-2 flex items-center gap-1">
-                <Shield className="w-3 h-3 text-amber-400" />
-                Modo:
-              </span>
-              <button
-                onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'facil' }))}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  (gameState.difficulty || 'facil') === 'facil'
-                    ? 'bg-amber-500 text-slate-950 shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Modo Fácil: Palabras con acción destacadas siempre"
-              >
-                Fácil
-              </button>
-              <button
-                onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'normal' }))}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  gameState.difficulty === 'normal'
-                    ? 'bg-amber-500 text-slate-950 shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Modo Normal: Palabras sin destacar hasta serusadas"
-              >
-                Normal
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowDetailsModal(true)}
+                  className="p-2 text-amber-400 hover:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl cursor-pointer"
+                  title="Detalles y Créditos"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={onReset}
+                  className="p-2 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 rounded-xl cursor-pointer"
+                  title="Reiniciar"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <button
-              onClick={() => setShowDetailsModal(true)}
-              className="text-xs text-amber-300 hover:text-amber-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 transition-colors cursor-pointer"
-              title="Ver detalles, sinopsis y créditos del autor"
-            >
-              <Info className="w-3.5 h-3.5 text-amber-400" />
-              <span>Detalles y Créditos</span>
-            </button>
+            {/* PC Scene Header with Difficulty Selector */}
+            <div className="hidden md:flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Compass className={`w-5 h-5 ${themeConfig.accentClass}`} />
+                <h2 className={`font-bold text-xl ${themeConfig.textMainClass}`}>
+                  {currentScene?.name || 'Escena'}
+                </h2>
+              </div>
 
-            <button
-              onClick={onReset}
-              className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reiniciar</span>
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center gap-3">
+                {/* Difficulty Selector */}
+                <div className="flex items-center bg-slate-950/80 border border-slate-800 rounded-xl p-1 text-xs shadow-inner">
+                  <span className="text-[10px] uppercase font-mono font-bold text-slate-400 px-2 flex items-center gap-1">
+                    <Shield className="w-3 h-3 text-amber-400" />
+                    Modo:
+                  </span>
+                  <button
+                    onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'facil' }))}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      (gameState.difficulty || 'facil') === 'facil'
+                        ? 'bg-amber-500 text-slate-950 shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Modo Fácil: Palabras con acción destacadas siempre"
+                  >
+                    Fácil
+                  </button>
+                  <button
+                    onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'normal' }))}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      gameState.difficulty === 'normal'
+                        ? 'bg-amber-500 text-slate-950 shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Modo Normal: Palabras sin destacar hasta ser usadas"
+                  >
+                    Normal
+                  </button>
+                  <button
+                    onClick={() => setGameState((prev: any) => ({ ...prev, difficulty: 'dificil' }))}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      gameState.difficulty === 'dificil'
+                        ? 'bg-amber-500 text-slate-950 shadow'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Modo Difícil: Las palabras usables no están marcadas ni quedan marcadas tras usarse"
+                  >
+                    Difícil
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowDetailsModal(true)}
+                  className="text-xs text-amber-300 hover:text-amber-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 transition-colors cursor-pointer"
+                  title="Ver detalles, sinopsis y créditos del autor"
+                >
+                  <Info className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Detalles y Créditos</span>
+                </button>
+
+                <button
+                  onClick={onReset}
+                  className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reiniciar</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Sentence Builder Bar (LucasArts Style Command Bar) */}
-        <div className={`p-3.5 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.accentBgClass} flex items-center justify-between gap-3 shadow-sm`}>
-          <div className="flex items-center gap-2 font-bold text-base tracking-wide text-amber-300">
-            <span className="text-amber-400 text-sm font-semibold uppercase tracking-wider">Acción:</span>
+        <div className={`p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.accentBgClass} flex items-center justify-between gap-3 shadow-sm`}>
+          <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide text-amber-300">
+            <span className="text-amber-400 text-xs font-semibold uppercase tracking-wider">Acción:</span>
             <span>
               {activeVerb ? activeVerb.toUpperCase() : 'SELECCIONAR ACCIÓN...'}
             </span>
@@ -874,8 +932,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               </span>
             )}
             {!activeVerb && !selectedItemObj && (
-              <span className="text-xs font-normal text-slate-400 italic">
-                (Haz clic en un verbo abajo o directamente sobre una palabra destacada)
+              <span className="text-xs font-normal text-slate-400 italic hidden sm:inline">
+                (Haz clic en un verbo abajo o en una palabra destacada)
               </span>
             )}
           </div>
@@ -883,15 +941,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           {(activeVerb || selectedItemObj) && (
             <button
               onClick={handleClearCommand}
-              className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 text-xs hover:bg-slate-800 transition-colors"
+              className="px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 text-xs hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
           )}
         </div>
 
-        {/* Main Narrative Card */}
-        <div className={`p-6 sm:p-8 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-xl relative overflow-hidden`}>
+        {/* Main Narrative Card (~60% height in focus mode) */}
+        <div className={`p-5 sm:p-7 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-xl relative overflow-hidden transition-all ${
+          isHeaderCollapsed ? 'max-h-[58vh] min-h-[260px] overflow-y-auto' : ''
+        }`}>
           {/* Subtle grid pattern background */}
           <div
             className="absolute inset-0 opacity-5 pointer-events-none"
@@ -1012,7 +1072,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.92, y: 15 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-lg p-6 rounded-2xl border cursor-default ${
+                className={`w-[calc(100vw-1.5rem)] max-w-lg p-4 sm:p-6 rounded-2xl border cursor-default max-h-[85vh] overflow-y-auto font-sans break-words ${
                   modalFeedback.type === 'gameover' || modalFeedback.isGameOver
                     ? 'border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.35)] bg-slate-950/95'
                     : modalFeedback.type === 'item'
@@ -1238,30 +1298,29 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
       {/* Interactive Word Direct Click Context Popover Menu */}
       {contextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setContextMenu(null)}
-          />
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setContextMenu(null)}
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 5 }}
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="fixed z-50 bg-slate-900 border border-amber-500/50 rounded-xl shadow-2xl p-3 min-w-[200px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-[calc(100vw-2rem)] max-w-sm bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl p-4 space-y-3 cursor-default"
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
-              <span className="text-xs font-bold text-amber-400 truncate max-w-[140px]">
-                "{contextMenu.word}"
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <span className="text-sm font-extrabold text-amber-300">
+                ¿Qué quieres hacer con "{contextMenu.word}"?
               </span>
               <button
                 onClick={() => setContextMenu(null)}
-                className="text-slate-400 hover:text-slate-200"
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
               {ALL_VERBS.map((v) => {
                 const hs = currentScene?.hotspots.find((h) => h.id === contextMenu.hotspotId);
                 return (
@@ -1270,7 +1329,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     onClick={() => {
                       if (hs) handleExecuteAction(hs, v.id);
                     }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 bg-slate-950 hover:bg-amber-500 hover:text-slate-950 border border-slate-800 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 bg-slate-950 hover:bg-amber-500 hover:text-slate-950 border border-slate-800 transition-all cursor-pointer"
                   >
                     {getVerbIcon(v.iconName)}
                     <span>{v.label.split(' / ')[0]}</span>
@@ -1279,7 +1338,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               })}
             </div>
           </motion.div>
-        </>
+        </div>
       )}
 
       {/* Details and Credits Modal */}
@@ -1334,7 +1393,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   </h4>
                   {project.credits ? (
                     <p className="text-slate-300 text-xs font-mono leading-relaxed whitespace-pre-line bg-slate-900 p-3 rounded-lg border border-slate-800">
-                      {project.credits}
+                      {renderTextWithLinks(project.credits)}
                     </p>
                   ) : (
                     <p className="text-slate-500 italic text-xs">

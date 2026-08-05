@@ -5,6 +5,7 @@ import { getPublishedProjects, saveProjectToCloud } from '../../lib/firebase';
 import { sampleGameProject } from '../../data/sampleGame';
 import { generateStandaloneHTML } from '../../utils/htmlExporter';
 import { exportProjectAsZip } from '../../utils/zipExporter';
+import { renderTextWithLinks } from '../../utils/textUtils';
 
 interface PublicCatalogProps {
   onPlayProject: (project: GameProject) => void;
@@ -374,7 +375,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({ onPlayProject, onO
                     Créditos, Fuentes de Imágenes y Colaboradores
                   </h4>
                   <p className="text-slate-300 font-mono text-xs leading-relaxed whitespace-pre-line bg-slate-900 p-3 rounded-lg border border-slate-800">
-                    {selectedDocModal.projectData.credits}
+                    {renderTextWithLinks(selectedDocModal.projectData.credits)}
                   </p>
                 </div>
               )}

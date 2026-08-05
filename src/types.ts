@@ -137,7 +137,7 @@ export interface SaveSlotData {
   narrativeHistory: { id: string; type: 'story' | 'response' | 'system'; text: string; timestamp?: string }[];
   appendedTextsPerScene: Record<string, string[]>;
   usedHotspotIds?: string[];
-  difficulty?: 'facil' | 'normal';
+  difficulty?: 'facil' | 'normal' | 'dificil';
 }
 
 export type UserRole = 'admin' | 'author';
