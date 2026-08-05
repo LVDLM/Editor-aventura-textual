@@ -13,6 +13,7 @@ interface ProjectWorkspaceProps {
   onPlayProject: (proj: GameProject) => void;
   onCreateNewProject: () => void;
   onOpenAuth: () => void;
+  webAspect?: 'clean' | 'classic';
 }
 
 export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
@@ -23,7 +24,9 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   onPlayProject,
   onCreateNewProject,
   onOpenAuth,
+  webAspect = 'clean',
 }) => {
+  const isClean = webAspect === 'clean';
   const [cloudProjects, setCloudProjects] = useState<CloudProjectDoc[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<PublicationStatus | 'all'>('all');
@@ -181,16 +184,18 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
 
   if (!currentUser) {
     return (
-      <div className="flex-1 bg-[#0a0a0c] p-8 flex items-center justify-center">
-        <div className="bg-slate-900 border border-white/10 rounded-3xl p-8 max-w-lg w-full text-center space-y-4 shadow-2xl">
+      <div className={`flex-1 p-8 flex items-center justify-center transition-colors ${isClean ? 'bg-[#f8fafc]' : 'bg-[#0a0a0c]'}`}>
+        <div className={`border rounded-3xl p-8 max-w-lg w-full text-center space-y-4 shadow-xl ${
+          isClean ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-white/10 text-white'
+        }`}>
           <FolderOpen className="w-12 h-12 text-amber-500 mx-auto" />
-          <h2 className="text-xl font-bold text-white">Taller de Proyectos en la Nube</h2>
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <h2 className={`text-xl font-bold ${isClean ? 'text-slate-900' : 'text-white'}`}>Taller de Proyectos en la Nube</h2>
+          <p className={`text-xs leading-relaxed ${isClean ? 'text-slate-600' : 'text-slate-300'}`}>
             Inicia sesión o crea una cuenta para guardar tus historias en diferentes fases de desarrollo (borradores, en revisión, publicadas) y solicitar su publicación en el portal principal.
           </p>
           <button
             onClick={onOpenAuth}
-            className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-lg"
+            className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-lg cursor-pointer"
           >
             Iniciar Sesión / Registrarme
           </button>
@@ -200,18 +205,22 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   }
 
   return (
-    <div className="flex-1 bg-[#0a0a0c] text-slate-200 p-4 sm:p-8 space-y-6 max-w-7xl mx-auto w-full">
+    <div className={`flex-1 p-4 sm:p-8 space-y-6 max-w-7xl mx-auto w-full transition-colors duration-200 ${
+      isClean ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0a0a0c] text-slate-200'
+    }`}>
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b ${
+        isClean ? 'border-slate-200' : 'border-white/10'
+      }`}>
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className={`text-2xl font-bold flex items-center gap-2 ${isClean ? 'text-slate-900' : 'text-white'}`}>
             <span>Gestor de Historias y Proyectos</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold">
               {currentUser.role === 'admin' ? 'Modo Administrador' : 'Modo Autor'}
             </span>
           </h1>
-          <p className="text-xs text-slate-400">
-            Guarda tus borrador en la nube, mantén múltiples proyectos y solicita la revisión para su publicación web.
+          <p className={`text-xs ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
+            Guarda tus borradores en la nube, mantén múltiples proyectos y solicita la revisión para su publicación web.
           </p>
         </div>
 

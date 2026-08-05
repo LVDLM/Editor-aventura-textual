@@ -20,7 +20,26 @@ import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS } from '.
 import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
-  const [project, setProject] = useState<GameProject>(sampleGameProject);
+  const [project, setProject] = useState<GameProject>(() => {
+    const saved = localStorage.getItem('motordeaventuras_last_edited_project');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.scenes && parsed.id) return parsed;
+      } catch (e) {
+        console.error('Error loading last edited project:', e);
+      }
+    }
+    return sampleGameProject;
+  });
+
+  // Save last edited project to localStorage whenever it changes
+  useEffect(() => {
+    if (project) {
+      localStorage.setItem('motordeaventuras_last_edited_project', JSON.stringify(project));
+    }
+  }, [project]);
+
   const [currentCloudDocId, setCurrentCloudDocId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('catalog');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -368,6 +387,7 @@ export default function App() {
             }}
             onCreateNewProject={handleCreateNewProject}
             onOpenAuth={() => setShowAuthModal(true)}
+            webAspect={webAspect}
           />
         )}
 
@@ -385,6 +405,7 @@ export default function App() {
               resetGameStateForProject(selectedProj);
               setCurrentView('play');
             }}
+            webAspect={webAspect}
           />
         )}
 
@@ -412,6 +433,7 @@ export default function App() {
             }}
             setCurrentView={setCurrentView}
             onOpenPrivacyModal={() => setShowPrivacyModal(true)}
+            webAspect={webAspect}
           />
         )}
       </main>
@@ -449,6 +471,7 @@ export default function App() {
           currentUser={currentUser}
           currentView={currentView}
           onClose={() => setShowHelp(false)}
+          webAspect={webAspect}
         />
       )}
 

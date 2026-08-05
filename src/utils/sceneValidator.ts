@@ -110,28 +110,41 @@ export function validateProjectScenes(project: GameProject): SceneValidationIssu
       });
     }
 
-    // 3. No return option to previous paragraph/scene
-    if (!isInitial && incoming.size > 0 && !hasGameOverAction[scene.id] && !isPortada) {
+    // 3. No return option to previous paragraph/scene (excluding portada, introducción, or initial scenes)
+    if (!isInitial && incoming.size > 0 && !hasGameOverAction[scene.id] && !isPortada && scene.type !== 'introduccion') {
       const incomingList = Array.from(incoming);
 
-      // Check if scene points back to ANY of its incoming parent scenes or preceding scenes
-      const returnsToParent = incomingList.some((parentId) => outgoing.has(parentId));
+      // Filter out parents that are portada, introducción, or initial scene
+      const nonCoverParents = incomingList.filter((parentId) => {
+        const parentScene = scenes.find((s) => s.id === parentId);
+        if (!parentScene) return false;
+        return (
+          parentScene.type !== 'portada' &&
+          parentScene.type !== 'introduccion' &&
+          parentScene.id !== project.initialSceneId
+        );
+      });
 
-      if (!returnsToParent) {
-        const parentNames = incomingList
-          .map((id) => scenes.find((s) => s.id === id)?.name || id)
-          .join(', ');
+      if (nonCoverParents.length > 0) {
+        // Check if scene points back to ANY of its non-cover parent scenes
+        const returnsToParent = nonCoverParents.some((parentId) => outgoing.has(parentId));
 
-        issues.push({
-          id: `no_return_${scene.id}`,
-          sceneId: scene.id,
-          sceneName: scene.name,
-          type: 'no_return',
-          severity: 'warning',
-          title: 'Sin posibilidad de regresar al párrafo anterior',
-          message: `Se puede acceder al párrafo "${scene.name}" desde "${parentNames}", pero no se ofrece ninguna acción o palabra clave que permita al jugador regresar al párrafo/escena anterior.`,
-          suggestion: 'Agrega una palabra clave o acción (por ejemplo: "Volver", "Regresar" o "Salir") que redirija a la escena previa.',
-        });
+        if (!returnsToParent) {
+          const parentNames = nonCoverParents
+            .map((id) => scenes.find((s) => s.id === id)?.name || id)
+            .join(', ');
+
+          issues.push({
+            id: `no_return_${scene.id}`,
+            sceneId: scene.id,
+            sceneName: scene.name,
+            type: 'no_return',
+            severity: 'warning',
+            title: 'Sin posibilidad de regresar al párrafo anterior',
+            message: `Se puede acceder al párrafo "${scene.name}" desde "${parentNames}", pero no se ofrece ninguna acción o palabra clave que permita al jugador regresar al párrafo/escena anterior.`,
+            suggestion: 'Agrega una palabra clave o acción (por ejemplo: "Volver", "Regresar" o "Salir") que redirija a la escena previa.',
+          });
+        }
       }
     }
   });

@@ -10,6 +10,7 @@ interface AdminReviewPanelProps {
   onSelectProject: (proj: GameProject, cloudDocId: string | null) => void;
   onOpenEditor: () => void;
   onPlayProject: (proj: GameProject) => void;
+  webAspect?: 'clean' | 'classic';
 }
 
 export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
@@ -17,7 +18,9 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
   onSelectProject,
   onOpenEditor,
   onPlayProject,
+  webAspect = 'clean',
 }) => {
+  const isClean = webAspect === 'clean';
   const [adminProjects, setAdminProjects] = useState<CloudProjectDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'published' | 'rejected' | 'all'>('pending');
@@ -97,24 +100,34 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
   const publishedCount = adminProjects.filter(p => p.status === 'published').length;
 
   return (
-    <div className="flex-1 bg-[#0a0a0c] text-slate-200 p-4 sm:p-8 space-y-6 max-w-7xl mx-auto w-full">
+    <div className={`flex-1 p-4 sm:p-8 space-y-6 max-w-7xl mx-auto w-full transition-colors duration-200 ${
+      isClean ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0a0a0c] text-slate-200'
+    }`}>
       {/* Admin Panel Header */}
-      <div className="bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-950 border border-rose-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className={`rounded-3xl p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border ${
+        isClean
+          ? 'bg-gradient-to-r from-rose-50 via-white to-slate-50 border-rose-200 text-slate-900'
+          : 'bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-950 border-rose-500/30 text-white'
+      }`}>
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold">
-            <Shield className="w-3.5 h-3.5" /> Panel de Control de Administración
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40 text-xs font-bold">
+            <Shield className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" /> Panel de Control de Administración
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+          <h1 className={`text-2xl sm:text-3xl font-extrabold ${isClean ? 'text-slate-900' : 'text-white'}`}>
             Moderación y Publicación de Historias
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
+          <p className={`text-xs sm:text-sm leading-relaxed max-w-2xl ${isClean ? 'text-slate-600' : 'text-slate-300'}`}>
             Como Administrador, puedes revisar las historias enviadas por los autores, editarlas o corregir erratas en el editor antes de aprobarlas, solicitar correcciones con observaciones o publicarlas directamente en la web principal.
           </p>
         </div>
 
         <button
           onClick={fetchAdminProjects}
-          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-white/10 flex items-center gap-1.5 transition-all shrink-0"
+          className={`px-4 py-2 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all shrink-0 cursor-pointer ${
+            isClean
+              ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 shadow-sm'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/10'
+          }`}
         >
           <RefreshCw className="w-4 h-4" /> Actualizar Lista
         </button>
@@ -122,20 +135,24 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
 
       {message && (
         <div className={`p-3.5 rounded-xl text-xs font-medium border flex items-center justify-between ${
-          message.type === 'success' ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+          message.type === 'success'
+            ? isClean ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+            : isClean ? 'bg-rose-50 border-rose-300 text-rose-900' : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
         }`}>
           <span>{message.text}</span>
-          <button onClick={() => setMessage(null)} className="text-xs opacity-60 hover:opacity-100">✕</button>
+          <button onClick={() => setMessage(null)} className="text-xs opacity-60 hover:opacity-100 cursor-pointer">✕</button>
         </div>
       )}
 
       {/* Admin Filter Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+      <div className={`flex flex-wrap gap-2 border-b pb-3 ${isClean ? 'border-slate-200' : 'border-white/10'}`}>
         <button
           onClick={() => setFilter('pending')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             filter === 'pending'
-              ? 'bg-amber-500 text-slate-950 shadow-lg'
+              ? 'bg-amber-500 text-slate-950 shadow-md'
+              : isClean
+              ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
               : 'bg-slate-900 text-slate-400 hover:text-white border border-white/5'
           }`}
         >
@@ -144,9 +161,11 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
         </button>
         <button
           onClick={() => setFilter('published')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             filter === 'published'
-              ? 'bg-emerald-600 text-white shadow-lg'
+              ? 'bg-emerald-600 text-white shadow-md'
+              : isClean
+              ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
               : 'bg-slate-900 text-slate-400 hover:text-white border border-white/5'
           }`}
         >
@@ -155,9 +174,11 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
         </button>
         <button
           onClick={() => setFilter('rejected')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             filter === 'rejected'
-              ? 'bg-rose-900 text-rose-100 shadow-lg'
+              ? 'bg-rose-600 text-white shadow-md'
+              : isClean
+              ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
               : 'bg-slate-900 text-slate-400 hover:text-white border border-white/5'
           }`}
         >
@@ -166,9 +187,11 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
         </button>
         <button
           onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             filter === 'all'
-              ? 'bg-white/10 text-white shadow'
+              ? isClean ? 'bg-slate-800 text-white shadow' : 'bg-white/10 text-white shadow'
+              : isClean
+              ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-300'
               : 'bg-slate-900 text-slate-400 hover:text-white border border-white/5'
           }`}
         >
@@ -178,11 +201,11 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
 
       {/* Projects List */}
       {loading ? (
-        <div className="py-12 text-center text-xs text-slate-400">Cargando historias para revisión del administrador...</div>
+        <div className={`py-12 text-center text-xs ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>Cargando historias para revisión del administrador...</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-slate-900/40 rounded-3xl border border-white/5 p-10 text-center space-y-2">
-          <p className="text-sm font-bold text-white">No hay historias en esta sección.</p>
-          <p className="text-xs text-slate-400">Cuando un autor envíe una historia para publicación, aparecerá aquí inmediatamente.</p>
+        <div className={`rounded-3xl border p-10 text-center space-y-2 ${isClean ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900/40 border-white/5'}`}>
+          <p className={`text-sm font-bold ${isClean ? 'text-slate-800' : 'text-white'}`}>No hay historias en esta sección.</p>
+          <p className={`text-xs ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>Cuando un autor envíe una historia para publicación, aparecerá aquí inmediatamente.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -193,22 +216,26 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
             return (
               <div
                 key={doc.id}
-                className="bg-slate-900 border border-white/10 hover:border-white/20 rounded-2xl p-5 space-y-4 transition-all shadow-xl"
+                className={`rounded-2xl p-5 space-y-4 transition-all border ${
+                  isClean
+                    ? 'bg-white border-slate-200 text-slate-800 shadow-sm hover:border-slate-300'
+                    : 'bg-slate-900 border-white/10 hover:border-white/20 text-slate-200 shadow-xl'
+                }`}
               >
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
+                <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b ${isClean ? 'border-slate-100' : 'border-white/5'}`}>
                   <div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <h3 className={`text-lg font-bold flex items-center gap-2 ${isClean ? 'text-slate-900' : 'text-white'}`}>
                       <span>{doc.title}</span>
                       <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
-                        doc.status === 'published' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                        doc.status === 'pending_review' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-                        doc.status === 'rejected' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-slate-800 text-slate-300'
+                        doc.status === 'published' ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40' :
+                        doc.status === 'pending_review' ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40' :
+                        doc.status === 'rejected' ? 'bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-500/40' : 'bg-slate-200 text-slate-700'
                       }`}>
                         {doc.status.toUpperCase()}
                       </span>
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Autor: <strong className="text-slate-200">{doc.authorName}</strong> ({doc.authorEmail}) • Creado: {new Date(doc.createdAt).toLocaleDateString()} • {scenesCount} Escenas
+                    <p className={`text-xs mt-0.5 ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
+                      Autor: <strong className={isClean ? 'text-slate-800' : 'text-slate-200'}>{doc.authorName}</strong> ({doc.authorEmail}) • Creado: {new Date(doc.createdAt).toLocaleDateString()} • {scenesCount} Escenas
                     </p>
                   </div>
 

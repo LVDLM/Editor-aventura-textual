@@ -34,6 +34,7 @@ import {
   Heading1,
   Heading2,
   Image as ImageIcon,
+  X,
 } from 'lucide-react';
 
 interface SceneEditorProps {
@@ -47,6 +48,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   );
 
   const [activeHotspotForEdit, setActiveHotspotForEdit] = useState<Hotspot | null>(null);
+  const [showSceneAlerts, setShowSceneAlerts] = useState(false);
 
   // New scene form
   const [newSceneName, setNewSceneName] = useState('');
@@ -706,28 +708,71 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           {/* Active Scene Specific Validation Alerts */}
           {activeSceneIssues.length > 0 && (
             <div className="space-y-2 relative z-10">
-              {activeSceneIssues.map((issue) => (
-                <div
-                  key={issue.id}
-                  className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
-                    issue.type === 'unlinked'
-                      ? 'bg-rose-950/50 border-rose-500/40 text-rose-200'
-                      : 'bg-amber-950/50 border-amber-500/40 text-amber-200'
-                  }`}
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={() => setShowSceneAlerts(!showSceneAlerts)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                  title="Ver u ocultar los avisos de vinculación de esta escena"
                 >
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                  <div className="space-y-1">
-                    <div className="font-bold flex items-center gap-2">
-                      <span>{issue.title}</span>
-                      <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-black/40 border border-current">
-                        {issue.type === 'unlinked' ? 'ERROR DE VINCULACIÓN' : 'ALERTA DE RETORNO/SALIDA'}
-                      </span>
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Avisos de vinculación ({activeSceneIssues.length})</span>
+                  {showSceneAlerts ? (
+                    <ChevronUp className="w-3.5 h-3.5 ml-1" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 ml-1" />
+                  )}
+                </button>
+
+                {showSceneAlerts && (
+                  <button
+                    onClick={() => setShowSceneAlerts(false)}
+                    className="text-[11px] text-white/50 hover:text-white underline cursor-pointer"
+                  >
+                    Ocultar
+                  </button>
+                )}
+              </div>
+
+              {showSceneAlerts && (
+                <div className="space-y-2 pt-1">
+                  {activeSceneIssues.map((issue) => (
+                    <div
+                      key={issue.id}
+                      className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-2.5 ${
+                        issue.type === 'unlinked'
+                          ? 'bg-rose-950/50 border-rose-500/40 text-rose-200'
+                          : 'bg-amber-950/50 border-amber-500/40 text-amber-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                        <div className="space-y-1">
+                          <div className="font-bold flex items-center gap-2">
+                            <span>{issue.title}</span>
+                            <span className="font-mono text-[9px] px-1.5 py-0.2 rounded bg-black/40 border border-current">
+                              {issue.type === 'unlinked'
+                                ? 'ERROR DE VINCULACIÓN'
+                                : 'ALERTA DE RETORNO/SALIDA'}
+                            </span>
+                          </div>
+                          <p>{issue.message}</p>
+                          <p className="font-mono text-[11px] text-amber-300">
+                            💡 {issue.suggestion}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setShowSceneAlerts(false)}
+                        className="p-1 text-white/40 hover:text-white rounded transition-colors cursor-pointer"
+                        title="Ocultar alertas"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <p>{issue.message}</p>
-                    <p className="font-mono text-[11px] text-amber-300">💡 {issue.suggestion}</p>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
 

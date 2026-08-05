@@ -37,6 +37,7 @@ interface UserProfilePageProps {
   onLoadGameStateToPlay: (projData: GameProject, gameStateSlot: SaveSlotData) => void;
   setCurrentView: (view: 'catalog' | 'play' | 'edit' | 'workspace' | 'admin' | 'profile') => void;
   onOpenPrivacyModal: () => void;
+  webAspect?: 'clean' | 'classic';
 }
 
 interface LocalSavedGameItem {
@@ -51,7 +52,9 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
   onLoadGameStateToPlay,
   setCurrentView,
   onOpenPrivacyModal,
+  webAspect = 'clean',
 }) => {
+  const isClean = webAspect === 'clean';
   // Nick editing state
   const [displayNameInput, setDisplayNameInput] = useState(currentUser.displayName || '');
   const [isSavingName, setIsSavingName] = useState(false);
@@ -206,11 +209,17 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
   };
 
   return (
-    <div className="min-h-[calc(100vh-60px)] bg-[#0a0a0d] text-slate-100 py-8 px-4 sm:px-6">
+    <div className={`min-h-[calc(100vh-60px)] py-8 px-4 sm:px-6 transition-colors duration-200 ${
+      isClean ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0a0a0d] text-slate-100'
+    }`}>
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Header Profile Hero Card */}
-        <div className="bg-gradient-to-r from-slate-900 via-[#12131a] to-slate-900 border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+        <div className={`rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border ${
+          isClean
+            ? 'bg-gradient-to-r from-amber-500/10 via-white to-slate-50 border-slate-200 text-slate-900'
+            : 'bg-gradient-to-r from-slate-900 via-[#12131a] to-slate-900 border-white/10 text-slate-100'
+        }`}>
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             
@@ -221,7 +230,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-black text-white">
+                  <h1 className={`text-xl sm:text-2xl font-black ${isClean ? 'text-slate-900' : 'text-white'}`}>
                     {currentUser.displayName || 'Usuario Lector'}
                   </h1>
                   <span
