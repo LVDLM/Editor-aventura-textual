@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Search, BookOpen, Filter, Package, FileCode, Clock, User, Info, X, Lock, Sun, Moon, CheckCircle2, Compass, Layers, ArrowRight, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Download, Search, BookOpen, Filter, Package, FileCode, Clock, User, Info, X, Lock, Sun, Moon, CheckCircle2, Compass, Layers, ArrowRight, Tag, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
 import { CloudProjectDoc, GameProject, UserProfile, GENRE_TAGS } from '../../types';
 import { getPublishedProjects, saveProjectToCloud } from '../../lib/firebase';
 import { sampleGameProject } from '../../data/sampleGame';
@@ -28,6 +28,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [seeding, setSeeding] = useState(false);
   const [selectedDocModal, setSelectedDocModal] = useState<CloudProjectDoc | null>(null);
+  const [fullCoverImage, setFullCoverImage] = useState<{ src: string; title: string } | null>(null);
   const [showAllStories, setShowAllStories] = useState(false);
 
   const fetchCatalog = async () => {
@@ -302,10 +303,14 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       {/* Cover thumbnail preview if available */}
                       {coverImg && (
                         <div
-                          onClick={() => setSelectedDocModal(doc)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFullCoverImage({ src: coverImg, title: doc.title });
+                          }}
                           className={`w-full h-40 rounded-xl overflow-hidden border relative cursor-pointer group-hover:border-amber-500/50 transition-colors shadow-inner ${
                             isClean ? 'border-slate-200 bg-slate-100' : 'border-white/10 bg-slate-950'
                           }`}
+                          title="Haz clic para ver la portada completa"
                         >
                           <img
                             src={coverImg}
@@ -313,8 +318,8 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-2.5">
-                            <span className="text-[10px] text-amber-300 font-bold bg-slate-950/90 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
-                              <BookOpen className="w-3 h-3 text-amber-400" /> Ver Portada Completa
+                            <span className="text-[10px] text-amber-300 font-bold bg-slate-950/90 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 hover:bg-amber-500 hover:text-slate-950 transition-colors">
+                              <Maximize2 className="w-3 h-3 text-amber-400" /> Ver Portada completa
                             </span>
                           </div>
                         </div>
@@ -359,15 +364,19 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       {/* Synopsis block */}
                       <div
                         onClick={() => setSelectedDocModal(doc)}
-                        className={`p-3.5 rounded-xl cursor-pointer transition-colors border ${
+                        title="Haz click para ver la ficha de lectura completa"
+                        className={`p-3.5 rounded-xl cursor-pointer transition-colors border relative group/synopsis ${
                           isClean
-                            ? 'bg-slate-50 border-slate-100 hover:bg-amber-50/50 hover:border-amber-200 text-slate-700'
-                            : 'bg-slate-950/80 border-white/5 hover:border-amber-500/30 text-slate-300'
+                            ? 'bg-slate-50 border-slate-100 hover:bg-amber-50/80 hover:border-amber-300/80 text-slate-700'
+                            : 'bg-slate-950/80 border-white/5 hover:border-amber-500/40 text-slate-300'
                         }`}
                       >
                         <p className="text-xs leading-relaxed line-clamp-3 font-serif italic">
                           "{synopsisText || 'Sin descripción disponible.'}"
                         </p>
+                        <div className="mt-2 text-[10px] text-amber-600 dark:text-amber-400 font-sans font-bold flex items-center gap-1 opacity-70 group-hover/synopsis:opacity-100 transition-opacity">
+                          <Info className="w-3 h-3 text-amber-500" /> Haz click para ver la ficha de lectura completa
+                        </div>
                       </div>
 
                       <div className={`flex items-center gap-4 text-[11px] pt-2 border-t font-medium ${
@@ -545,13 +554,25 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto space-y-5 text-slate-300 text-xs sm:text-sm leading-relaxed">
               {/* Cover Image */}
-              {getProjectCoverImage(selectedDocModal.projectData) && (
-                <div className="w-full text-center">
+              {(selectedDocModal.publishedData ? getProjectCoverImage(selectedDocModal.publishedData) : getProjectCoverImage(selectedDocModal.projectData)) && (
+                <div
+                  className="w-full text-center group cursor-pointer relative"
+                  onClick={() => {
+                    const cover = selectedDocModal.publishedData ? getProjectCoverImage(selectedDocModal.publishedData) : getProjectCoverImage(selectedDocModal.projectData);
+                    if (cover) setFullCoverImage({ src: cover, title: selectedDocModal.title });
+                  }}
+                  title="Haz clic para ver la portada completa"
+                >
                   <img
-                    src={getProjectCoverImage(selectedDocModal.projectData)!}
+                    src={(selectedDocModal.publishedData ? getProjectCoverImage(selectedDocModal.publishedData) : getProjectCoverImage(selectedDocModal.projectData))!}
                     alt={`Carátula de ${selectedDocModal.title}`}
-                    className="w-full max-h-64 object-cover rounded-xl border-2 border-amber-500/40 shadow-xl mx-auto"
+                    className="w-full max-h-64 object-cover rounded-xl border-2 border-amber-500/40 shadow-xl mx-auto group-hover:border-amber-400 transition-all"
                   />
+                  <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                    <span className="text-xs bg-slate-950/90 text-amber-300 font-bold px-3 py-1.5 rounded-lg border border-amber-500/40 flex items-center gap-1.5 shadow-lg">
+                      <Maximize2 className="w-4 h-4 text-amber-400" /> Ver Portada completa
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -665,6 +686,40 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   <span>¡Iniciar Texto-Juego!</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Cover Image Viewer Modal */}
+      {fullCoverImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+          onClick={() => setFullCoverImage(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[92vh] w-full h-full flex flex-col items-center justify-center cursor-default space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between text-white bg-slate-900/90 px-4 py-3 rounded-xl border border-white/10 max-w-3xl shadow-xl">
+              <span className="font-bold text-sm sm:text-base text-amber-400 truncate flex items-center gap-2">
+                <BookOpen className="w-4 h-4" /> {fullCoverImage.title} — Portada completa
+              </span>
+              <button
+                onClick={() => setFullCoverImage(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Cerrar vista de portada"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 w-full flex items-center justify-center overflow-hidden p-2">
+              <img
+                src={fullCoverImage.src}
+                alt={`Portada completa de ${fullCoverImage.title}`}
+                className="max-w-full max-h-[78vh] object-contain rounded-2xl border-2 border-amber-500/50 shadow-2xl"
+              />
             </div>
           </div>
         </div>

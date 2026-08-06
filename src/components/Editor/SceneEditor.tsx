@@ -1590,23 +1590,91 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     </button>
                   </div>
 
-                  <textarea
-                    ref={(el) => {
-                      textareaRefs.current[block.id] = el;
-                    }}
-                    rows={4}
-                    value={block.text}
-                    onChange={(e) => handleUpdateBlockText(block.id, e.target.value)}
-                    onMouseUp={handleMouseUpTextSelection}
-                    className="w-full bg-black/60 border border-white/10 rounded-b-xl p-3 text-sm text-white leading-relaxed focus:border-amber-500 outline-none font-serif border-t-0"
-                    placeholder={`Escribe el texto del párrafo #${index + 1}...`}
-                  />
+                  {/* Calculate Appended Story Text from Keywords */}
+                  {(() => {
+                    const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
+                      block.text.toLowerCase().includes(hs.word.toLowerCase())
+                    );
+
+                    const appendedResponses: { cause: string; text: string; isGameOver?: boolean }[] = [];
+
+                    blockHotspots.forEach((hs) => {
+                      hs.actions.forEach((act) => {
+                        const txt = act.stateChange?.appendStoryText?.trim();
+                        if (txt) {
+                          let verbAction = 'activar';
+                          if (act.verb === 'mirar') verbAction = 'examinar';
+                          else if (act.verb === 'coger') verbAction = 'coger';
+                          else if (act.verb === 'usar') verbAction = 'usar';
+                          else if (act.verb === 'abrir') verbAction = 'abrir';
+                          else if (act.verb === 'hablar') verbAction = 'hablar con';
+                          else if (act.verb === 'empujar') verbAction = 'empujar';
+                          else if (act.verb === 'ir_a') verbAction = 'ir a';
+
+                          const causeStr = `Al ${verbAction} ${hs.word}`;
+                          appendedResponses.push({
+                            cause: causeStr,
+                            text: txt,
+                            isGameOver: act.isGameOver || act.stateChange?.isGameOver
+                          });
+                        }
+                      });
+                    });
+
+                    const hasAppended = appendedResponses.length > 0;
+
+                    return (
+                      <>
+                        <textarea
+                          ref={(el) => {
+                            textareaRefs.current[block.id] = el;
+                          }}
+                          rows={4}
+                          value={block.text}
+                          onChange={(e) => handleUpdateBlockText(block.id, e.target.value)}
+                          onMouseUp={handleMouseUpTextSelection}
+                          className={`w-full bg-black/60 border border-white/10 p-3 text-sm text-white leading-relaxed focus:border-amber-500 outline-none font-serif border-t-0 ${
+                            hasAppended ? 'rounded-b-none border-b-0' : 'rounded-b-xl'
+                          }`}
+                          placeholder={`Escribe el texto del párrafo #${index + 1}...`}
+                        />
+
+                        {hasAppended && (
+                          <div className="bg-black/85 border border-white/10 border-t border-t-amber-500/40 rounded-b-xl p-3.5 space-y-2.5 font-serif text-slate-200 text-sm leading-relaxed shadow-inner">
+                            {appendedResponses.map((item, i) => (
+                              <div key={i} className="space-y-1">
+                                <p>
+                                  <span className="font-sans font-bold text-[11px] text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 mr-2 inline-block">
+                                    [{item.cause}]
+                                  </span>
+                                  <span className="text-amber-100">{item.text}</span>
+                                  {item.isGameOver && (
+                                    <span className="ml-2 font-sans text-[10px] bg-rose-950 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-bold">
+                                      💀 Fin de partida
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                            ))}
+                            <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between text-[10px] text-amber-400/80 font-sans italic">
+                              <span className="flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-amber-400" />
+                                <span>Texto extra añadido por Palabra Clave</span>
+                              </span>
+                              <span className="text-slate-400 font-normal">
+                                (Visible aquí para lectura continua del autor, oculto en juego hasta interactuar)
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Hotspots / Interactive Keywords for THIS paragraph block */}
                   <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-xs font-bold text-amber-300">
                         <span>Palabras Clave en este Párrafo:</span>
                       </span>
                       <span className="text-[10px] text-slate-400">

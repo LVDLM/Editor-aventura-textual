@@ -134,11 +134,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <h1 className="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2">
               <span className={`cursor-pointer transition-colors ${isClean ? 'text-slate-900 hover:text-amber-600' : 'text-white hover:text-amber-400'}`} onClick={() => setCurrentView('catalog')}>
-                Textoaventura: Lecturas interactivas
+                Urdimbre: Aventuras textuales.
               </span>
             </h1>
             <p className={`text-[11px] truncate max-w-[160px] sm:max-w-xs ${isClean ? 'text-slate-500' : 'text-white/50'}`} title={gameTitle}>
-              {currentView === 'play' || currentView === 'edit' ? gameTitle : 'Plataforma de Historias'}
+              {currentView === 'play' || currentView === 'edit' ? gameTitle : 'Biblioteca de historias para jugar.'}
             </p>
           </div>
         </div>

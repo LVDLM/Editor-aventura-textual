@@ -435,8 +435,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
             {/* Required Flags (Multiple Variable combination!) */}
             {globalFlagKeys.length > 0 && (
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-2">
-                <label className="block text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-amber-400" />
+                <label className="block text-xs font-bold text-amber-300">
                   <span>Combinación de Banderas / Variables Requeridas para que funcione esta Acción:</span>
                 </label>
                 <p className="text-[11px] text-slate-400">
@@ -502,27 +501,6 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                   ⚠️ Por favor, escribe un mensaje de respuesta para el jugador antes de guardar.
                 </p>
               )}
-            </div>
-
-            {/* Game Over toggle box */}
-            <div className="bg-rose-950/30 border border-rose-500/40 rounded-xl p-3 flex items-center justify-between">
-              <div>
-                <span className="font-bold text-xs text-rose-300 block flex items-center gap-1.5">
-                  <span>💀 Fin de Partida / Terminar Historia</span>
-                </span>
-                <span className="text-[11px] text-slate-300">
-                  Marca esta acción para terminar la historia o mostrar los botones de fin de juego (Reiniciar / Cargar partida).
-                </span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isGameOver}
-                  onChange={(e) => setIsGameOver(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
-              </label>
             </div>
 
             {/* State Change Consequences (Expanded without arbitrary limit!) */}
