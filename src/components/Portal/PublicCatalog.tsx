@@ -74,23 +74,25 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   };
 
   const handleDownloadHTML = (doc: CloudProjectDoc) => {
-    const html = generateStandaloneHTML(doc.projectData);
+    const dataToUse = doc.publishedData || doc.projectData;
+    const html = generateStandaloneHTML(dataToUse);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${doc.projectData.id || 'historia'}_autonomo.html`;
+    a.download = `${dataToUse.id || 'historia'}_v${doc.publishedVersion || 1}_autonomo.html`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const handleDownloadZIP = async (doc: CloudProjectDoc) => {
     try {
-      const blob = await exportProjectAsZip(doc.projectData);
+      const dataToUse = doc.publishedData || doc.projectData;
+      const blob = await exportProjectAsZip(dataToUse);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${doc.projectData.id || 'historia'}_paquete.zip`;
+      a.download = `${dataToUse.id || 'historia'}_v${doc.publishedVersion || 1}_paquete.zip`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -125,52 +127,6 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
     }`}>
       <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-8">
         
-        {/* Top Header: Web Aspect Selector */}
-        {onAspectChange && (
-          <div className={`flex flex-wrap items-center justify-between gap-3 pb-3 border-b ${
-            isClean ? 'border-slate-200' : 'border-slate-800'
-          }`}>
-            <div className="flex items-center gap-2">
-              <Compass className={`w-5 h-5 ${isClean ? 'text-amber-600' : 'text-amber-400'}`} />
-              <span className={`font-bold text-xs uppercase tracking-wider ${
-                isClean ? 'text-slate-700' : 'text-slate-300'
-              }`}>
-                Diseño de la Web General:
-              </span>
-            </div>
-
-            <div className={`flex items-center p-1 rounded-xl text-xs font-semibold shadow-inner ${
-              isClean ? 'bg-slate-200/80 border border-slate-300/80' : 'bg-slate-950 border border-slate-800'
-            }`}>
-              <button
-                onClick={() => onAspectChange('clean')}
-                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-                  isClean
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Diseño Luminoso, Diáfano y Enfocado en Lecturas e Información del Creador"
-              >
-                <Sun className="w-3.5 h-3.5" />
-                <span>Luminoso y Diáfano</span>
-              </button>
-
-              <button
-                onClick={() => onAspectChange('classic')}
-                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-                  !isClean
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title="Diseño Portal Oscuro Clásico Retro"
-              >
-                <Moon className="w-3.5 h-3.5" />
-                <span>Oscuro Clásico</span>
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* HERO HEADER SECTION (NO ICONS ON SPECIFIED TEXTS) */}
         {isClean ? (
           <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
@@ -180,10 +136,10 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 <span>Biblioteca Abierta de Textoaventuras Interactivas</span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
-                Historias de texto vivas, decisiones e interacción directa
+                Una aventura gráfica donde los gráficos los pone tu imaginación
               </h1>
               <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-                Sumérgete en historias escritas para ser jugadas. Haz clic sobre palabras clave y objetos dentro del texto para explorar cada escena, resolver acertijos y decidir el rumbo del relato.
+                Disfruta de una experiencia visual única adaptable a cualquier tipo de resolución de pantalla, ya sea con una imagen pixelada o con todos los detalles. Haz clic sobre palabras clave y objetos dentro del texto para explorar cada escena, resolver acertijos y decidir el rumbo del relato.
               </p>
             </div>
 
@@ -211,10 +167,10 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 <span>Biblioteca Abierta de Textoaventuras Interactivas</span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                Descubre y juega a increíbles Aventuras de Texto
+                Una aventura gráfica donde los gráficos los pone tu imaginación
               </h1>
               <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-                Explora la colección de historias interactivas estilo Point &amp; Click clásicas publicadas en la web. Elige una aventura para leerla e interactuar desde tu navegador, o descárgala para jugarla en tu equipo de forma autónoma.
+                Disfruta de una experiencia visual única adaptable a cualquier tipo de resolución de pantalla, ya sea con una imagen pixelada o con todos los detalles. Haz clic sobre palabras clave y objetos dentro del texto para explorar cada escena, resolver acertijos y decidir el rumbo del relato.
               </p>
               <div className="pt-2 flex flex-wrap gap-3">
                 <button
@@ -326,11 +282,12 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {visibleStories.map((doc) => {
-                const scenesCount = doc.projectData?.scenes?.length || 0;
-                const itemsCount = doc.projectData?.inventoryItems?.length || 0;
-                const coverImg = getProjectCoverImage(doc.projectData);
-                const synopsisText = doc.projectData?.synopsis || doc.projectData?.description || doc.description;
-                const storyTags = doc.genreTags || doc.projectData?.genreTags || [];
+                const targetData = doc.publishedData || doc.projectData;
+                const scenesCount = targetData?.scenes?.length || 0;
+                const itemsCount = targetData?.inventoryItems?.length || 0;
+                const coverImg = getProjectCoverImage(targetData);
+                const synopsisText = targetData?.synopsis || targetData?.description || doc.description;
+                const storyTags = doc.genreTags || targetData?.genreTags || [];
 
                 return (
                   <div
@@ -366,11 +323,14 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       <div>
                         <h3
                           onClick={() => setSelectedDocModal(doc)}
-                          className={`text-lg font-black group-hover:text-amber-600 transition-colors line-clamp-1 cursor-pointer ${
+                          className={`text-lg font-black group-hover:text-amber-600 transition-colors line-clamp-1 cursor-pointer flex items-center gap-2 ${
                             isClean ? 'text-slate-900' : 'text-white'
                           }`}
                         >
-                          {doc.title}
+                          <span className="truncate">{doc.title}</span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 shrink-0 font-bold">
+                            v{doc.publishedVersion || 1}
+                          </span>
                         </h3>
                         <p className={`text-xs flex items-center gap-1 mt-1 ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
                           <User className="w-3.5 h-3.5 text-amber-600" />
@@ -428,7 +388,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     <div className="pt-5 space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => onPlayProject(doc.projectData)}
+                          onClick={() => onPlayProject(doc.publishedData || doc.projectData)}
                           className="py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
                         >
                           <Play className="w-3.5 h-3.5 fill-slate-950" />
@@ -695,7 +655,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
                 <button
                   onClick={() => {
-                    const data = selectedDocModal.projectData;
+                    const data = selectedDocModal.publishedData || selectedDocModal.projectData;
                     setSelectedDocModal(null);
                     onPlayProject(data);
                   }}

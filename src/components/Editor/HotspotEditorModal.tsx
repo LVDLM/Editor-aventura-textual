@@ -8,6 +8,7 @@ interface HotspotEditorModalProps {
   project: GameProject;
   onSave: (updatedHotspot: Hotspot) => void;
   onClose: () => void;
+  onAddGlobalFlag?: (flagKey: string) => void;
 }
 
 export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
@@ -15,9 +16,22 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   project,
   onSave,
   onClose,
+  onAddGlobalFlag,
 }) => {
   const [currentHotspot, setCurrentHotspot] = useState<Hotspot>({ ...hotspot });
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
+
+  // New inline flag creation
+  const [newFlagName, setNewFlagName] = useState('');
+
+  const handleCreateInlineFlag = () => {
+    const cleanKey = newFlagName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!cleanKey) return;
+    if (onAddGlobalFlag) {
+      onAddGlobalFlag(cleanKey);
+    }
+    setNewFlagName('');
+  };
 
   // Action form state
   const [verb, setVerb] = useState<VerbType>('mirar');
@@ -100,8 +114,13 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       stateChangeObj.setFlags = { ...setFlagsMap };
     }
 
+    let actionRuleId = editingActionId;
+    if (forceMode === 'subaction' || !actionRuleId) {
+      actionRuleId = `act_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    }
+
     const newRule: ActionRule = {
-      id: editingActionId || `act_${Date.now()}`,
+      id: actionRuleId,
       verb,
       responseMessage: msg,
       requiredItemId: requiredItemId || undefined,
@@ -111,7 +130,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     };
 
     const existingRule = currentHotspot.actions.find(
-      (a) => a.verb === verb && a.id !== (editingActionId || newRule.id)
+      (a) => a.verb === verb && a.id !== newRule.id && a.id !== editingActionId
     );
 
     if (existingRule && !forceMode) {
@@ -126,9 +145,9 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     let updatedActions = [...currentHotspot.actions];
 
-    if (forceMode === 'replace') {
-      updatedActions = updatedActions.map((a) => (a.id === existingRule?.id ? newRule : a));
-    } else if (editingActionId) {
+    if (forceMode === 'replace' && existingRule) {
+      updatedActions = updatedActions.map((a) => (a.id === existingRule.id ? newRule : a));
+    } else if (editingActionId && forceMode !== 'subaction') {
       updatedActions = updatedActions.map((a) => (a.id === editingActionId ? newRule : a));
     } else {
       updatedActions.push(newRule);
@@ -136,6 +155,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     const updated = { ...currentHotspot, actions: updatedActions };
     setCurrentHotspot(updated);
+    onSave(updated);
     setDuplicateConflict(null);
     resetForm();
   };
@@ -146,6 +166,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       actions: currentHotspot.actions.filter((a) => a.id !== actionId),
     };
     setCurrentHotspot(updated);
+    onSave(updated);
   };
 
   const resetForm = () => {
@@ -344,6 +365,36 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
               <Sparkles className="w-4 h-4 text-amber-400" />
               <span>{editingActionId ? 'Editar Regla de Acción y Consecuencias' : 'Crear Nueva Regla de Acción'}</span>
             </h4>
+
+            {/* Inline create new flag if needed */}
+            <div className="bg-slate-900/60 border border-amber-500/30 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-amber-400" />
+                <span>¿Necesitas crear una nueva bandera/variable global?</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newFlagName}
+                  onChange={(e) => setNewFlagName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCreateInlineFlag();
+                    }
+                  }}
+                  placeholder="ej: puerta_abierta"
+                  className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono outline-none focus:border-amber-500 w-36"
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateInlineFlag}
+                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs cursor-pointer shadow transition-colors"
+                >
+                  + Crear Bandera
+                </button>
+              </div>
+            </div>
 
             {/* Verb & Requirements */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -744,14 +795,17 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
       {/* Duplicate Verb Conflict Modal */}
       {duplicateConflict && (
-        <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border-2 border-amber-500/60 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-amber-400">
-              <Sparkles className="w-6 h-6 shrink-0" />
-              <h3 className="font-bold text-base text-slate-100">
-                Acción para "{duplicateConflict.verbLabel}" ya configurada
-              </h3>
-            </div>
+        <div
+          className="fixed inset-0 z-60 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 cursor-default"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="bg-slate-900 border-2 border-amber-500/60 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-bold text-base text-slate-100 border-b border-slate-800 pb-2">
+              Acción para "{duplicateConflict.verbLabel}" ya configurada
+            </h3>
 
             <p className="text-xs text-slate-300 leading-relaxed">
               Ya existe una regla previa para la acción <strong className="text-amber-300 uppercase">{duplicateConflict.verbLabel}</strong> en la palabra clave <strong className="text-amber-300 font-bold">"{currentHotspot.word}"</strong>:
@@ -769,18 +823,17 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleSaveAction('replace')}
-                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow"
+                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors flex items-center justify-center cursor-pointer shadow"
               >
-                <span>🔄 Reemplazar Acción Existente</span>
+                <span>Reemplazar Acción Existente</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleSaveAction('subaction')}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow"
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center cursor-pointer shadow"
               >
-                <ArrowRight className="w-4 h-4 text-indigo-300" />
                 <span>
-                  ➕ Agregar como Subacción ({duplicateConflict.verbLabel} {currentHotspot.actions.filter((a) => a.verb === verb).length + 1})
+                  Agregar como Subacción ({duplicateConflict.verbLabel} {currentHotspot.actions.filter((a) => a.verb === verb).length + 1})
                 </span>
               </button>
               <button

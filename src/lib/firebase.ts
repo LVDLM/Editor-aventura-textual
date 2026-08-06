@@ -184,21 +184,24 @@ export async function deleteUserAccountAndData(uid: string): Promise<void> {
 // Projects Cloud Operations
 
 /**
- * Fetch all published projects for the public portal
+ * Fetch all published projects for the public portal (using published snapshot if present)
  */
 export async function getPublishedProjects(): Promise<CloudProjectDoc[]> {
   try {
     const q = query(
       collection(db, 'projects'),
-      where('status', '==', 'published')
+      where('status', 'in', ['published', 'pending_review'])
     );
     const snap = await getDocs(q);
     const list: CloudProjectDoc[] = [];
     snap.forEach((docSnap) => {
-      list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
+      const data = { id: docSnap.id, ...docSnap.data() } as CloudProjectDoc;
+      if (data.status === 'published' || data.publishedData) {
+        list.push(data);
+      }
     });
-    // Sort client-side in case index isn't ready
-    return list.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+    // Sort client-side by publishedAt / updatedAt
+    return list.sort((a, b) => new Date(b.publishedAt || b.updatedAt || b.createdAt).getTime() - new Date(a.publishedAt || a.updatedAt || a.createdAt).getTime());
   } catch (err) {
     console.error('Error fetching published projects:', err);
     return [];
@@ -261,6 +264,23 @@ export async function saveProjectToCloud(
   const existingSnap = await getDoc(ref);
   const existingData = existingSnap.exists() ? (existingSnap.data() as CloudProjectDoc) : null;
 
+  const currentPubVersion = existingData?.publishedVersion || 0;
+  let publishedData = existingData?.publishedData || null;
+  let publishedVersion = existingData?.publishedVersion || (status === 'published' ? 1 : null);
+  let publishedAt = existingData?.publishedAt || null;
+  let hasUnpublishedChanges = existingData?.hasUnpublishedChanges || false;
+
+  if (status === 'published') {
+    publishedData = projectData; // Create live snapshot
+    publishedVersion = currentPubVersion + 1;
+    publishedAt = now;
+    hasUnpublishedChanges = false;
+  } else {
+    if (existingData?.publishedData) {
+      hasUnpublishedChanges = true;
+    }
+  }
+
   const docPayload: Record<string, any> = {
     id: idToUse,
     title: projectData.title || 'Sin Título',
@@ -270,12 +290,20 @@ export async function saveProjectToCloud(
     authorEmail: author.email || '',
     status: status,
     allowDownload: projectData.allowDownload ?? existingData?.allowDownload ?? false,
-    projectData: projectData,
+    projectData: projectData, // Working draft
     updatedAt: now,
     createdAt: existingData?.createdAt || now,
     reviewFeedback: reviewFeedback || existingData?.reviewFeedback || '',
-    publishedAt: status === 'published' ? (existingData?.publishedAt || now) : (existingData?.publishedAt || null)
+    publishedAt: publishedAt,
+    hasUnpublishedChanges: hasUnpublishedChanges,
   };
+
+  if (publishedData) {
+    docPayload.publishedData = publishedData;
+  }
+  if (publishedVersion) {
+    docPayload.publishedVersion = publishedVersion;
+  }
 
   // Sanitize object to remove any 'undefined' properties which cause Firestore setDoc to fail
   const sanitizedPayload = JSON.parse(JSON.stringify(docPayload));
@@ -293,17 +321,32 @@ export async function updateProjectStatusInCloud(
   feedback: string = ''
 ): Promise<void> {
   const ref = doc(db, 'projects', docId);
+  const snap = await getDoc(ref);
+  const existingData = snap.exists() ? (snap.data() as CloudProjectDoc) : null;
+
+  const now = new Date().toISOString();
   const updateData: any = {
     status,
-    updatedAt: new Date().toISOString()
+    updatedAt: now
   };
+
   if (status === 'published') {
-    updateData.publishedAt = new Date().toISOString();
+    updateData.publishedAt = now;
+    if (existingData?.projectData) {
+      updateData.publishedData = existingData.projectData;
+      updateData.publishedVersion = (existingData.publishedVersion || 0) + 1;
+      updateData.hasUnpublishedChanges = false;
+    }
+  } else if (existingData?.publishedData) {
+    updateData.hasUnpublishedChanges = true;
   }
+
   if (feedback !== undefined) {
     updateData.reviewFeedback = feedback;
   }
-  await updateDoc(ref, updateData);
+
+  const sanitized = JSON.parse(JSON.stringify(updateData));
+  await updateDoc(ref, sanitized);
 }
 
 /**

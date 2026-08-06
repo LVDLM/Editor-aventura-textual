@@ -4,7 +4,7 @@ import { GeneralSettings } from './GeneralSettings';
 import { SceneEditor } from './SceneEditor';
 import { InventoryManager } from './InventoryManager';
 import { FlagsManager } from './FlagsManager';
-import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown } from 'lucide-react';
+import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal } from 'lucide-react';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 
 interface GameEditorProps {
@@ -25,14 +25,30 @@ export const GameEditor: React.FC<GameEditorProps> = ({
   webAspect = 'clean',
 }) => {
   const [activeTab, setActiveTab] = useState<'scenes' | 'settings' | 'inventory' | 'flags'>('scenes');
+  const [editorWidth, setEditorWidth] = useState<'standard' | 'wide' | 'full'>(() => {
+    return (localStorage.getItem('editor_width_preference') as any) || 'wide';
+  });
+
+  const handleWidthChange = (width: 'standard' | 'wide' | 'full') => {
+    setEditorWidth(width);
+    localStorage.setItem('editor_width_preference', width);
+  };
+
   const validationIssues = validateProjectScenes(project);
   const isClean = webAspect === 'clean';
 
+  const containerWidthClass =
+    editorWidth === 'standard'
+      ? 'max-w-7xl'
+      : editorWidth === 'wide'
+      ? 'max-w-[1600px]'
+      : 'max-w-none px-1 sm:px-4';
+
   return (
-    <div className={`min-h-[calc(100vh-60px)] py-6 px-4 transition-colors duration-300 ${
+    <div className={`min-h-[calc(100vh-60px)] py-6 px-3 sm:px-6 transition-colors duration-300 ${
       isClean ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0a0a0c] text-white'
     }`}>
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className={`${containerWidthClass} mx-auto space-y-6 transition-all duration-300`}>
         
         {/* Top Bar for Editor */}
         <div className={`flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border shadow-md ${
@@ -52,7 +68,59 @@ export const GameEditor: React.FC<GameEditorProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Workspace Width Selector Selector */}
+            <div className={`flex items-center gap-1 p-1 rounded-xl border text-xs font-semibold ${
+              isClean ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-black/40 border-white/10 text-slate-300'
+            }`}>
+              <span className="px-2 text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1" title="Ajusta el ancho de la zona de trabajo para pantallas grandes">
+                <MoveHorizontal className="w-3.5 h-3.5 text-amber-500" />
+                <span className="hidden md:inline">Ancho Zona:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => handleWidthChange('standard')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
+                  editorWidth === 'standard'
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : isClean
+                    ? 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Ancho Estándar (1280px) - Para pantallas normales"
+              >
+                Estándar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleWidthChange('wide')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
+                  editorWidth === 'wide'
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : isClean
+                    ? 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Ancho Ampliado (1600px) - Recomendado para monitores grandes"
+              >
+                Amplio
+              </button>
+              <button
+                type="button"
+                onClick={() => handleWidthChange('full')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
+                  editorWidth === 'full'
+                    ? 'bg-amber-500 text-slate-950 shadow'
+                    : isClean
+                    ? 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Pantalla Completa (100%) - Maximiza el espacio horizontal"
+              >
+                Completo
+              </button>
+            </div>
+
             {onOpenExport && (
               <button
                 onClick={onOpenExport}

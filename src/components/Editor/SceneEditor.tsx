@@ -35,6 +35,10 @@ import {
   Heading2,
   Image as ImageIcon,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Maximize2,
+  Settings,
 } from 'lucide-react';
 
 interface SceneEditorProps {
@@ -50,6 +54,19 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   const [activeHotspotForEdit, setActiveHotspotForEdit] = useState<Hotspot | null>(null);
   const [showSceneAlerts, setShowSceneAlerts] = useState(false);
 
+  // Sidebar collapse preference
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('editor_sidebar_collapsed') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem('editor_sidebar_collapsed', String(next));
+      return next;
+    });
+  };
+
   // New scene form
   const [newSceneName, setNewSceneName] = useState('');
   const [newSceneType, setNewSceneType] = useState<'normal' | 'portada' | 'introduccion' | 'qte'>('normal');
@@ -57,6 +74,19 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   // Selection keyword helper
   const [selectedText, setSelectedText] = useState('');
   const [manualKeyword, setManualKeyword] = useState('');
+  const [inlineFlagName, setInlineFlagName] = useState('');
+
+  const handleAddGlobalFlag = (flagKey: string) => {
+    const cleanKey = flagKey.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!cleanKey) return;
+    updateProject((prev) => ({
+      ...prev,
+      globalFlags: {
+        ...(prev.globalFlags || {}),
+        [cleanKey]: false,
+      },
+    }));
+  };
 
   // Image section visibility & textarea refs for text formatting toolbar
   const [openImageSectionBlockIds, setOpenImageSectionBlockIds] = useState<Record<string, boolean>>({});
@@ -528,18 +558,79 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
         activeSceneId={activeScene?.id}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
-        {/* Scenes List Sidebar */}
-        <div className="lg:col-span-1 bg-[#0c0c0e] border border-white/10 rounded-2xl p-5 space-y-4 h-fit">
-          <div className="flex items-center justify-between border-b border-white/5 pb-3">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-amber-500" />
-              <h3 className="text-[10px] uppercase tracking-widest text-white/40 font-bold">
-                Escenas ({project.scenes.length})
-              </h3>
+      {/* Top Collapsed Scenes Bar if sidebar is hidden */}
+      {isSidebarCollapsed && (
+        <div className="bg-[#0c0c0e] border border-amber-500/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg animate-fadeIn">
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer"
+              title="Desplegar panel lateral de escenas"
+            >
+              <PanelLeftOpen className="w-4 h-4 text-amber-400" />
+              <span>Ver Lista de Escenas ({project.scenes.length})</span>
+            </button>
+
+            {/* Quick scene switcher dropdown */}
+            <div className="flex items-center gap-2 bg-black/60 border border-white/10 rounded-xl px-3 py-1 text-xs">
+              <span className="text-white/50 font-medium">Escena Actual:</span>
+              <select
+                value={selectedSceneId}
+                onChange={(e) => setSelectedSceneId(e.target.value)}
+                className="bg-transparent text-amber-300 font-bold outline-none cursor-pointer"
+              >
+                {project.scenes.map((s, idx) => (
+                  <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                    {idx + 1}. {s.name} ({s.type === 'portada' ? 'Portada' : s.type === 'introduccion' ? 'Intro' : s.type === 'qte' ? 'QTE' : 'Normal'})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
+
+          {/* Quick Add Scene */}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newSceneName}
+              onChange={(e) => setNewSceneName(e.target.value)}
+              className="bg-black/50 border border-white/10 rounded-xl px-3 py-1 text-xs text-white focus:border-amber-500 outline-none w-44"
+              placeholder="+ Nueva escena..."
+            />
+            <button
+              type="button"
+              onClick={handleCreateScene}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-sm cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Añadir</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={`grid grid-cols-1 ${isSidebarCollapsed ? 'lg:grid-cols-1' : 'lg:grid-cols-4'} gap-6`}>
+        
+        {/* Scenes List Sidebar */}
+        {!isSidebarCollapsed && (
+          <div className="lg:col-span-1 bg-[#0c0c0e] border border-white/10 rounded-2xl p-5 space-y-4 h-fit">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-amber-500" />
+                <h3 className="text-[10px] uppercase tracking-widest text-white/40 font-bold">
+                  Escenas ({project.scenes.length})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="p-1 rounded-lg text-white/40 hover:text-amber-400 hover:bg-white/10 transition-colors cursor-pointer"
+                title="Plegar panel lateral para maximizar el área de escritura"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            </div>
 
           {/* Add scene */}
           <div className="space-y-2">
@@ -682,9 +773,10 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
             })}
           </div>
         </div>
+        )}
 
       {/* Main Scene Editor & Hotspots Workspace */}
-      <div className="lg:col-span-3 space-y-6">
+      <div className={`${isSidebarCollapsed ? 'lg:col-span-1' : 'lg:col-span-3'} space-y-6`}>
         
         {/* Story Text Editor Card */}
         <div className="bg-[#0f0f12] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 relative overflow-hidden">
@@ -1510,6 +1602,87 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     placeholder={`Escribe el texto del párrafo #${index + 1}...`}
                   />
 
+                  {/* Hotspots / Interactive Keywords for THIS paragraph block */}
+                  <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Palabras Clave en este Párrafo:</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Haz clic sobre una palabra para configurar acciones (mirar, usar, etc.)
+                      </span>
+                    </div>
+
+                    {(() => {
+                      const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
+                        block.text.toLowerCase().includes(hs.word.toLowerCase())
+                      );
+
+                      if (blockHotspots.length === 0) {
+                        return (
+                          <p className="text-[11px] text-slate-400 italic">
+                            No se detectan palabras clave en este párrafo. Selecciona texto arriba o añade palabras abajo.
+                          </p>
+                        );
+                      }
+
+                      return (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {blockHotspots.map((hs) => (
+                            <div
+                              key={hs.id}
+                              onClick={() => setActiveHotspotForEdit(hs)}
+                              className="bg-black/80 border border-amber-500/40 hover:border-amber-400 rounded-xl px-3 py-1.5 flex items-center gap-2 cursor-pointer group transition-all shadow-sm hover:shadow-amber-500/10"
+                            >
+                              <span className="text-xs font-bold text-amber-300 group-hover:text-amber-200">
+                                "{hs.word}"
+                              </span>
+
+                              {/* Action verb pills */}
+                              <div className="flex items-center gap-1">
+                                {hs.actions.map((act) => (
+                                  <span
+                                    key={act.id}
+                                    className="text-[9px] font-mono font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded"
+                                  >
+                                    {act.verb}
+                                  </span>
+                                ))}
+                                {hs.actions.length === 0 && (
+                                  <span className="text-[9px] text-slate-500 italic">sin acciones</span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveHotspotForEdit(hs);
+                                }}
+                                className="p-0.5 text-slate-400 hover:text-amber-300 cursor-pointer"
+                                title="Editar acciones de esta palabra"
+                              >
+                                <Settings className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteHotspot(hs.id);
+                                }}
+                                className="p-0.5 text-slate-500 hover:text-rose-400 cursor-pointer"
+                                title="Eliminar esta palabra clave"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
                   {/* Flag Condition Controls */}
                   <div className="bg-slate-900/80 border border-white/5 rounded-lg p-3 space-y-2 text-xs">
                     <div className="flex items-center gap-1.5 text-slate-300 text-xs font-bold">
@@ -1519,7 +1692,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
                     {flagKeys.length === 0 ? (
                       <p className="text-[11px] text-slate-500 italic">
-                        No hay banderas globales registradas. Puedes crearlas en la pestaña "Banderas y Variables" para condicionar la aparición de párrafos.
+                        No hay banderas globales registradas. Puedes crearlas abajo o en la pestaña "Banderas y Variables".
                       </p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -1572,6 +1745,41 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         </div>
                       </div>
                     )}
+
+                    {/* Inline Flag Creator */}
+                    <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[11px] text-slate-400 font-medium">¿Crear nueva bandera global desde este párrafo?</span>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={inlineFlagName}
+                          onChange={(e) => setInlineFlagName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (inlineFlagName.trim()) {
+                                handleAddGlobalFlag(inlineFlagName);
+                                setInlineFlagName('');
+                              }
+                            }
+                          }}
+                          placeholder="ej: linterna_encendida"
+                          className="bg-black/60 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono outline-none focus:border-amber-500 w-40"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (inlineFlagName.trim()) {
+                              handleAddGlobalFlag(inlineFlagName);
+                              setInlineFlagName('');
+                            }
+                          }}
+                          className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs cursor-pointer shadow transition-colors"
+                        >
+                          + Crear
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -1597,7 +1805,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
             />
             <button
               onClick={() => handleAddHotspot(manualKeyword)}
-              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-amber-400 font-medium border border-white/10 rounded-xl text-xs flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-amber-400 font-medium border border-white/10 rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Marcar Palabra Clave</span>
@@ -1605,16 +1813,16 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           </div>
         </div>
 
-        {/* Hotspots / Keywords Interactive Manager */}
+        {/* Hotspots / Keywords Summary for Scene */}
         <div className="bg-[#0f0f12] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
           <div className="flex items-center justify-between border-b border-white/5 pb-3">
             <div>
               <h3 className="font-medium text-white text-base flex items-center gap-2">
                 <MousePointer className="w-4 h-4 text-amber-500" />
-                <span>Palabras Clave Interactivas ({activeScene?.hotspots.length || 0})</span>
+                <span>Resumen General de Palabras Clave de la Escena ({activeScene?.hotspots.length || 0})</span>
               </h3>
               <p className="text-xs text-white/40 mt-0.5">
-                Configura qué sucede al aplicar acciones sobre cada palabra destacada.
+                Listado completo de palabras interactivas de esta escena.
               </p>
             </div>
           </div>
@@ -1630,12 +1838,12 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {activeScene.hotspots.map((hs) => (
                 <div
                   key={hs.id}
                   onClick={() => setActiveHotspotForEdit(hs)}
-                  className="bg-black/40 border border-white/10 hover:border-amber-500/50 rounded-xl p-4 cursor-pointer transition-all shadow-sm group"
+                  className="bg-black/40 border border-white/10 hover:border-amber-500/50 rounded-xl p-3.5 cursor-pointer transition-all shadow-sm group"
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -1654,7 +1862,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         e.stopPropagation();
                         handleDeleteHotspot(hs.id);
                       }}
-                      className="p-1 text-white/30 hover:text-rose-400"
+                      className="p-1 text-white/30 hover:text-rose-400 cursor-pointer"
                       title="Eliminar palabra clave"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1662,7 +1870,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                   </div>
 
                   {/* Actions summary badges */}
-                  <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+                  <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
                     {hs.actions.map((act) => (
                       <span
                         key={act.id}
@@ -1690,6 +1898,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           project={project}
           onSave={handleSaveHotspot}
           onClose={() => setActiveHotspotForEdit(null)}
+          onAddGlobalFlag={handleAddGlobalFlag}
         />
       )}
     </div>

@@ -231,7 +231,11 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                         doc.status === 'pending_review' ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40' :
                         doc.status === 'rejected' ? 'bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-500/40' : 'bg-slate-200 text-slate-700'
                       }`}>
-                        {doc.status.toUpperCase()}
+                        {doc.status === 'pending_review'
+                          ? `SOLICITUD v${(doc.publishedVersion || 0) + 1}`
+                          : doc.status === 'published'
+                          ? `PUBLICADO v${doc.publishedVersion || 1}`
+                          : doc.status.toUpperCase()}
                       </span>
                     </h3>
                     <p className={`text-xs mt-0.5 ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -244,16 +248,16 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                     {doc.status !== 'published' && (
                       <button
                         onClick={() => handleApproveAndPublish(doc)}
-                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-md"
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-md cursor-pointer active:scale-95"
                       >
-                        <CheckCircle className="w-4 h-4" /> Aprobar y Publicar
+                        <CheckCircle className="w-4 h-4" /> Aprobar y Publicar v{(doc.publishedVersion || 0) + 1}
                       </button>
                     )}
 
                     {doc.status === 'published' && (
                       <button
                         onClick={() => handleUnpublish(doc)}
-                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <ArrowLeftRight className="w-3.5 h-3.5" /> Despublicar (Mover a Borrador)
                       </button>
@@ -264,6 +268,23 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                 <p className="text-xs text-slate-300 leading-relaxed">
                   {doc.description || 'Sin descripción disponible.'}
                 </p>
+
+                {doc.publishedData && (
+                  <div className="flex items-center justify-between text-xs bg-slate-950/80 p-2.5 rounded-xl border border-emerald-500/30">
+                    <span className="text-slate-300 text-[11px] font-mono">
+                      Versión Web actual en catálogo: <strong className="text-emerald-300 font-bold">v{doc.publishedVersion || 1}</strong>
+                    </span>
+                    <button
+                      onClick={() => {
+                        onPlayProject(doc.publishedData!);
+                      }}
+                      className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Probar la versión que ven actualmente los jugadores en la web"
+                    >
+                      <Play className="w-3 h-3 fill-emerald-300" /> Probar v{doc.publishedVersion || 1} en Vivo
+                    </button>
+                  </div>
+                )}
 
                 {doc.reviewFeedback && (
                   <div className="p-3 bg-slate-950 border border-white/10 rounded-xl text-xs text-slate-300">
@@ -279,9 +300,9 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                         onSelectProject(doc.projectData, doc.id);
                         onPlayProject(doc.projectData);
                       }}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <Play className="w-3.5 h-3.5 text-amber-400" /> Probar Juego
+                      <Play className="w-3.5 h-3.5 text-amber-400" /> Probar Borrador v{(doc.publishedVersion || 0) + 1}
                     </button>
                     <button
                       onClick={() => {

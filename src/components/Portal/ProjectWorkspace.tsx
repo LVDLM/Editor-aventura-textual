@@ -169,12 +169,34 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
     return p.status === statusFilter;
   });
 
-  const getStatusBadge = (status: PublicationStatus) => {
-    switch (status) {
+  const getStatusBadge = (doc: CloudProjectDoc) => {
+    switch (doc.status) {
       case 'published':
-        return <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 font-semibold">🟢 Publicado en la Web</span>;
+        return (
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 font-semibold">
+              🟢 Publicado v{doc.publishedVersion || 1}
+            </span>
+            {doc.hasUnpublishedChanges && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                ✏️ Cambios sin publicar (v{(doc.publishedVersion || 1) + 1} en edición)
+              </span>
+            )}
+          </div>
+        );
       case 'pending_review':
-        return <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 font-semibold">⏳ En Revisión por Admin</span>;
+        return (
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 font-semibold">
+              ⏳ En Revisión v{(doc.publishedVersion || 0) + 1}
+            </span>
+            {doc.publishedData && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+                🟢 v{doc.publishedVersion} sigue activa en la Web
+              </span>
+            )}
+          </div>
+        );
       case 'rejected':
         return <span className="text-xs px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1 font-semibold">❌ Correcciones Requeridas</span>;
       default:
@@ -364,10 +386,27 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                       </h3>
                       <p className="text-xs text-slate-400">Actualizado: {new Date(doc.updatedAt).toLocaleDateString()}</p>
                     </div>
-                    {getStatusBadge(doc.status)}
+                    {getStatusBadge(doc)}
                   </div>
 
                   <p className="text-xs text-slate-300 line-clamp-2">{doc.description || 'Sin descripción.'}</p>
+
+                  {doc.publishedData && (
+                    <div className="flex items-center justify-between text-xs bg-slate-950/80 p-2.5 rounded-xl border border-emerald-500/30">
+                      <span className="text-slate-300 text-[11px] font-mono">
+                        Versión Web activa: <strong className="text-emerald-300 font-bold">v{doc.publishedVersion || 1}</strong>
+                      </span>
+                      <button
+                        onClick={() => {
+                          onPlayProject(doc.publishedData!);
+                        }}
+                        className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Probar la versión pública activa en la Web"
+                      >
+                        <Play className="w-3 h-3 fill-emerald-300" /> Probar v{doc.publishedVersion || 1} en Vivo
+                      </button>
+                    </div>
+                  )}
 
                   {doc.reviewFeedback && (
                     <div className="p-3 bg-rose-950/40 border border-rose-500/30 rounded-xl text-xs text-rose-200 space-y-1">
@@ -387,18 +426,19 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                         onSelectProject(doc.projectData, doc.id);
                         onOpenEditor();
                       }}
-                      className="py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                      className="py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Edit3 className="w-3.5 h-3.5" /> Abrir en Editor
+                      <Edit3 className="w-3.5 h-3.5" /> Editar Borrador
                     </button>
                     <button
                       onClick={() => {
                         onSelectProject(doc.projectData, doc.id);
                         onPlayProject(doc.projectData);
                       }}
-                      className="py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                      className="py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      title="Probar los cambios actuales en tu borrador"
                     >
-                      <Play className="w-3.5 h-3.5 text-amber-400" /> Probar Juego
+                      <Play className="w-3.5 h-3.5 text-amber-400" /> Probar Borrador
                     </button>
                   </div>
 
@@ -406,18 +446,26 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                     {doc.status === 'draft' || doc.status === 'rejected' ? (
                       <button
                         onClick={() => handleSubmitForReview(doc)}
-                        className="flex-1 py-1.5 bg-amber-950/60 hover:bg-amber-900/60 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors"
+                        className="flex-1 py-1.5 bg-amber-950/60 hover:bg-amber-900/60 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
                         title="Enviar historia al Administrador para que la revise y la publique en la web principal"
                       >
-                        <Send className="w-3.5 h-3.5" /> Solicitar Publicación Web
+                        <Send className="w-3.5 h-3.5" /> Solicitar Publicación (v1)
+                      </button>
+                    ) : doc.status === 'published' && doc.hasUnpublishedChanges ? (
+                      <button
+                        onClick={() => handleSubmitForReview(doc)}
+                        className="flex-1 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all shadow cursor-pointer active:scale-95"
+                        title="Solicitar publicar los cambios de tu borrador como una nueva versión web"
+                      >
+                        <Send className="w-3.5 h-3.5" /> Publicar Nueva Versión v{(doc.publishedVersion || 1) + 1}
                       </button>
                     ) : doc.status === 'pending_review' ? (
                       <span className="text-xs text-amber-300/80 italic flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> Esperando revisión del administrador...
+                        <Clock className="w-3.5 h-3.5" /> En revisión por el admin (v{(doc.publishedVersion || 0) + 1})...
                       </span>
                     ) : (
                       <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Publicado en el catálogo público
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Publicado (v{doc.publishedVersion || 1}) sin cambios pendientes
                       </span>
                     )}
 

@@ -90,18 +90,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Center/Right: Audio & Expand Arrow Button */}
         <div className="flex items-center gap-2">
-          {onAspectChange && (
-            <button
-              onClick={() => onAspectChange(isClean ? 'classic' : 'clean')}
-              className={`p-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
-                isClean ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-              }`}
-              title={isClean ? 'Cambiar a Estilo Web Oscuro Clásico' : 'Cambiar a Estilo Web Luminoso'}
-            >
-              {isClean ? <Moon className="w-3.5 h-3.5 text-slate-600" /> : <Sun className="w-3.5 h-3.5 text-amber-400" />}
-            </button>
-          )}
-
           <button
             onClick={toggleSound}
             className={`p-1 rounded-lg transition-colors cursor-pointer ${
@@ -205,22 +193,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls & User Auth Button */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Global Web Aspect Selector Button */}
-          {onAspectChange && (
-            <button
-              onClick={() => onAspectChange(isClean ? 'classic' : 'clean')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                isClean
-                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
-                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
-              }`}
-              title={isClean ? 'Cambiar estilo de la web a Oscuro Clásico' : 'Cambiar estilo de la web a Luminoso y Diáfano'}
-            >
-              {isClean ? <Moon className="w-3.5 h-3.5 text-slate-700" /> : <Sun className="w-3.5 h-3.5 text-amber-400" />}
-              <span className="hidden md:inline">{isClean ? 'Modo Oscuro' : 'Modo Claro'}</span>
-            </button>
-          )}
-
           {/* User Profile / Auth Button */}
           <button
             onClick={() => {

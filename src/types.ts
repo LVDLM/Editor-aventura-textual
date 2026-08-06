@@ -177,7 +177,11 @@ export interface CloudProjectDoc {
   authorName: string;
   authorEmail: string;
   status: PublicationStatus;
-  projectData: GameProject;
+  projectData: GameProject; // Working draft
+  publishedData?: GameProject; // Live published snapshot
+  publishedVersion?: number; // Live published version number (1, 2, 3...)
+  draftVersion?: number; // Current draft version number
+  hasUnpublishedChanges?: boolean; // True if draft has been modified since last publish
   createdAt: string;
   updatedAt: string;
   publishedAt?: string;
