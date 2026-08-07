@@ -22,6 +22,41 @@ export interface InventoryItem {
   isGameOver?: boolean; // Triggers end of game when inspected/used
 }
 
+export type SoundEffectType =
+  | 'none'
+  | 'fanfare'
+  | 'door_squeak'
+  | 'damage'
+  | 'gunshot'
+  | 'pickup'
+  | 'unlock'
+  | 'secret'
+  | 'thunder'
+  | 'page_turn'
+  | 'footsteps'
+  | 'monster'
+  | 'game_over'
+  | 'click'
+  | 'error';
+
+export const SOUND_EFFECT_OPTIONS: { id: SoundEffectType; label: string }[] = [
+  { id: 'none', label: 'Sin Sonido' },
+  { id: 'fanfare', label: '🎺 Fanfarria breve (Coger objeto / Triunfo)' },
+  { id: 'door_squeak', label: '🚪 Chirrido de puerta / Mueble' },
+  { id: 'damage', label: '💥 Recibir daño / Impacto' },
+  { id: 'gunshot', label: '🔫 Disparo de arma de fuego' },
+  { id: 'pickup', label: '📦 Coger objeto (Tono rápido)' },
+  { id: 'unlock', label: '🗝️ Abrir cerrojo / Llave' },
+  { id: 'secret', label: '✨ Secreto / Magia / Arpegio' },
+  { id: 'thunder', label: '🌩️ Trueno / Estruendo' },
+  { id: 'page_turn', label: '📜 Pasar página / Hoja' },
+  { id: 'footsteps', label: '👣 Pasos / Caminar' },
+  { id: 'monster', label: '👾 Rugido de monstruo' },
+  { id: 'game_over', label: '💀 Fin de partida / Muerte' },
+  { id: 'click', label: '🔘 Clic de interfaz' },
+  { id: 'error', label: '❌ Error / Impasable' },
+];
+
 export interface StateChange {
   setFlags?: Record<string, boolean>; // e.g., { habitacion_iluminada: true }
   addItemId?: string; // Add item to inventory
@@ -46,6 +81,7 @@ export interface ActionRule {
   responseMessage: string; // Message printed in narrative response box
   stateChange?: StateChange;
   isGameOver?: boolean; // Direct game over flag on action rule
+  soundEffect?: SoundEffectType; // Sound effect triggered with this action response
   
   // Custom priority or condition fail message
   failMessage?: string; // Message if required item or flag is missing
@@ -100,6 +136,7 @@ export interface Scene {
   name: string;
   type?: SceneType;
   description?: string;
+  sfx?: SoundEffectType; // Sound played when entering/loading this scene
   textBlocks: SceneTextBlock[];
   hotspots: Hotspot[];
   qteConfig?: QTEConfig;

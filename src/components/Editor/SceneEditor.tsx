@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep } from '../../types';
+import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
+import { playSound } from '../../utils/audio';
 import { HotspotEditorModal } from './HotspotEditorModal';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 import { ValidationPanel } from './ValidationPanel';
@@ -39,6 +40,7 @@ import {
   PanelLeftOpen,
   Maximize2,
   Settings,
+  Volume2,
 } from 'lucide-react';
 
 interface SceneEditorProps {
@@ -872,7 +874,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
             <div>
               <label className="block text-[10px] uppercase font-bold text-white/40 mb-1">Nombre de la Escena</label>
               <input
@@ -932,6 +934,44 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 <option value="portada">Escena de Portada (Carátula)</option>
                 <option value="introduccion">Escena de Introducción (Prólogo)</option>
                 <option value="qte">Escena Especial: Quick Time Event (QTE)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-amber-300 flex items-center justify-between mb-1">
+                <span className="flex items-center gap-1">
+                  <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                  Sonido al Cargar Escena
+                </span>
+                {activeScene?.sfx && activeScene.sfx !== 'none' && (
+                  <button
+                    type="button"
+                    onClick={() => playSound(activeScene.sfx)}
+                    className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>▶ Probar</span>
+                  </button>
+                )}
+              </label>
+              <select
+                value={activeScene?.sfx || 'none'}
+                onChange={(e) => {
+                  const sfx = (e.target.value as SoundEffectType) || 'none';
+                  updateProject((prev) => ({
+                    ...prev,
+                    scenes: prev.scenes.map((s) =>
+                      s.id === activeScene.id ? { ...s, sfx: sfx !== 'none' ? sfx : undefined } : s
+                    ),
+                  }));
+                  if (sfx !== 'none') playSound(sfx);
+                }}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-amber-200 font-medium focus:border-amber-500 outline-none"
+              >
+                {SOUND_EFFECT_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -1656,15 +1696,6 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                                 </p>
                               </div>
                             ))}
-                            <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between text-[10px] text-amber-400/80 font-sans italic">
-                              <span className="flex items-center gap-1">
-                                <Sparkles className="w-3 h-3 text-amber-400" />
-                                <span>Texto extra añadido por Palabra Clave</span>
-                              </span>
-                              <span className="text-slate-400 font-normal">
-                                (Visible aquí para lectura continua del autor, oculto en juego hasta interactuar)
-                              </span>
-                            </div>
                           </div>
                         )}
                       </>

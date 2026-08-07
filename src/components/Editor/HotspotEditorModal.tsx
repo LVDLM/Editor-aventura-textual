@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Hotspot, ActionRule, GameProject, VerbType } from '../../types';
+import { Hotspot, ActionRule, GameProject, VerbType, SoundEffectType, SOUND_EFFECT_OPTIONS } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
-import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert } from 'lucide-react';
+import { playSound } from '../../utils/audio';
+import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2 } from 'lucide-react';
 
 interface HotspotEditorModalProps {
   hotspot: Hotspot;
@@ -38,6 +39,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [responseMessage, setResponseMessage] = useState('');
   const [requiredItemId, setRequiredItemId] = useState('');
   const [requiredFlagsMap, setRequiredFlagsMap] = useState<Record<string, boolean>>({});
+  const [soundEffect, setSoundEffect] = useState<SoundEffectType>('none');
   
   // State change consequences
   const [addItemId, setAddItemId] = useState('');
@@ -88,6 +90,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setGoToSceneId(action.stateChange?.goToSceneId || '');
     setAppendStoryText(action.stateChange?.appendStoryText || '');
     setIsGameOver(!!action.isGameOver || !!action.stateChange?.isGameOver);
+    setSoundEffect(action.soundEffect || 'none');
   };
 
   const handleSaveAction = (forceMode?: 'replace' | 'subaction') => {
@@ -126,6 +129,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       requiredItemId: requiredItemId || undefined,
       requiredFlags: Object.keys(requiredFlagsMap).length > 0 ? { ...requiredFlagsMap } : undefined,
       isGameOver: isGameOver || undefined,
+      soundEffect: soundEffect !== 'none' ? soundEffect : undefined,
       stateChange: Object.keys(stateChangeObj).length > 0 ? stateChangeObj : undefined,
     };
 
@@ -184,6 +188,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setGoToSceneId('');
     setAppendStoryText('');
     setIsGameOver(false);
+    setSoundEffect('none');
   };
 
   const toggleRequiredFlag = (flagKey: string) => {
@@ -501,6 +506,42 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                   ⚠️ Por favor, escribe un mensaje de respuesta para el jugador antes de guardar.
                 </p>
               )}
+            </div>
+
+            {/* Sound Effect for this action */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <label className="block text-xs font-bold text-amber-300 flex items-center gap-1.5 mb-0.5">
+                  <Volume2 className="w-4 h-4 text-amber-400" />
+                  <span>Efecto de Sonido al reproducir esta respuesta:</span>
+                </label>
+                <p className="text-[11px] text-slate-400">
+                  Se reproducirá cuando el jugador ejecute esta acción.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={soundEffect}
+                  onChange={(e) => setSoundEffect(e.target.value as SoundEffectType)}
+                  className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-200 outline-none focus:border-amber-500 font-semibold"
+                >
+                  {SOUND_EFFECT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {soundEffect !== 'none' && (
+                  <button
+                    type="button"
+                    onClick={() => playSound(soundEffect)}
+                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>Probar</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* State Change Consequences (Expanded without arbitrary limit!) */}

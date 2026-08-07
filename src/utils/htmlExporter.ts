@@ -414,6 +414,58 @@ ${jsonProject}
     let activeVerb = null;
     let selectedInventoryItem = null;
 
+    let audioCtx = null;
+    function playSound(type) {
+      if (!type || type === 'none') return;
+      try {
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCtx = new AC();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+
+        if (type === 'click') {
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = 'sine'; o.frequency.setValueAtTime(400, now); o.frequency.exponentialRampToValueAtTime(200, now + 0.05);
+          g.gain.setValueAtTime(0.15, now); g.gain.linearRampToValueAtTime(0.01, now + 0.05);
+          o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.05);
+        } else if (type === 'fanfare') {
+          [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = 'triangle'; o.frequency.setValueAtTime(f, now + i * 0.09);
+            g.gain.setValueAtTime(0, now + i * 0.09); g.gain.linearRampToValueAtTime(0.25, now + i * 0.09 + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.3);
+            o.connect(g); g.connect(audioCtx.destination); o.start(now + i * 0.09); o.stop(now + i * 0.09 + 0.32);
+          });
+        } else if (type === 'door' || type === 'door_squeak') {
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain(), flt = audioCtx.createBiquadFilter();
+          o.type = 'sawtooth'; o.frequency.setValueAtTime(420, now); o.frequency.linearRampToValueAtTime(750, now + 0.18); o.frequency.linearRampToValueAtTime(310, now + 0.38); o.frequency.linearRampToValueAtTime(550, now + 0.5);
+          flt.type = 'bandpass'; flt.frequency.setValueAtTime(650, now); flt.Q.setValueAtTime(2.5, now);
+          g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.18, now + 0.04); g.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
+          o.connect(flt); flt.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.54);
+        } else if (type === 'damage') {
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = 'square'; o.frequency.setValueAtTime(170, now); o.frequency.exponentialRampToValueAtTime(30, now + 0.25);
+          g.gain.setValueAtTime(0.3, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+          o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.3);
+        } else if (type === 'gunshot') {
+          const dur = 0.35, bufferSize = audioCtx.sampleRate * dur, buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+          const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+          const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(3200, now); filter.frequency.exponentialRampToValueAtTime(180, now + dur);
+          const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.45, now); gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+          noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination); noise.start(now);
+        } else if (type === 'pickup') {
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = 'sine'; o.frequency.setValueAtTime(440, now); o.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+          g.gain.setValueAtTime(0.2, now); g.gain.linearRampToValueAtTime(0.01, now + 0.12);
+          o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.12);
+        }
+      } catch (e) {}
+    }
+
     document.getElementById('game-title').innerText = PROJECT.title;
     document.getElementById('game-author').innerText = 'Por ' + PROJECT.author;
 
@@ -540,12 +592,18 @@ ${jsonProject}
       return itemOrBlock.imageFileData || itemOrBlock.imageUrl || '';
     }
 
+    let lastRenderedSceneId = null;
     function render() {
       const scene = getActiveScene();
       const storyCard = document.getElementById('story-content');
       if (!scene) {
         if (storyCard) storyCard.innerHTML = '<p style="color: #94a3b8; font-style: italic;">No hay escenas disponibles en este juego.</p>';
         return;
+      }
+
+      if (lastRenderedSceneId !== scene.id) {
+        lastRenderedSceneId = scene.id;
+        if (scene.sfx) playSound(scene.sfx);
       }
 
       let combinedHTML = '';
@@ -765,6 +823,16 @@ ${jsonProject}
       responseBox.style.display = 'block';
 
       if (rule) {
+        if (rule.soundEffect && rule.soundEffect !== 'none') {
+          playSound(rule.soundEffect);
+        } else if (rule.stateChange && rule.stateChange.addItemId) {
+          playSound('pickup');
+        } else if (rule.stateChange && rule.stateChange.goToSceneId) {
+          playSound('door');
+        } else {
+          playSound('click');
+        }
+
         let msg = stripGameOverTag(rule.responseMessage || '');
         let addedImgHtml = '';
         let itemImgSrc = '';

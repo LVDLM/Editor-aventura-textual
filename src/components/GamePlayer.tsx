@@ -123,6 +123,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   useEffect(() => {
     setQteMistakeMsg(null);
+    if (currentScene?.sfx) {
+      playSound(currentScene.sfx);
+    }
     if (currentScene && (currentScene.type === 'qte' || currentScene.qteConfig) && currentScene.qteConfig?.sequence?.length) {
       const timeLimit = currentScene.qteConfig.timeLimitSeconds || 10;
       setQteTimeLeft(timeLimit);
@@ -355,6 +358,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     let messageToShow: string | null = null;
 
     if (rule) {
+      if (rule.soundEffect && rule.soundEffect !== 'none') {
+        playSound(rule.soundEffect);
+      } else if (rule.stateChange?.addItemId) {
+        playSound('pickup');
+      } else if (rule.stateChange?.goToSceneId) {
+        playSound('door');
+      } else {
+        playSound('select');
+      }
+
       // If action appends text to paragraph, display full paragraph directly in story (no response popup message)
       if (rule.stateChange?.appendStoryText) {
         messageToShow = null;
