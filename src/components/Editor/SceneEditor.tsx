@@ -5,6 +5,7 @@ import { playSound } from '../../utils/audio';
 import { HotspotEditorModal } from './HotspotEditorModal';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 import { ValidationPanel } from './ValidationPanel';
+import { GamePlayer } from '../GamePlayer';
 import {
   FileText,
   Plus,
@@ -41,17 +42,46 @@ import {
   Maximize2,
   Settings,
   Volume2,
+  Play,
+  RotateCcw,
 } from 'lucide-react';
 
 interface SceneEditorProps {
   project: GameProject;
   updateProject: (fn: (prev: GameProject) => GameProject) => void;
+  webAspect?: 'clean' | 'classic';
 }
 
-export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject }) => {
+export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject, webAspect = 'clean' }) => {
   const [selectedSceneId, setSelectedSceneId] = useState<string>(
     project.scenes[0]?.id || ''
   );
+
+  const activeScene = project.scenes.find((s) => s.id === selectedSceneId) || project.scenes[0];
+
+  // Live Scene Preview state inside editor
+  const [isPreviewingActiveScene, setIsPreviewingActiveScene] = useState(false);
+  const [testSceneGameState, setTestSceneGameState] = useState<any>(null);
+
+  const startTestingSceneWithId = (sceneId: string) => {
+    setSelectedSceneId(sceneId);
+    setTestSceneGameState({
+      currentSceneId: sceneId,
+      inventory: project.inventoryItems.filter((i) => i.isStartingItem).map((i) => i.id),
+      flags: { ...project.globalFlags },
+      appendedTextsPerScene: {},
+      history: [],
+      usedHotspotIds: [],
+      difficulty: 'facil',
+    });
+    setIsPreviewingActiveScene(true);
+  };
+
+  const startTestingActiveScene = () => {
+    if (activeScene) {
+      startTestingSceneWithId(activeScene.id);
+    }
+  };
 
   const [activeHotspotForEdit, setActiveHotspotForEdit] = useState<Hotspot | null>(null);
   const [showSceneAlerts, setShowSceneAlerts] = useState(false);
@@ -149,7 +179,6 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     }, 50);
   };
 
-  const activeScene = project.scenes.find((s) => s.id === selectedSceneId) || project.scenes[0];
   const flagKeys = Object.keys(project.globalFlags || {});
 
   const handleCreateScene = () => {
@@ -589,6 +618,29 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 ))}
               </select>
             </div>
+
+            <button
+              type="button"
+              onClick={isPreviewingActiveScene ? () => setIsPreviewingActiveScene(false) : startTestingActiveScene}
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer border ${
+                isPreviewingActiveScene
+                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-300'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400/30'
+              }`}
+              title={isPreviewingActiveScene ? 'Volver a editar esta escena' : 'Probar esta escena en vivo'}
+            >
+              {isPreviewingActiveScene ? (
+                <>
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Volver al Editor</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Probar Escena</span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* Quick Add Scene */}
@@ -740,6 +792,16 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        startTestingSceneWithId(scene.id);
+                      }}
+                      className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded transition-colors cursor-pointer"
+                      title="Probar esta escena"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleMoveScene(index, 'up');
                       }}
                       disabled={index === 0}
@@ -779,29 +841,96 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
       {/* Main Scene Editor & Hotspots Workspace */}
       <div className={`${isSidebarCollapsed ? 'lg:col-span-1' : 'lg:col-span-3'} space-y-6`}>
-        
-        {/* Story Text Editor Card */}
-        <div className="bg-[#0f0f12] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 relative overflow-hidden">
-          {/* Subtle grid pattern background */}
-          <div
-            className="absolute inset-0 opacity-5 pointer-events-none"
-            style={{
-              backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)',
-              backgroundSize: '40px 40px',
-            }}
-          />
+        {isPreviewingActiveScene ? (
+          <div className="bg-[#0f0f12] border border-emerald-500/40 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 animate-fadeIn">
+            {/* Preview Header Banner */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-500/20 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 font-bold text-lg shadow-sm">
+                  <Play className="w-5 h-5 text-emerald-400 fill-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-emerald-200 text-base flex items-center gap-2 flex-wrap">
+                    <span>Probando Escena:</span>
+                    <span className="text-white font-mono bg-black/60 px-2.5 py-0.5 rounded-lg border border-emerald-500/30">
+                      {activeScene?.name}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-emerald-300/70">
+                    Interactúa con los verbos y palabras clave directamente para probar tu diseño en tiempo real.
+                  </p>
+                </div>
+              </div>
 
-          <div className="flex items-center justify-between border-b border-white/5 pb-3 relative z-10">
-            <div>
-              <span className="text-xs font-mono text-amber-500/70 block mb-1">
-                EDITOR DE TEXTO // {activeScene?.id.toUpperCase()}
-              </span>
-              <h3 className="font-medium text-white text-base flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-500" />
-                <span>Escena: {activeScene?.name}</span>
-              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={startTestingActiveScene}
+                  className="px-3.5 py-2 bg-emerald-950/80 hover:bg-emerald-900/90 border border-emerald-500/40 text-emerald-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                  title="Reiniciar el estado de prueba de esta escena"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reiniciar Escena</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewingActiveScene(false)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center gap-2 shadow-lg"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Volver al Editor</span>
+                </button>
+              </div>
             </div>
+
+            {/* Live Game Player inside Editor */}
+            {testSceneGameState && (
+              <div className="rounded-2xl border border-white/10 overflow-hidden bg-black shadow-2xl">
+                <GamePlayer
+                  project={project}
+                  updateProject={updateProject}
+                  gameState={testSceneGameState}
+                  setGameState={setTestSceneGameState}
+                  onReset={startTestingActiveScene}
+                />
+              </div>
+            )}
           </div>
+        ) : (
+          <>
+            {/* Story Text Editor Card */}
+            <div className="bg-[#0f0f12] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 relative overflow-hidden">
+              {/* Subtle grid pattern background */}
+              <div
+                className="absolute inset-0 opacity-5 pointer-events-none"
+                style={{
+                  backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)',
+                  backgroundSize: '40px 40px',
+                }}
+              />
+
+              <div className="flex items-center justify-between border-b border-white/5 pb-3 relative z-10 gap-2 flex-wrap">
+                <div>
+                  <span className="text-xs font-mono text-amber-500/70 block mb-1">
+                    EDITOR DE TEXTO // {activeScene?.id.toUpperCase()}
+                  </span>
+                  <h3 className="font-medium text-white text-base flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-amber-500" />
+                    <span>Escena: {activeScene?.name}</span>
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={startTestingActiveScene}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow transition-all cursor-pointer border border-emerald-400/30"
+                  title="Probar interactivamente esta escena sin salir del editor"
+                >
+                  <Play className="w-3.5 h-3.5 text-emerald-200 fill-emerald-200" />
+                  <span>Probar esta Escena</span>
+                </button>
+              </div>
 
           {/* Active Scene Specific Validation Alerts */}
           {activeSceneIssues.length > 0 && (
@@ -1987,7 +2116,9 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
             </div>
           )}
         </div>
-      </div>
+      </>
+    )}
+  </div>
     </div>
 
       {/* Hotspot Config Modal */}
