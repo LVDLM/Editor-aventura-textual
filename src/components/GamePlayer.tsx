@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { GameProject, Hotspot, VerbType, InventoryItem, SaveSlotData } from '../types';
+import { GameProject, Hotspot, VerbType, InventoryItem, SaveSlotData, AppendedTextEntry } from '../types';
 import { THEME_CONFIGS } from '../utils/themeStyles';
-import { renderTextWithLinks } from '../utils/textUtils';
+import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS } from '../utils/verbs';
 import { playSound } from '../utils/audio';
 import {
@@ -47,7 +47,7 @@ interface GamePlayerProps {
     currentSceneId: string;
     inventory: string[];
     flags: Record<string, boolean>;
-    appendedTextsPerScene: Record<string, string[]>;
+    appendedTextsPerScene: Record<string, AppendedTextEntry[]>;
     history: { id: string; type: 'story' | 'response' | 'system'; text: string }[];
     usedHotspotIds?: string[];
     difficulty?: 'facil' | 'normal' | 'dificil';
@@ -225,9 +225,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     (currentScene?.textBlocks || []).some(
       (b) => b.isGameOver || /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(b.text)
     ) ||
-    ((currentScene && gameState.appendedTextsPerScene[currentScene.id]) || []).some((t) =>
-      /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(t)
-    );
+    ((currentScene && gameState.appendedTextsPerScene[currentScene.id]) || []).some((t) => {
+      const textVal = typeof t === 'string' ? t : t.text;
+      return /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(textVal);
+    });
 
   const checkConditions = (visibleFlags?: Record<string, boolean>, hiddenFlags?: Record<string, boolean>) => {
     if (visibleFlags) {
@@ -407,8 +408,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         if (sc?.appendStoryText) {
           const currentList = newAppended[prev.currentSceneId] || [];
-          if (!currentList.includes(sc.appendStoryText)) {
-            newAppended[prev.currentSceneId] = [...currentList, sc.appendStoryText];
+          const currentSceneObj = project.scenes.find((s) => s.id === prev.currentSceneId);
+          const parentBlock = currentSceneObj?.textBlocks.find((b) => isWordMatchInText(hotspot.word, b.text));
+          const isAlreadyAppended = currentList.some((t) => (typeof t === 'string' ? t : t.text) === sc.appendStoryText);
+          if (!isAlreadyAppended) {
+            const entryObj: AppendedTextEntry = parentBlock
+              ? { text: sc.appendStoryText, blockId: parentBlock.id }
+              : { text: sc.appendStoryText };
+            newAppended[prev.currentSceneId] = [...currentList, entryObj];
           }
         }
 
@@ -1111,53 +1118,87 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
           )}
 
-          {/* Main Story Text Blocks */}
+          {/* Main Story Text Blocks & Interleaved Appended Paragraphs */}
           <div className={`space-y-6 text-lg leading-relaxed ${themeConfig.textMainClass} relative z-10`}>
-            {currentScene?.textBlocks.map((block) => {
-              if (!checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
-                return null;
-              }
-              const blockImg = block.imageFileData || block.imageUrl;
-              const isPortada = block.type === 'portada' || currentScene?.type === 'portada';
-              const isIntro = block.type === 'introduccion' || currentScene?.type === 'introduccion';
-              const hasText = !!(block.text && block.text.trim().length > 0);
+            {(() => {
+              const sceneAppendedList = gameState.appendedTextsPerScene[gameState.currentSceneId] || [];
+              const blockAppendedMap: Record<string, string[]> = {};
+              const unattachedAppended: string[] = [];
+
+              sceneAppendedList.forEach((entry) => {
+                const txt = typeof entry === 'string' ? entry : entry.text;
+                const bId = typeof entry === 'string' ? undefined : entry.blockId;
+                if (bId) {
+                  if (!blockAppendedMap[bId]) blockAppendedMap[bId] = [];
+                  blockAppendedMap[bId].push(txt);
+                } else {
+                  unattachedAppended.push(txt);
+                }
+              });
 
               return (
-                <div
-                  key={block.id}
-                  id={`block-${block.id}`}
-                  className="tracking-wide space-y-3 transition-all"
-                >
-                  {blockImg && (
-                    <div className="w-full text-center">
-                      <img
-                        src={blockImg}
-                        alt="Ilustración"
-                        className={
-                          isPortada
-                            ? 'w-full max-h-[380px] object-cover rounded-2xl border-2 border-amber-500/50 shadow-2xl mx-auto'
-                            : 'w-full max-h-[280px] object-cover rounded-xl border border-white/10 shadow-lg mx-auto'
-                        }
-                      />
-                    </div>
-                  )}
+                <>
+                  {currentScene?.textBlocks.map((block) => {
+                    if (!checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
+                      return null;
+                    }
+                    const blockImg = block.imageFileData || block.imageUrl;
+                    const isPortada = block.type === 'portada' || currentScene?.type === 'portada';
+                    const hasText = !!(block.text && block.text.trim().length > 0);
+                    const attachedTexts = blockAppendedMap[block.id] || [];
 
-                  {hasText && renderTextWithTags(block.text, block.isGameOver)}
-                </div>
+                    return (
+                      <React.Fragment key={block.id}>
+                        <div
+                          id={`block-${block.id}`}
+                          className="tracking-wide space-y-3 transition-all"
+                        >
+                          {blockImg && (
+                            <div className="w-full text-center">
+                              <img
+                                src={blockImg}
+                                alt="Ilustración"
+                                className={
+                                  isPortada
+                                    ? 'w-full max-h-[380px] object-cover rounded-2xl border-2 border-amber-500/50 shadow-2xl mx-auto'
+                                    : 'w-full max-h-[280px] object-cover rounded-xl border border-white/10 shadow-lg mx-auto'
+                                }
+                              />
+                            </div>
+                          )}
+
+                          {hasText && renderTextWithTags(block.text, block.isGameOver)}
+                        </div>
+
+                        {/* Appended Story Paragraphs attached to THIS block */}
+                        {attachedTexts.map((appended, i) => (
+                          <motion.div
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            key={`block-appended-${block.id}-${i}`}
+                            className="tracking-wide"
+                          >
+                            {renderTextWithTags(appended)}
+                          </motion.div>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {/* Unattached Appended Story Paragraphs */}
+                  {unattachedAppended.map((appended, i) => (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={`unattached-appended-${i}`}
+                      className="tracking-wide"
+                    >
+                      {renderTextWithTags(appended)}
+                    </motion.div>
+                  ))}
+                </>
               );
-            })}
-
-            {/* Appended Story Paragraphs */}
-            {(gameState.appendedTextsPerScene[gameState.currentSceneId] || []).map((appended, i) => (
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                key={i}
-                className="tracking-wide"
-              >
-                {renderTextWithTags(appended)}
-              </motion.div>
-            ))}
+            })()}
           </div>
         </div>
 

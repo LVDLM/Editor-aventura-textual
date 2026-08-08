@@ -521,6 +521,17 @@ ${jsonProject}
       return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function isWordMatchInText(word, text) {
+      if (!word || !text) return false;
+      const isWordChar = function(char) { return /[\p{L}\p{N}_]/u.test(char); };
+      const startChar = word.charAt(0);
+      const endChar = word.charAt(word.length - 1);
+      const prefix = isWordChar(startChar) ? '(?<![\\p{L}\\p{N}_])' : '';
+      const suffix = isWordChar(endChar) ? '(?![\\p{L}\\p{N}_])' : '';
+      const pattern = new RegExp(prefix + escapeRegExp(word) + suffix, 'iu');
+      return pattern.test(text);
+    }
+
     function parseInteractiveText(text, scene) {
       if (!text) return '';
       if (isGameOverState()) return escapeHTML(text);
@@ -624,6 +635,22 @@ ${jsonProject}
         combinedHTML += '<div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(14, 165, 233, 0.2); padding-bottom: 0.5rem;">📖 Escena de Introducción</div>';
       }
 
+      // Group appended texts by blockId or unattached
+      const appendedList = gameState.appendedTexts[scene.id] || [];
+      const blockAppended = {};
+      const unattachedAppended = [];
+
+      appendedList.forEach(function(item) {
+        const txt = typeof item === 'string' ? item : item.text;
+        const bId = typeof item === 'string' ? null : item.blockId;
+        if (bId) {
+          if (!blockAppended[bId]) blockAppended[bId] = [];
+          blockAppended[bId].push(txt);
+        } else {
+          unattachedAppended.push(txt);
+        }
+      });
+
       // Text blocks
       (scene.textBlocks || []).forEach((block, bIdx) => {
         if (checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
@@ -646,12 +673,17 @@ ${jsonProject}
           }
 
           combinedHTML += '</div>';
+
+          // Render appended texts belonging to this block
+          const attached = blockAppended[block.id] || [];
+          attached.forEach(function(t) {
+            combinedHTML += '<p style="margin-bottom: 1rem; color: #fef08a;">' + renderTextBlock(t, scene) + '</p>';
+          });
         }
       });
 
-      // Appended texts for scene
-      const appended = gameState.appendedTexts[scene.id] || [];
-      appended.forEach(t => {
+      // Unattached appended texts for scene
+      unattachedAppended.forEach(function(t) {
         combinedHTML += '<p style="margin-bottom: 1rem; color: #fef08a;">' + renderTextBlock(t, scene) + '</p>';
       });
 
@@ -872,7 +904,20 @@ ${jsonProject}
             if (!gameState.appendedTexts[gameState.currentSceneId]) {
               gameState.appendedTexts[gameState.currentSceneId] = [];
             }
-            gameState.appendedTexts[gameState.currentSceneId].push(sc.appendStoryText);
+            const parentBlock = (scene.textBlocks || []).find(function(b) {
+              return isWordMatchInText(hs.word, b.text);
+            });
+            const entryObj = {
+              text: sc.appendStoryText,
+              blockId: parentBlock ? parentBlock.id : null
+            };
+            const currentList = gameState.appendedTexts[gameState.currentSceneId];
+            const exists = currentList.some(function(item) {
+              return (typeof item === 'string' ? item : item.text) === sc.appendStoryText;
+            });
+            if (!exists) {
+              currentList.push(entryObj);
+            }
             if (checkGameOverTag(sc.appendStoryText)) {
               gameState.isGameOver = true;
             }

@@ -179,6 +179,8 @@ export interface GameProject {
   scenes: Scene[];
 }
 
+export type AppendedTextEntry = string | { text: string; blockId?: string };
+
 export interface SaveSlotData {
   id: string;
   timestamp: string;
@@ -189,7 +191,7 @@ export interface SaveSlotData {
   inventoryItemIds: string[];
   flags: Record<string, boolean>;
   narrativeHistory: { id: string; type: 'story' | 'response' | 'system'; text: string; timestamp?: string }[];
-  appendedTextsPerScene: Record<string, string[]>;
+  appendedTextsPerScene: Record<string, AppendedTextEntry[]>;
   usedHotspotIds?: string[];
   difficulty?: 'facil' | 'normal' | 'dificil';
 }

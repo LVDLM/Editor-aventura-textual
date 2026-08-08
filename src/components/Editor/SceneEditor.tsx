@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
 import { playSound } from '../../utils/audio';
+import { isWordMatchInText } from '../../utils/textUtils';
 import { HotspotEditorModal } from './HotspotEditorModal';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 import { ValidationPanel } from './ValidationPanel';
@@ -51,18 +52,6 @@ interface SceneEditorProps {
   updateProject: (fn: (prev: GameProject) => GameProject) => void;
   webAspect?: 'clean' | 'classic';
 }
-
-const isWordChar = (char: string) => /[\p{L}\p{N}_]/u.test(char);
-const isWordMatchInText = (word: string, text: string): boolean => {
-  if (!word || !text) return false;
-  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const startChar = word.charAt(0);
-  const endChar = word.charAt(word.length - 1);
-  const prefix = isWordChar(startChar) ? '(?<![\\p{L}\\p{N}_])' : '';
-  const suffix = isWordChar(endChar) ? '(?![\\p{L}\\p{N}_])' : '';
-  const pattern = new RegExp(`${prefix}${escapeRegExp(word)}${suffix}`, 'iu');
-  return pattern.test(text);
-};
 
 export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject, webAspect = 'clean' }) => {
   const [selectedSceneId, setSelectedSceneId] = useState<string>(
