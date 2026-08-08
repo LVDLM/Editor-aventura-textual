@@ -516,33 +516,98 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         playSound('door');
       }
     } else {
-      // Fallback message popup - check if any rule for this verb specifies a failMessage
-      const failedRuleWithMsg = rulesForVerb.find((a) => !!a.failMessage);
-      const fallback =
-        failedRuleWithMsg?.failMessage ||
+      // Fallback response - check if any rule for this verb specifies fail configurations (failMessage, failStateChange, failIsGameOver, failSoundEffect)
+      const failedRule = rulesForVerb.find((a) => a.failMessage || a.failStateChange || a.failIsGameOver || a.failSoundEffect);
+
+      const fallbackText =
+        failedRule?.failMessage ||
         (hotspot.customDefaultResponses && hotspot.customDefaultResponses[verbToUse]) ||
         (project.defaultResponses && project.defaultResponses[verbToUse]) ||
-        'Eso no parece surtir efecto.';
+        'Eso no parece surtir effecto.';
 
-      messageToShow = fallback;
-      playSound('error');
+      const fsc = failedRule?.failStateChange;
+      const isFailGameOver =
+        !!failedRule?.failIsGameOver ||
+        !!fsc?.isGameOver ||
+        /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(failedRule?.failMessage || '');
+
+      if (failedRule?.failSoundEffect && failedRule.failSoundEffect !== 'none') {
+        playSound(failedRule.failSoundEffect);
+      } else {
+        playSound('error');
+      }
 
       setGameState((prev: any) => {
         const currentUsedHotspots = prev.usedHotspotIds || [];
+        const newUsedHotspots = currentUsedHotspots.includes(hotspot.id)
+          ? currentUsedHotspots
+          : [...currentUsedHotspots, hotspot.id];
+
+        let newFlags = { ...prev.flags, ...(fsc?.setFlags || {}) };
+        let newInventory = [...prev.inventory];
+        let nextSceneId = prev.currentSceneId;
+        const newAppended = { ...prev.appendedTextsPerScene };
+
+        if (fsc?.addItemId && !newInventory.includes(fsc.addItemId)) {
+          newInventory.push(fsc.addItemId);
+        }
+
+        if (fsc?.removeItemId) {
+          newInventory = newInventory.filter((id) => id !== fsc.removeItemId);
+        }
+
+        if (fsc?.appendStoryText) {
+          const currentList = newAppended[prev.currentSceneId] || [];
+          const currentSceneObj = project.scenes.find((s) => s.id === prev.currentSceneId);
+          const parentBlock = currentSceneObj?.textBlocks.find((b) => isWordMatchInText(hotspot.word, b.text));
+          const isAlreadyAppended = currentList.some((t) => (typeof t === 'string' ? t : t.text) === fsc.appendStoryText);
+          if (!isAlreadyAppended) {
+            const entryObj: AppendedTextEntry = parentBlock
+              ? { text: fsc.appendStoryText, blockId: parentBlock.id }
+              : { text: fsc.appendStoryText };
+            newAppended[prev.currentSceneId] = [...currentList, entryObj];
+          }
+        }
+
+        if (fsc?.goToSceneId) {
+          nextSceneId = fsc.goToSceneId;
+        }
+
+        const newHistory = [
+          ...prev.history,
+          { id: Date.now().toString(), type: 'response', text: fallbackText },
+        ];
+
         return {
           ...prev,
-          usedHotspotIds: currentUsedHotspots.includes(hotspot.id)
-            ? currentUsedHotspots
-            : [...currentUsedHotspots, hotspot.id],
+          flags: newFlags,
+          inventory: newInventory,
+          currentSceneId: nextSceneId,
+          appendedTextsPerScene: newAppended,
+          usedHotspotIds: newUsedHotspots,
+          isGameOver: prev.isGameOver || isFailGameOver,
+          history: newHistory,
         };
       });
 
-      setModalFeedback({
-        type: 'action',
-        title: actionTitle,
-        verbIconName,
-        message: fallback,
-      });
+      const cleanMsg = fallbackText.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim();
+
+      if (isFailGameOver) {
+        setModalFeedback({
+          type: 'gameover',
+          title: 'FIN DE PARTIDA',
+          verbIconName: 'Skull',
+          isGameOver: true,
+          message: cleanMsg || 'Has alcanzado un desenlace fatal.',
+        });
+      } else {
+        setModalFeedback({
+          type: 'action',
+          title: actionTitle,
+          verbIconName,
+          message: cleanMsg,
+        });
+      }
     }
 
     // Reset command state

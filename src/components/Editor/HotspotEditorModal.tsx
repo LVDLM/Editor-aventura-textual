@@ -37,12 +37,11 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   // Action form state
   const [verb, setVerb] = useState<VerbType>('mirar');
   const [responseMessage, setResponseMessage] = useState('');
-  const [failMessage, setFailMessage] = useState('');
   const [requiredItemId, setRequiredItemId] = useState('');
   const [requiredFlagsMap, setRequiredFlagsMap] = useState<Record<string, boolean>>({});
   const [soundEffect, setSoundEffect] = useState<SoundEffectType>('none');
   
-  // State change consequences
+  // State change consequences (Conditions MET)
   const [addItemId, setAddItemId] = useState('');
   const [removeItemId, setRemoveItemId] = useState('');
   const [flagToSet, setFlagToSet] = useState('');
@@ -52,6 +51,18 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [appendStoryText, setAppendStoryText] = useState('');
   const [isGameOver, setIsGameOver] = useState(false);
   const [responseError, setResponseError] = useState(false);
+
+  // Fail consequences (Conditions NOT MET)
+  const [failMessage, setFailMessage] = useState('');
+  const [failIsGameOver, setFailIsGameOver] = useState(false);
+  const [failSoundEffect, setFailSoundEffect] = useState<SoundEffectType>('none');
+  const [failAddItemId, setFailAddItemId] = useState('');
+  const [failRemoveItemId, setFailRemoveItemId] = useState('');
+  const [failFlagToSet, setFailFlagToSet] = useState('');
+  const [failFlagSetValue, setFailFlagSetValue] = useState<boolean>(true);
+  const [failSetFlagsMap, setFailSetFlagsMap] = useState<Record<string, boolean>>({});
+  const [failGoToSceneId, setFailGoToSceneId] = useState('');
+  const [failAppendStoryText, setFailAppendStoryText] = useState('');
 
   const [duplicateConflict, setDuplicateConflict] = useState<{
     newRule: ActionRule;
@@ -65,13 +76,13 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setEditingActionId(action.id);
     setVerb(action.verb);
     setResponseMessage(action.responseMessage);
-    setFailMessage(action.failMessage || '');
     setResponseError(false);
     setRequiredItemId(action.requiredItemId || '');
     setRequiredFlagsMap(action.requiredFlags || {});
+    
+    // Success consequences
     setAddItemId(action.stateChange?.addItemId || '');
     setRemoveItemId(action.stateChange?.removeItemId || '');
-    
     if (action.stateChange?.setFlags) {
       const entries = Object.entries(action.stateChange.setFlags);
       if (entries.length > 0) {
@@ -88,11 +99,43 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       setFlagSetValue(true);
       setSetFlagsMap({});
     }
-
     setGoToSceneId(action.stateChange?.goToSceneId || '');
     setAppendStoryText(action.stateChange?.appendStoryText || '');
-    setIsGameOver(!!action.isGameOver || !!action.stateChange?.isGameOver);
+    setIsGameOver(
+      !!action.isGameOver ||
+      !!action.stateChange?.isGameOver ||
+      /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(action.responseMessage || '')
+    );
     setSoundEffect(action.soundEffect || 'none');
+
+    // Fail consequences
+    setFailMessage(action.failMessage || '');
+    setFailIsGameOver(
+      !!action.failIsGameOver ||
+      !!action.failStateChange?.isGameOver ||
+      /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(action.failMessage || '')
+    );
+    setFailSoundEffect(action.failSoundEffect || 'none');
+    setFailAddItemId(action.failStateChange?.addItemId || '');
+    setFailRemoveItemId(action.failStateChange?.removeItemId || '');
+    if (action.failStateChange?.setFlags) {
+      const entries = Object.entries(action.failStateChange.setFlags);
+      if (entries.length > 0) {
+        setFailFlagToSet(entries[0][0]);
+        setFailFlagSetValue(entries[0][1]);
+        setFailSetFlagsMap(action.failStateChange.setFlags);
+      } else {
+        setFailFlagToSet('');
+        setFailFlagSetValue(true);
+        setFailSetFlagsMap({});
+      }
+    } else {
+      setFailFlagToSet('');
+      setFailFlagSetValue(true);
+      setFailSetFlagsMap({});
+    }
+    setFailGoToSceneId(action.failStateChange?.goToSceneId || '');
+    setFailAppendStoryText(action.failStateChange?.appendStoryText || '');
   };
 
   const handleSaveAction = (forceMode?: 'replace' | 'subaction') => {
@@ -105,8 +148,8 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     setResponseError(false);
 
+    // Success state changes
     const stateChangeObj: any = {};
-
     if (addItemId) stateChangeObj.addItemId = addItemId;
     if (removeItemId) stateChangeObj.removeItemId = removeItemId;
     if (goToSceneId) stateChangeObj.goToSceneId = goToSceneId;
@@ -119,6 +162,23 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       stateChangeObj.setFlags = { ...setFlagsMap };
     }
 
+    // Fail state changes
+    const failStateChangeObj: any = {};
+    if (failAddItemId) failStateChangeObj.addItemId = failAddItemId;
+    if (failRemoveItemId) failStateChangeObj.removeItemId = failRemoveItemId;
+    if (failGoToSceneId) failStateChangeObj.goToSceneId = failGoToSceneId;
+    if (failAppendStoryText.trim()) failStateChangeObj.appendStoryText = failAppendStoryText.trim();
+    if (failIsGameOver) failStateChangeObj.isGameOver = true;
+
+    if (failFlagToSet) {
+      failStateChangeObj.setFlags = { [failFlagToSet]: failFlagSetValue };
+    } else if (Object.keys(failSetFlagsMap).length > 0) {
+      failStateChangeObj.setFlags = { ...failSetFlagsMap };
+    }
+
+    const hasSuccessTag = /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(msg);
+    const hasFailTag = /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(failMessage);
+
     let actionRuleId = editingActionId;
     if (forceMode === 'subaction' || !actionRuleId) {
       actionRuleId = `act_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -128,12 +188,16 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       id: actionRuleId,
       verb,
       responseMessage: msg,
-      failMessage: failMessage.trim() || undefined,
       requiredItemId: requiredItemId || undefined,
       requiredFlags: Object.keys(requiredFlagsMap).length > 0 ? { ...requiredFlagsMap } : undefined,
-      isGameOver: isGameOver || undefined,
+      isGameOver: isGameOver || hasSuccessTag || undefined,
       soundEffect: soundEffect !== 'none' ? soundEffect : undefined,
       stateChange: Object.keys(stateChangeObj).length > 0 ? stateChangeObj : undefined,
+
+      failMessage: failMessage.trim() || undefined,
+      failStateChange: Object.keys(failStateChangeObj).length > 0 ? failStateChangeObj : undefined,
+      failIsGameOver: failIsGameOver || hasFailTag || undefined,
+      failSoundEffect: failSoundEffect !== 'none' ? failSoundEffect : undefined,
     };
 
     const existingRule = currentHotspot.actions.find(
@@ -180,10 +244,10 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setEditingActionId(null);
     setVerb('mirar');
     setResponseMessage('');
-    setFailMessage('');
     setResponseError(false);
     setRequiredItemId('');
     setRequiredFlagsMap({});
+
     setAddItemId('');
     setRemoveItemId('');
     setFlagToSet('');
@@ -193,6 +257,17 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setAppendStoryText('');
     setIsGameOver(false);
     setSoundEffect('none');
+
+    setFailMessage('');
+    setFailIsGameOver(false);
+    setFailSoundEffect('none');
+    setFailAddItemId('');
+    setFailRemoveItemId('');
+    setFailFlagToSet('');
+    setFailFlagSetValue(true);
+    setFailSetFlagsMap({});
+    setFailGoToSceneId('');
+    setFailAppendStoryText('');
   };
 
   const toggleRequiredFlag = (flagKey: string) => {
@@ -484,212 +559,380 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
               </div>
             )}
 
-            {/* Response Message */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-300">
-                  Mensaje de Respuesta al Jugador (Cumpliendo condiciones) <span className="text-amber-400">*</span>
-                </label>
+            {/* Section 1: SUCCESS CONSEQUENCES (Conditions MET) */}
+            <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>✅ Consecuencias cuando SÍ se cumplen las condiciones</span>
+                </span>
                 <button
                   type="button"
                   onClick={() => {
-                    setResponseMessage((prev) =>
-                      prev
-                        ? `${prev.trim()} [Terminar / Cargar partida]`
-                        : 'Acción fatal. [Terminar / Cargar partida]'
-                    );
-                    setResponseError(false);
-                    setIsGameOver(true);
+                    const tag = '[Terminar / Cargar partida]';
+                    if (isGameOver || responseMessage.includes(tag)) {
+                      setResponseMessage((prev) => prev.replace(tag, '').trim());
+                      setIsGameOver(false);
+                    } else {
+                      setResponseMessage((prev) => (prev ? `${prev.trim()}\n\n${tag}` : tag));
+                      setIsGameOver(true);
+                    }
                   }}
-                  className="text-[10px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                  className={`text-[10px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer font-bold border ${
+                    isGameOver || responseMessage.includes('[Terminar / Cargar partida]')
+                      ? 'bg-rose-500 text-white border-rose-400 shadow'
+                      : 'bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border-rose-500/40'
+                  }`}
                 >
-                  <span>💀 Insertar "[Terminar / Cargar partida]"</span>
+                  <span>💀 {isGameOver || responseMessage.includes('[Terminar / Cargar partida]') ? 'Quitar Fin de Partida' : 'Insertar "[Terminar / Cargar partida]"'}</span>
                 </button>
               </div>
-              <textarea
-                rows={2}
-                value={responseMessage}
-                onChange={(e) => {
-                  setResponseMessage(e.target.value);
-                  if (responseError) setResponseError(false);
-                }}
-                className={`w-full bg-slate-900 border rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-amber-500 font-serif leading-relaxed ${
-                  responseError ? 'border-rose-500 bg-rose-950/20' : 'border-slate-800'
-                }`}
-                placeholder="Ej: Usas la llave y la puerta se abre con un quejido..."
-              />
-              {responseError && (
-                <p className="text-[11px] font-bold text-rose-400 mt-1 animate-pulse">
-                  ⚠️ Por favor, escribe un mensaje de respuesta para el jugador antes de guardar.
-                </p>
-              )}
-            </div>
 
-            {/* Alternative / Fail Message if requirements not met */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                <span>Mensaje alternativo si NO se cumplen las condiciones / objeto (Opcional)</span>
-              </label>
-              <textarea
-                rows={2}
-                value={failMessage}
-                onChange={(e) => setFailMessage(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-amber-500 font-serif leading-relaxed"
-                placeholder="Ej: Está cerrada con llave. / Necesitas una llave para abrirla..."
-              />
-              <p className="text-[11px] text-slate-400 mt-1">
-                Si la acción tiene un objeto u otras banderas requeridas y el jugador NO las cumple, verá este mensaje en pantalla.
-              </p>
-            </div>
-
-            {/* Sound Effect for this action */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <label className="block text-xs font-bold text-amber-300 flex items-center gap-1.5 mb-0.5">
-                  <Volume2 className="w-4 h-4 text-amber-400" />
-                  <span>Efecto de Sonido al reproducir esta respuesta:</span>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Mensaje de Respuesta al Jugador <span className="text-amber-400">*</span>
                 </label>
-                <p className="text-[11px] text-slate-400">
-                  Se reproducirá cuando el jugador ejecute esta acción.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={soundEffect}
-                  onChange={(e) => setSoundEffect(e.target.value as SoundEffectType)}
-                  className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-200 outline-none focus:border-amber-500 font-semibold"
-                >
-                  {SOUND_EFFECT_OPTIONS.map((opt) => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                {soundEffect !== 'none' && (
-                  <button
-                    type="button"
-                    onClick={() => playSound(soundEffect)}
-                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                    <span>Probar</span>
-                  </button>
+                <textarea
+                  rows={2}
+                  value={responseMessage}
+                  onChange={(e) => {
+                    setResponseMessage(e.target.value);
+                    if (responseError) setResponseError(false);
+                  }}
+                  className={`w-full bg-slate-900 border rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-emerald-500 font-serif leading-relaxed ${
+                    responseError ? 'border-rose-500 bg-rose-950/20' : 'border-slate-800'
+                  }`}
+                  placeholder="Ej: Usas la llave y la puerta se abre con un quejido..."
+                />
+                {responseError && (
+                  <p className="text-[11px] font-bold text-rose-400 mt-1 animate-pulse">
+                    ⚠️ Por favor, escribe un mensaje de respuesta antes de guardar.
+                  </p>
                 )}
               </div>
-            </div>
 
-            {/* State Change Consequences (Expanded without arbitrary limit!) */}
-            <div className="border-t border-slate-800/80 pt-3 space-y-3">
-              <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-                Múltiples Consecuencias y Efectos Inmediatos:
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                {/* Give Item */}
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Entregar Objeto al Jugador</label>
+              {/* Sound effect for success */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                  <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Sonido al cumplir condiciones:</span>
+                </label>
+                <div className="flex items-center gap-2">
                   <select
-                    value={addItemId}
-                    onChange={(e) => setAddItemId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
+                    value={soundEffect}
+                    onChange={(e) => setSoundEffect(e.target.value as SoundEffectType)}
+                    className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-200 outline-none focus:border-amber-500 font-semibold"
                   >
-                    <option value="">-- Ninguno --</option>
-                    {project.inventoryItems.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        + {item.name}
+                    {SOUND_EFFECT_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* Remove Item */}
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Retirar Objeto del Inventario</label>
-                  <select
-                    value={removeItemId}
-                    onChange={(e) => setRemoveItemId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
-                  >
-                    <option value="">-- Ninguno --</option>
-                    {project.inventoryItems.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        - {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Change Scene */}
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Cambiar a Escena</label>
-                  <select
-                    value={goToSceneId}
-                    onChange={(e) => setGoToSceneId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
-                  >
-                    <option value="">-- Permanecer aquí --</option>
-                    {project.scenes.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        🚪 {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Set Flag Dropdown */}
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Modificar Bandera Global</label>
-                  <div className="flex gap-1">
-                    <select
-                      value={flagToSet}
-                      onChange={(e) => {
-                        const fk = e.target.value;
-                        setFlagToSet(fk);
-                        if (fk) {
-                          setSetFlagsMap({ [fk]: flagSetValue });
-                        } else {
-                          setSetFlagsMap({});
-                        }
-                      }}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 font-mono"
+                  {soundEffect !== 'none' && (
+                    <button
+                      type="button"
+                      onClick={() => playSound(soundEffect)}
+                      className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
                     >
-                      <option value="">-- Sin cambio --</option>
-                      {globalFlagKeys.map((fk) => (
-                        <option key={fk} value={fk}>
-                          🚩 {fk}
+                      <span>Probar</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* State change effects for success */}
+              <div className="border-t border-emerald-500/20 pt-2.5 space-y-2.5">
+                <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">
+                  Efectos e Impactos en el Juego (Éxito):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Entregar Objeto</label>
+                    <select
+                      value={addItemId}
+                      onChange={(e) => setAddItemId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value="">-- Ninguno --</option>
+                      {project.inventoryItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          + {item.name}
                         </option>
                       ))}
                     </select>
-                    {flagToSet && (
-                      <select
-                        value={flagSetValue ? 'true' : 'false'}
-                        onChange={(e) => {
-                          const val = e.target.value === 'true';
-                          setFlagSetValue(val);
-                          setSetFlagsMap({ [flagToSet]: val });
-                        }}
-                        className="bg-slate-900 border border-slate-800 rounded-lg px-1.5 py-1.5 text-xs font-bold text-amber-300"
-                      >
-                        <option value="true">TRUE</option>
-                        <option value="false">FALSE</option>
-                      </select>
-                    )}
                   </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Retirar Objeto</label>
+                    <select
+                      value={removeItemId}
+                      onChange={(e) => setRemoveItemId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value="">-- Ninguno --</option>
+                      {project.inventoryItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          - {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Cambiar a Escena</label>
+                    <select
+                      value={goToSceneId}
+                      onChange={(e) => setGoToSceneId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value="">-- Permanecer aquí --</option>
+                      {project.scenes.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          🚪 {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Modificar Bandera Global</label>
+                    <div className="flex gap-1">
+                      <select
+                        value={flagToSet}
+                        onChange={(e) => {
+                          const fk = e.target.value;
+                          setFlagToSet(fk);
+                          if (fk) {
+                            setSetFlagsMap({ [fk]: flagSetValue });
+                          } else {
+                            setSetFlagsMap({});
+                          }
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-1.5 py-1.5 text-xs text-slate-200 font-mono"
+                      >
+                        <option value="">-- Sin cambio --</option>
+                        {globalFlagKeys.map((fk) => (
+                          <option key={fk} value={fk}>
+                            🚩 {fk}
+                          </option>
+                        ))}
+                      </select>
+                      {flagToSet && (
+                        <select
+                          value={flagSetValue ? 'true' : 'false'}
+                          onChange={(e) => {
+                            const val = e.target.value === 'true';
+                            setFlagSetValue(val);
+                            setSetFlagsMap({ [flagToSet]: val });
+                          }}
+                          className="bg-slate-900 border border-slate-800 rounded-lg px-1 py-1.5 text-xs font-bold text-amber-300"
+                        >
+                          <option value="true">TRUE</option>
+                          <option value="false">FALSE</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1">
+                    Añadir Párrafo de Texto Extra a la Narración
+                  </label>
+                  <input
+                    type="text"
+                    value={appendStoryText}
+                    onChange={(e) => setAppendStoryText(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-emerald-500 font-serif"
+                    placeholder="Ej: Ahora la puerta ha quedado abierta de par en par."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: FAIL CONSEQUENCES (Conditions NOT MET) */}
+            <div className="bg-rose-950/20 border border-rose-500/30 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between border-b border-rose-500/20 pb-2">
+                <div>
+                  <span className="text-xs font-bold text-rose-300 uppercase tracking-wider block">
+                    ❌ Consecuencias cuando NO se cumplen las condiciones (Opcional)
+                  </span>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">
+                    Si se requiere un objeto o banderas y el jugador NO los cumple, ocurrirá esto:
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tag = '[Terminar / Cargar partida]';
+                    if (failIsGameOver || failMessage.includes(tag)) {
+                      setFailMessage((prev) => prev.replace(tag, '').trim());
+                      setFailIsGameOver(false);
+                    } else {
+                      setFailMessage((prev) => (prev ? `${prev.trim()}\n\n${tag}` : tag));
+                      setFailIsGameOver(true);
+                    }
+                  }}
+                  className={`text-[10px] px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer font-bold border ${
+                    failIsGameOver || failMessage.includes('[Terminar / Cargar partida]')
+                      ? 'bg-rose-500 text-white border-rose-400 shadow'
+                      : 'bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border-rose-500/40'
+                  }`}
+                >
+                  <span>💀 {failIsGameOver || failMessage.includes('[Terminar / Cargar partida]') ? 'Quitar Fin de Partida en Fallo' : 'Insertar "[Terminar / Cargar partida]"'}</span>
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Mensaje alternativo al Fallar
+                </label>
+                <textarea
+                  rows={2}
+                  value={failMessage}
+                  onChange={(e) => setFailMessage(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-rose-500 font-serif leading-relaxed"
+                  placeholder="Ej: Intentas forzarla sin la llave. Una trampa de agujas se activa y caes fulminado. [Terminar / Cargar partida]"
+                />
+              </div>
+
+              {/* Fail sound effect */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+                  <Volume2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Sonido al fallar condiciones:</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={failSoundEffect}
+                    onChange={(e) => setFailSoundEffect(e.target.value as SoundEffectType)}
+                    className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-rose-200 outline-none focus:border-rose-500 font-semibold"
+                  >
+                    {SOUND_EFFECT_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {failSoundEffect !== 'none' && (
+                    <button
+                      type="button"
+                      onClick={() => playSound(failSoundEffect)}
+                      className="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Probar</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Append extra text */}
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
-                  Añadir Párrafo de Texto Extra a la Narración
-                </label>
-                <input
-                  type="text"
-                  value={appendStoryText}
-                  onChange={(e) => setAppendStoryText(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500"
-                  placeholder="Ej: Ahora la puerta ha quedado libre y puedes salir."
-                />
+              {/* State change effects for failure */}
+              <div className="border-t border-rose-500/20 pt-2.5 space-y-2.5">
+                <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider block">
+                  Efectos e Impactos en el Juego al Fallar (Muerte / Cambio de escena / Banderas / Texto):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Entregar Objeto al Fallar</label>
+                    <select
+                      value={failAddItemId}
+                      onChange={(e) => setFailAddItemId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value="">-- Ninguno --</option>
+                      {project.inventoryItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          + {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Retirar Objeto al Fallar</label>
+                    <select
+                      value={failRemoveItemId}
+                      onChange={(e) => setFailRemoveItemId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value="">-- Ninguno --</option>
+                      {project.inventoryItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          - {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Cambiar a Escena al Fallar</label>
+                    <select
+                      value={failGoToSceneId}
+                      onChange={(e) => setFailGoToSceneId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value="">-- Permanecer aquí --</option>
+                      {project.scenes.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          🚪 {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Modificar Bandera al Fallar</label>
+                    <div className="flex gap-1">
+                      <select
+                        value={failFlagToSet}
+                        onChange={(e) => {
+                          const fk = e.target.value;
+                          setFailFlagToSet(fk);
+                          if (fk) {
+                            setFailSetFlagsMap({ [fk]: failFlagSetValue });
+                          } else {
+                            setFailSetFlagsMap({});
+                          }
+                        }}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-1.5 py-1.5 text-xs text-slate-200 font-mono"
+                      >
+                        <option value="">-- Sin cambio --</option>
+                        {globalFlagKeys.map((fk) => (
+                          <option key={fk} value={fk}>
+                            🚩 {fk}
+                          </option>
+                        ))}
+                      </select>
+                      {failFlagToSet && (
+                        <select
+                          value={failFlagSetValue ? 'true' : 'false'}
+                          onChange={(e) => {
+                            const val = e.target.value === 'true';
+                            setFailFlagSetValue(val);
+                            setFailSetFlagsMap({ [failFlagToSet]: val });
+                          }}
+                          className="bg-slate-900 border border-slate-800 rounded-lg px-1 py-1.5 text-xs font-bold text-amber-300"
+                        >
+                          <option value="true">TRUE</option>
+                          <option value="false">FALSE</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1">
+                    Añadir Párrafo de Texto Extra al Fallar (Aparece en la narración)
+                  </label>
+                  <input
+                    type="text"
+                    value={failAppendStoryText}
+                    onChange={(e) => setFailAppendStoryText(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-rose-500 font-serif"
+                    placeholder="Ej: Te has precipitado y la trampa ha quedado destruida junto con el mecanismo."
+                  />
+                </div>
               </div>
             </div>
 
@@ -791,10 +1034,27 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                             "{act.responseMessage}"
                           </p>
 
-                          {act.failMessage && (
-                            <p className="text-[11px] text-rose-300/90 italic font-sans bg-rose-950/30 border border-rose-900/40 p-2 rounded-lg">
-                              <span className="font-bold text-rose-400 not-italic">⚠️ Si NO cumple requisitos:</span> "{act.failMessage}"
-                            </p>
+                          {(act.failMessage || act.failStateChange || act.failIsGameOver) && (
+                            <div className="text-[11px] text-rose-300/90 font-sans bg-rose-950/30 border border-rose-900/40 p-2 rounded-lg space-y-1">
+                              <div className="flex items-center gap-2 font-bold text-rose-400">
+                                <span>⚠️ Si NO cumple requisitos / objeto:</span>
+                                {act.failIsGameOver && (
+                                  <span className="text-[9px] bg-rose-500/30 text-rose-200 border border-rose-500/50 px-1.5 py-0.2 rounded uppercase">
+                                    💀 Fin de Partida
+                                  </span>
+                                )}
+                              </div>
+                              {act.failMessage && <p className="italic font-serif">"{act.failMessage}"</p>}
+                              {act.failStateChange && (
+                                <div className="flex items-center gap-2 text-[10px] text-rose-300/80 pt-0.5 flex-wrap">
+                                  {act.failStateChange.addItemId && <span>+ Objeto añadido</span>}
+                                  {act.failStateChange.removeItemId && <span>- Objeto retirado</span>}
+                                  {act.failStateChange.setFlags && <span>🚩 Banderas cambiadas</span>}
+                                  {act.failStateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
+                                  {act.failStateChange.appendStoryText && <span>📝 Párrafo añadido</span>}
+                                </div>
+                              )}
+                            </div>
                           )}
 
                           {act.stateChange && (

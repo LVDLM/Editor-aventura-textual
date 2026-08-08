@@ -968,7 +968,7 @@ ${jsonProject}
           showPopupModal('', escapeHTML(msg), itemImgSrc, actionIcon);
         }
       } else {
-        // Fallback response
+        // Fallback response - check if any rule for this verb specifies fail configurations
         const VERB_ICONS = {
           mirar: '👁️',
           examinar: '🔍',
@@ -985,21 +985,83 @@ ${jsonProject}
         };
         const actionIcon = VERB_ICONS[verbToUse] || '👁️';
 
-        var failedRuleWithMsg = null;
+        var failedRule = null;
         for (var fi = 0; fi < rulesForVerb.length; fi++) {
-          if (rulesForVerb[fi].failMessage) {
-            failedRuleWithMsg = rulesForVerb[fi];
+          var r = rulesForVerb[fi];
+          if (r.failMessage || r.failStateChange || r.failIsGameOver || r.failSoundEffect) {
+            failedRule = r;
             break;
           }
         }
 
-        const fallback = (failedRuleWithMsg && failedRuleWithMsg.failMessage) ||
+        const fallback = (failedRule && failedRule.failMessage) ||
                          (hs.customDefaultResponses && hs.customDefaultResponses[verbToUse]) ||
                          (PROJECT.defaultResponses && PROJECT.defaultResponses[verbToUse]) ||
                          'Eso no parece funcionar.';
+
+        if (failedRule && failedRule.failSoundEffect && failedRule.failSoundEffect !== 'none') {
+          playSound(failedRule.failSoundEffect);
+        } else {
+          playSound('error');
+        }
+
+        const isFailGameOver = !!(failedRule && failedRule.failIsGameOver) ||
+                               !!(failedRule && failedRule.failStateChange && failedRule.failStateChange.isGameOver) ||
+                               checkGameOverTag(failedRule ? failedRule.failMessage || '' : '');
+
+        if (isFailGameOver) {
+          gameState.isGameOver = true;
+        }
+
+        let failImgSrc = '';
+        if (failedRule && failedRule.failStateChange) {
+          const fsc = failedRule.failStateChange;
+          if (fsc.setFlags) Object.assign(gameState.flags, fsc.setFlags);
+          if (fsc.addItemId && !gameState.inventory.includes(fsc.addItemId)) {
+            gameState.inventory.push(fsc.addItemId);
+            const addedItem = PROJECT.inventoryItems.find(i => i.id === fsc.addItemId);
+            if (addedItem) failImgSrc = getImageSrc(addedItem);
+          }
+          if (fsc.removeItemId) {
+            gameState.inventory = gameState.inventory.filter(i => i !== fsc.removeItemId);
+          }
+          if (fsc.appendStoryText) {
+            if (!gameState.appendedTexts[gameState.currentSceneId]) {
+              gameState.appendedTexts[gameState.currentSceneId] = [];
+            }
+            const parentBlock = (scene.textBlocks || []).find(function(b) {
+              return isWordMatchInText(hs.word, b.text);
+            });
+            const entryObj = {
+              text: fsc.appendStoryText,
+              blockId: parentBlock ? parentBlock.id : null
+            };
+            const currentList = gameState.appendedTexts[gameState.currentSceneId];
+            const exists = currentList.some(function(item) {
+              return (typeof item === 'string' ? item : item.text) === fsc.appendStoryText;
+            });
+            if (!exists) {
+              currentList.push(entryObj);
+            }
+            if (checkGameOverTag(fsc.appendStoryText)) {
+              gameState.isGameOver = true;
+            }
+          }
+          if (fsc.goToSceneId) {
+            gameState.currentSceneId = fsc.goToSceneId;
+          }
+        }
+
         const cleanFb = stripGameOverTag(fallback);
         responseBox.innerText = cleanFb;
-        showPopupModal('', escapeHTML(cleanFb), null, actionIcon);
+
+        if (isFailGameOver) {
+          showPopupModal('FIN DE PARTIDA', escapeHTML(cleanFb), failImgSrc, '💀');
+        } else if (failImgSrc) {
+          showPopupModal('Objeto', escapeHTML(cleanFb), failImgSrc, '📦');
+        } else {
+          showPopupModal('', escapeHTML(cleanFb), failImgSrc, actionIcon);
+        }
       }
 
       clearSentence();

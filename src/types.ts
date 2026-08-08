@@ -77,14 +77,17 @@ export interface ActionRule {
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
   
-  // What happens when triggered
+  // What happens when triggered (Conditions MET)
   responseMessage: string; // Message printed in narrative response box
   stateChange?: StateChange;
   isGameOver?: boolean; // Direct game over flag on action rule
   soundEffect?: SoundEffectType; // Sound effect triggered with this action response
   
-  // Custom priority or condition fail message
+  // Custom priority or condition fail message & consequences (Conditions NOT MET)
   failMessage?: string; // Message if required item or flag is missing
+  failStateChange?: StateChange; // Consecuencias / Cambios de estado si no se cumplen las condiciones
+  failIsGameOver?: boolean; // Fin de partida si no se cumplen las condiciones
+  failSoundEffect?: SoundEffectType; // Efecto de sonido si no se cumplen las condiciones
 }
 
 export interface Hotspot {
