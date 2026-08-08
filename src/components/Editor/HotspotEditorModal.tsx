@@ -37,6 +37,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   // Action form state
   const [verb, setVerb] = useState<VerbType>('mirar');
   const [responseMessage, setResponseMessage] = useState('');
+  const [failMessage, setFailMessage] = useState('');
   const [requiredItemId, setRequiredItemId] = useState('');
   const [requiredFlagsMap, setRequiredFlagsMap] = useState<Record<string, boolean>>({});
   const [soundEffect, setSoundEffect] = useState<SoundEffectType>('none');
@@ -64,6 +65,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setEditingActionId(action.id);
     setVerb(action.verb);
     setResponseMessage(action.responseMessage);
+    setFailMessage(action.failMessage || '');
     setResponseError(false);
     setRequiredItemId(action.requiredItemId || '');
     setRequiredFlagsMap(action.requiredFlags || {});
@@ -126,6 +128,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       id: actionRuleId,
       verb,
       responseMessage: msg,
+      failMessage: failMessage.trim() || undefined,
       requiredItemId: requiredItemId || undefined,
       requiredFlags: Object.keys(requiredFlagsMap).length > 0 ? { ...requiredFlagsMap } : undefined,
       isGameOver: isGameOver || undefined,
@@ -177,6 +180,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setEditingActionId(null);
     setVerb('mirar');
     setResponseMessage('');
+    setFailMessage('');
     setResponseError(false);
     setRequiredItemId('');
     setRequiredFlagsMap({});
@@ -194,10 +198,13 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const toggleRequiredFlag = (flagKey: string) => {
     setRequiredFlagsMap((prev) => {
       const copy = { ...prev };
-      if (copy[flagKey]) {
-        delete copy[flagKey];
-      } else {
+      const currentVal = copy[flagKey];
+      if (currentVal === undefined) {
         copy[flagKey] = true;
+      } else if (currentVal === true) {
+        copy[flagKey] = false;
+      } else {
+        delete copy[flagKey];
       }
       return copy;
     });
@@ -441,26 +448,36 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
             {globalFlagKeys.length > 0 && (
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-2">
                 <label className="block text-xs font-bold text-amber-300">
-                  <span>Combinación de Banderas / Variables Requeridas para que funcione esta Acción:</span>
+                  <span>Combinación de Banderas / Variables Requeridas para esta Acción:</span>
                 </label>
                 <p className="text-[11px] text-slate-400">
-                  Selecciona una o múltiples variables que deben estar activadas para que se ejecute esta acción específica:
+                  Haz clic en cada bandera para alternar su condición: <span className="text-emerald-400 font-semibold">✅ SÍ (debe estar activada)</span> ➔ <span className="text-rose-400 font-semibold">❌ NO (debe estar desactivada)</span> ➔ <span className="text-slate-400">— Sin requisito</span>.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
                   {globalFlagKeys.map((fk) => {
-                    const isReq = !!requiredFlagsMap[fk];
+                    const flagVal = requiredFlagsMap[fk];
+                    const isTrue = flagVal === true;
+                    const isFalse = flagVal === false;
                     return (
-                      <label key={`req_${fk}`} className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
-                        isReq ? 'bg-amber-500/20 border-amber-500/50 text-amber-200 font-bold' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          checked={isReq}
-                          onChange={() => toggleRequiredFlag(fk)}
-                          className="accent-amber-500 rounded"
-                        />
+                      <button
+                        key={`req_${fk}`}
+                        type="button"
+                        onClick={() => toggleRequiredFlag(fk)}
+                        className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                          isTrue
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 font-bold'
+                            : isFalse
+                            ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
                         <span className="font-mono">{fk}</span>
-                      </label>
+                        <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                          isTrue ? 'bg-emerald-500/30 text-emerald-300' : isFalse ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-500'
+                        }`}>
+                          {isTrue ? '✅ SÍ' : isFalse ? '❌ NO' : '—'}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
@@ -471,7 +488,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-300">
-                  Mensaje de Respuesta al Jugador <span className="text-amber-400">*</span>
+                  Mensaje de Respuesta al Jugador (Cumpliendo condiciones) <span className="text-amber-400">*</span>
                 </label>
                 <button
                   type="button"
@@ -499,13 +516,30 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                 className={`w-full bg-slate-900 border rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-amber-500 font-serif leading-relaxed ${
                   responseError ? 'border-rose-500 bg-rose-950/20' : 'border-slate-800'
                 }`}
-                placeholder="Ej: Mueves el armario tapando la ventana. El viento deja de silbar..."
+                placeholder="Ej: Usas la llave y la puerta se abre con un quejido..."
               />
               {responseError && (
                 <p className="text-[11px] font-bold text-rose-400 mt-1 animate-pulse">
                   ⚠️ Por favor, escribe un mensaje de respuesta para el jugador antes de guardar.
                 </p>
               )}
+            </div>
+
+            {/* Alternative / Fail Message if requirements not met */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                <span>Mensaje alternativo si NO se cumplen las condiciones / objeto (Opcional)</span>
+              </label>
+              <textarea
+                rows={2}
+                value={failMessage}
+                onChange={(e) => setFailMessage(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-amber-500 font-serif leading-relaxed"
+                placeholder="Ej: Está cerrada con llave. / Necesitas una llave para abrirla..."
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Si la acción tiene un objeto u otras banderas requeridas y el jugador NO las cumple, verá este mensaje en pantalla.
+              </p>
             </div>
 
             {/* Sound Effect for this action */}
@@ -748,7 +782,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
                             {reqFlagsList.length > 0 && (
                               <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono">
-                                🚩 Requiere: {reqFlagsList.join(' + ')}
+                                🚩 Requiere: {reqFlagsList.map((fk) => `${fk}=${act.requiredFlags![fk] ? 'SÍ' : 'NO'}`).join(', ')}
                               </span>
                             )}
                           </div>
@@ -756,6 +790,12 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                           <p className="text-xs text-slate-200 italic font-serif">
                             "{act.responseMessage}"
                           </p>
+
+                          {act.failMessage && (
+                            <p className="text-[11px] text-rose-300/90 italic font-sans bg-rose-950/30 border border-rose-900/40 p-2 rounded-lg">
+                              <span className="font-bold text-rose-400 not-italic">⚠️ Si NO cumple requisitos:</span> "{act.failMessage}"
+                            </p>
+                          )}
 
                           {act.stateChange && (
                             <div className="flex items-center gap-2 text-[10px] text-amber-400/90 pt-1 flex-wrap">

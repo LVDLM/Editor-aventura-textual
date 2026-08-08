@@ -336,9 +336,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       ? `${verbObj.label}: ${hotspot.label || hotspot.word}`
       : (hotspot.label || hotspot.word);
 
-    // Find all matching action rules for this verb
-    const matchingRules = hotspot.actions.filter((a) => {
-      if (a.verb !== verbToUse) return false;
+    // Find all action rules for this verb
+    const rulesForVerb = hotspot.actions.filter((a) => a.verb === verbToUse);
+
+    // Filter rules that pass all required item, required flags, and visible/hidden flags
+    const matchingRules = rulesForVerb.filter((a) => {
       // Check required item
       if (a.requiredItemId) {
         if (selectedInventoryItemId !== a.requiredItemId && !gameState.inventory.includes(a.requiredItemId)) {
@@ -349,6 +351,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (a.requiredFlags && !checkConditions(a.requiredFlags)) return false;
       if (!checkConditions(a.visibleIfFlags, a.hiddenIfFlags)) return false;
       return true;
+    });
+
+    // Sort passing rules so rules with specific required flags/items take precedence over unconditional fallback rules
+    matchingRules.sort((r1, r2) => {
+      const score1 = (r1.requiredFlags ? Object.keys(r1.requiredFlags).length : 0) + (r1.requiredItemId ? 1 : 0);
+      const score2 = (r2.requiredFlags ? Object.keys(r2.requiredFlags).length : 0) + (r2.requiredItemId ? 1 : 0);
+      return score2 - score1;
     });
 
     const useKey = `${hotspot.id}_${verbToUse}`;
@@ -507,8 +516,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         playSound('door');
       }
     } else {
-      // Fallback message popup
+      // Fallback message popup - check if any rule for this verb specifies a failMessage
+      const failedRuleWithMsg = rulesForVerb.find((a) => !!a.failMessage);
       const fallback =
+        failedRuleWithMsg?.failMessage ||
         (hotspot.customDefaultResponses && hotspot.customDefaultResponses[verbToUse]) ||
         (project.defaultResponses && project.defaultResponses[verbToUse]) ||
         'Eso no parece surtir efecto.';

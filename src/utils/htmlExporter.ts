@@ -846,12 +846,27 @@ ${jsonProject}
       const verbToUse = activeVerb || 'mirar';
 
       // Find all matching action rules for this verb
-      const matchingRules = hs.actions.filter(a => {
-        if (a.verb !== verbToUse) return false;
+      const rulesForVerb = (hs.actions || []).filter(function(a) {
+        return a.verb === verbToUse;
+      });
+
+      const matchingRules = rulesForVerb.filter(function(a) {
         if (a.requiredItemId && selectedInventoryItem !== a.requiredItemId && !gameState.inventory.includes(a.requiredItemId)) {
           return false;
         }
+        if (a.requiredFlags && !checkConditions(a.requiredFlags)) {
+          return false;
+        }
+        if (!checkConditions(a.visibleIfFlags, a.hiddenIfFlags)) {
+          return false;
+        }
         return true;
+      });
+
+      matchingRules.sort(function(r1, r2) {
+        var score1 = (r1.requiredFlags ? Object.keys(r1.requiredFlags).length : 0) + (r1.requiredItemId ? 1 : 0);
+        var score2 = (r2.requiredFlags ? Object.keys(r2.requiredFlags).length : 0) + (r2.requiredItemId ? 1 : 0);
+        return score2 - score1;
       });
 
       const useKey = hs.id + '_' + verbToUse;
@@ -970,7 +985,16 @@ ${jsonProject}
         };
         const actionIcon = VERB_ICONS[verbToUse] || '👁️';
 
-        const fallback = (hs.customDefaultResponses && hs.customDefaultResponses[verbToUse]) ||
+        var failedRuleWithMsg = null;
+        for (var fi = 0; fi < rulesForVerb.length; fi++) {
+          if (rulesForVerb[fi].failMessage) {
+            failedRuleWithMsg = rulesForVerb[fi];
+            break;
+          }
+        }
+
+        const fallback = (failedRuleWithMsg && failedRuleWithMsg.failMessage) ||
+                         (hs.customDefaultResponses && hs.customDefaultResponses[verbToUse]) ||
                          (PROJECT.defaultResponses && PROJECT.defaultResponses[verbToUse]) ||
                          'Eso no parece funcionar.';
         const cleanFb = stripGameOverTag(fallback);
