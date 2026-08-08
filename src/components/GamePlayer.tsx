@@ -566,10 +566,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     if (activeHotspots.length === 0) return text;
 
-    // Create a regex matching any hotspot word
+    // Create a regex matching any hotspot word with exact word boundaries
     const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const isWordChar = (char: string) => /[\p{L}\p{N}_]/u.test(char);
     const sortedHotspots = [...activeHotspots].sort((a, b) => b.word.length - a.word.length);
-    const pattern = new RegExp(`(${sortedHotspots.map((h) => escapeRegExp(h.word)).join('|')})`, 'gi');
+
+    const hotspotPatterns = sortedHotspots.map((h) => {
+      const escaped = escapeRegExp(h.word);
+      const startChar = h.word.charAt(0);
+      const endChar = h.word.charAt(h.word.length - 1);
+      const prefix = isWordChar(startChar) ? '(?<![\\p{L}\\p{N}_])' : '';
+      const suffix = isWordChar(endChar) ? '(?![\\p{L}\\p{N}_])' : '';
+      return `${prefix}${escaped}${suffix}`;
+    });
+
+    const pattern = new RegExp(`(${hotspotPatterns.join('|')})`, 'giu');
 
     const parts = text.split(pattern);
     const isNormalMode = gameState.difficulty === 'normal';

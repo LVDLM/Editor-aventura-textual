@@ -52,6 +52,18 @@ interface SceneEditorProps {
   webAspect?: 'clean' | 'classic';
 }
 
+const isWordChar = (char: string) => /[\p{L}\p{N}_]/u.test(char);
+const isWordMatchInText = (word: string, text: string): boolean => {
+  if (!word || !text) return false;
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const startChar = word.charAt(0);
+  const endChar = word.charAt(word.length - 1);
+  const prefix = isWordChar(startChar) ? '(?<![\\p{L}\\p{N}_])' : '';
+  const suffix = isWordChar(endChar) ? '(?![\\p{L}\\p{N}_])' : '';
+  const pattern = new RegExp(`${prefix}${escapeRegExp(word)}${suffix}`, 'iu');
+  return pattern.test(text);
+};
+
 export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject, webAspect = 'clean' }) => {
   const [selectedSceneId, setSelectedSceneId] = useState<string>(
     project.scenes[0]?.id || ''
@@ -1762,7 +1774,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                   {/* Calculate Appended Story Text from Keywords */}
                   {(() => {
                     const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
-                      block.text.toLowerCase().includes(hs.word.toLowerCase())
+                      isWordMatchInText(hs.word, block.text)
                     );
 
                     const appendedResponses: { cause: string; text: string; isGameOver?: boolean }[] = [];
@@ -1844,7 +1856,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
                     {(() => {
                       const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
-                        block.text.toLowerCase().includes(hs.word.toLowerCase())
+                        isWordMatchInText(hs.word, block.text)
                       );
 
                       if (blockHotspots.length === 0) {
