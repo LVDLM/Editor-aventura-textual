@@ -320,13 +320,21 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   };
 
   const handleUpdateBlockText = (blockId: string, text: string) => {
+    const hasTag = /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(text);
     updateProject((prev) => ({
       ...prev,
       scenes: prev.scenes.map((s) => {
         if (s.id !== activeScene.id) return s;
         return {
           ...s,
-          textBlocks: s.textBlocks.map((b) => (b.id === blockId ? { ...b, text } : b)),
+          textBlocks: s.textBlocks.map((b) => {
+            if (b.id !== blockId) return b;
+            return {
+              ...b,
+              text,
+              isGameOver: hasTag ? true : b.isGameOver && hasTag,
+            };
+          }),
         };
       }),
     }));
@@ -457,10 +465,40 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     }));
   };
 
-  const handleInsertGameOverTagToBlock = (blockId: string, currentText: string) => {
-    const newText = currentText ? `${currentText.trim()} [Terminar / Cargar partida]` : 'Has llegado al final. [Terminar / Cargar partida]';
-    handleUpdateBlockText(blockId, newText);
-    handleToggleBlockGameOver(blockId, true);
+  const handleToggleGameOverOnBlock = (blockId: string, currentText: string, currentIsGameOver?: boolean) => {
+    const gameOverRegex = /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi;
+    const hasTag = gameOverRegex.test(currentText);
+    const isCurrentlyGameOver = !!currentIsGameOver || hasTag;
+
+    if (isCurrentlyGameOver) {
+      const cleanedText = currentText.replace(gameOverRegex, '').trim();
+      updateProject((prev) => ({
+        ...prev,
+        scenes: prev.scenes.map((s) => {
+          if (s.id !== activeScene.id) return s;
+          return {
+            ...s,
+            textBlocks: s.textBlocks.map((b) =>
+              b.id === blockId ? { ...b, text: cleanedText, isGameOver: false } : b
+            ),
+          };
+        }),
+      }));
+    } else {
+      const newText = currentText ? `${currentText.trim()}\n\n[Terminar / Cargar partida]` : '[Terminar / Cargar partida]';
+      updateProject((prev) => ({
+        ...prev,
+        scenes: prev.scenes.map((s) => {
+          if (s.id !== activeScene.id) return s;
+          return {
+            ...s,
+            textBlocks: s.textBlocks.map((b) =>
+              b.id === blockId ? { ...b, text: newText, isGameOver: true } : b
+            ),
+          };
+        }),
+      }));
+    }
   };
 
   const handleToggleBlockFlagCondition = (
@@ -1503,16 +1541,6 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 <FileText className="w-3.5 h-3.5 text-amber-400" />
                 <span>Bloques de Texto Narrativo ({activeScene?.textBlocks.length || 0})</span>
               </label>
-
-              {selectedText && (
-                <button
-                  onClick={() => handleAddHotspot(selectedText)}
-                  className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 shadow-md animate-pulse"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Convertir "{selectedText}" en Palabra Clave</span>
-                </button>
-              )}
             </div>
 
             {activeScene?.textBlocks.map((block, index) => {
@@ -1589,14 +1617,30 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleInsertGameOverTagToBlock(block.id, block.text)}
-                        className="text-[10px] bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
-                        title="Añade automáticamente [Terminar / Cargar partida] al final de este párrafo"
-                      >
-                        <span>💀 Insertar Botón de Fin de Partida</span>
-                      </button>
+                      {(() => {
+                        const isBlockGameOver =
+                          !!block.isGameOver ||
+                          /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(block.text);
+
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleGameOverOnBlock(block.id, block.text, block.isGameOver)}
+                            className={`text-[10px] px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-bold border cursor-pointer ${
+                              isBlockGameOver
+                                ? 'bg-rose-500 text-white border-rose-400 shadow-sm'
+                                : 'bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border-rose-500/40'
+                            }`}
+                            title={
+                              isBlockGameOver
+                                ? 'Quitar etiqueta y marca de Fin de Partida de este párrafo'
+                                : 'Añade automáticamente [Terminar / Cargar partida] al final de este párrafo'
+                            }
+                          >
+                            <span>💀 {isBlockGameOver ? 'Quitar Fin de Partida' : 'Insertar Botón de Fin de Partida'}</span>
+                          </button>
+                        );
+                      })()}
 
                       {activeScene.textBlocks.length > 1 && (
                         <button
@@ -1848,16 +1892,22 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         isWordMatchInText(hs.word, block.text)
                       );
 
-                      if (blockHotspots.length === 0) {
+                      const cleanSelected = selectedText.trim();
+                      const isSelectedInThisBlock =
+                        cleanSelected.length > 0 &&
+                        (isWordMatchInText(cleanSelected, block.text) ||
+                          block.text.toLowerCase().includes(cleanSelected.toLowerCase()));
+
+                      if (blockHotspots.length === 0 && !isSelectedInThisBlock) {
                         return (
                           <p className="text-[11px] text-slate-400 italic">
-                            No se detectan palabras clave en este párrafo. Selecciona texto arriba o añade palabras abajo.
+                            No se detectan palabras clave en este párrafo. Selecciona texto en el párrafo de arriba para convertirlo en palabra clave.
                           </p>
                         );
                       }
 
                       return (
-                        <div className="flex flex-wrap gap-2 pt-1">
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
                           {blockHotspots.map((hs) => (
                             <div
                               key={hs.id}
@@ -1907,6 +1957,19 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                               </button>
                             </div>
                           ))}
+
+                          {isSelectedInThisBlock && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleAddHotspot(cleanSelected);
+                                setSelectedText('');
+                              }}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md animate-pulse cursor-pointer border border-amber-400/50"
+                            >
+                              <span>Convertir "{cleanSelected}" en Palabra Clave</span>
+                            </button>
+                          )}
                         </div>
                       );
                     })()}
