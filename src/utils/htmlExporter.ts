@@ -766,25 +766,95 @@ ${jsonProject}
     }
 
     function selectInventoryItem(id) {
-      selectedInventoryItem = selectedInventoryItem === id ? null : id;
+      if (selectedInventoryItem === id) {
+        selectedInventoryItem = null;
+        renderInventory();
+        updateSentenceBar();
+        return;
+      }
+
+      if (selectedInventoryItem && selectedInventoryItem !== id) {
+        var sourceId = selectedInventoryItem;
+        var targetId = id;
+        var sourceItem = PROJECT.inventoryItems.find(function(i) { return i.id === sourceId; });
+        var targetItem = PROJECT.inventoryItems.find(function(i) { return i.id === targetId; });
+
+        var rule = null;
+        if (targetItem && targetItem.combinations) {
+          rule = targetItem.combinations.find(function(c) { return c.requiredItemId === sourceId; });
+        }
+        if (!rule && sourceItem && sourceItem.combinations) {
+          rule = sourceItem.combinations.find(function(c) { return c.requiredItemId === targetId; });
+        }
+
+        var flagsMatch = true;
+        if (rule && rule.requiredFlags) {
+          for (var flagKey in rule.requiredFlags) {
+            if (!!gameState.flags[flagKey] !== !!rule.requiredFlags[flagKey]) {
+              flagsMatch = false;
+              break;
+            }
+          }
+        }
+
+        if (rule && flagsMatch) {
+          var sc = rule.stateChange || {};
+          if (sc.setFlags) {
+            for (var k in sc.setFlags) {
+              gameState.flags[k] = sc.setFlags[k];
+            }
+          }
+          if (sc.addItemId && gameState.inventory.indexOf(sc.addItemId) === -1) {
+            gameState.inventory.push(sc.addItemId);
+          }
+          if (sc.removeItemId) {
+            gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItemId; });
+          }
+          if (sc.removeItem2Id) {
+            gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItem2Id; });
+          }
+          if (sc.goToSceneId) {
+            gameState.currentSceneId = sc.goToSceneId;
+            renderScene(sc.goToSceneId);
+          }
+
+          if (rule.soundEffect && typeof playSound === 'function') {
+            playSound(rule.soundEffect);
+          }
+
+          selectedInventoryItem = null;
+          activeVerb = null;
+          renderInventory();
+          updateSentenceBar();
+
+          var comboTitle = '🧩 ' + (targetItem ? targetItem.name : '') + ' + ' + (sourceItem ? sourceItem.name : '');
+          var comboMsg = rule.responseMessage || 'Has combinado los objetos con éxito.';
+          showPopupModal(comboTitle, escapeHTML(comboMsg), getImageSrc(targetItem) || getImageSrc(sourceItem), '✨');
+          return;
+        }
+
+        selectedInventoryItem = null;
+        activeVerb = null;
+        renderInventory();
+        updateSentenceBar();
+
+        if (rule && !flagsMatch && rule.failMessage) {
+          showPopupModal('Combinación no disponible', escapeHTML(rule.failMessage), null, 'ℹ️');
+        } else {
+          showPopupModal('Sin efecto', 'No parece ocurrir nada al usar ' + (sourceItem ? sourceItem.name : 'este objeto') + ' con ' + (targetItem ? targetItem.name : 'este objeto') + '.', null, 'ℹ️');
+        }
+        return;
+      }
+
+      selectedInventoryItem = id;
       renderInventory();
       updateSentenceBar();
 
-      if (selectedInventoryItem) {
-        const item = PROJECT.inventoryItems.find(i => i.id === selectedInventoryItem);
-        if (item) {
-          const responseBox = document.getElementById('response-box');
-          responseBox.style.display = 'block';
-          const cleanDesc = stripGameOverTag(item.description || '');
-          let html = '<div style="font-weight: 700; font-size: 1.05rem; color: var(--accent); margin-bottom: 0.25rem;">📦 ' + escapeHTML(item.name) + '</div>' +
-                     '<div>' + escapeHTML(cleanDesc || 'Sin descripción.') + '</div>';
-          const itemImg = getImageSrc(item);
-          if (itemImg) {
-            html += '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImg) + '" alt="' + escapeHTML(item.name) + '" style="max-height: 180px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
-          }
-          responseBox.innerHTML = html;
-          showPopupModal(escapeHTML(item.name), escapeHTML(cleanDesc || 'Sin descripción.'), itemImg, '📦');
-        }
+      const item = PROJECT.inventoryItems.find(function(i) { return i.id === selectedInventoryItem; });
+      if (item) {
+        const cleanDesc = stripGameOverTag(item.description || '');
+        const itemImg = getImageSrc(item);
+        showPopupModal(escapeHTML(item.name), escapeHTML(cleanDesc || 'Sin descripción.'), itemImg, '📦');
       }
     }
 
@@ -799,7 +869,8 @@ ${jsonProject}
         const item = PROJECT.inventoryItems.find(i => i.id === itemId);
         if (!item) return '';
         const isSel = selectedInventoryItem === itemId ? 'selected' : '';
-        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\\'' + itemId + '\\\')">📦 ' + escapeHTML(item.name) + '</div>';
+        const isComboTarget = selectedInventoryItem && selectedInventoryItem !== itemId ? '<span style="font-size: 0.65rem; color: #fbbf24; background: rgba(245, 158, 11, 0.15); padding: 2px 5px; border-radius: 4px; float: right;">🧩 Combinar</span>' : '';
+        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\\'' + itemId + '\\\')">📦 ' + escapeHTML(item.name) + ' ' + isComboTarget + '</div>';
       }).join('');
     }
 

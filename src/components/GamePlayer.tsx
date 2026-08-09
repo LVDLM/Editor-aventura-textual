@@ -255,28 +255,112 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   const handleSelectInventoryItem = (itemId: string) => {
     playSound('select');
-    const item = project.inventoryItems.find((i) => i.id === itemId);
+    const targetItem = project.inventoryItems.find((i) => i.id === itemId);
+    if (!targetItem) return;
 
     if (selectedInventoryItemId === itemId) {
       setSelectedInventoryItemId(null);
-    } else {
-      setSelectedInventoryItemId(itemId);
+      return;
     }
 
-    if (item) {
-      const isItemGameOver = !!item.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(item.description || '');
-      const rawDesc = item.description || 'Sin descripción adicional.';
-      const cleanDesc = rawDesc.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim();
+    if (selectedInventoryItemId && selectedInventoryItemId !== itemId) {
+      const sourceItemId = selectedInventoryItemId;
+      const sourceItem = project.inventoryItems.find((i) => i.id === sourceItemId);
 
-      setModalFeedback({
-        type: isItemGameOver ? 'gameover' : 'item',
-        title: item.name,
-        verbIconName: isItemGameOver ? 'Skull' : 'Eye',
-        isGameOver: isItemGameOver,
-        itemImageUrl: item.imageFileData || item.imageUrl,
-        message: cleanDesc,
-      });
+      let rule = (targetItem.combinations || []).find((c) => c.requiredItemId === sourceItemId);
+      if (!rule && sourceItem) {
+        rule = (sourceItem.combinations || []).find((c) => c.requiredItemId === targetItem.id);
+      }
+
+      let flagsMatch = true;
+      if (rule?.requiredFlags) {
+        flagsMatch = Object.entries(rule.requiredFlags).every(([flagKey, expectedVal]) => {
+          return !!gameState.flags[flagKey] === expectedVal;
+        });
+      }
+
+      if (rule && flagsMatch) {
+        const sc = rule.stateChange;
+        const soundToPlay = rule.soundEffect || 'pickup';
+        playSound(soundToPlay);
+
+        setGameState((prev: any) => {
+          const newFlags = { ...prev.flags, ...(sc?.setFlags || {}) };
+          let newInventory = [...prev.inventory];
+          let nextSceneId = prev.currentSceneId;
+
+          if (sc?.addItemId && !newInventory.includes(sc.addItemId)) {
+            newInventory.push(sc.addItemId);
+          }
+          if (sc?.removeItemId) {
+            newInventory = newInventory.filter((id) => id !== sc.removeItemId);
+          }
+          if (sc?.removeItem2Id) {
+            newInventory = newInventory.filter((id) => id !== sc.removeItem2Id);
+          }
+          if (sc?.goToSceneId) {
+            nextSceneId = sc.goToSceneId;
+          }
+
+          return {
+            ...prev,
+            flags: newFlags,
+            inventory: newInventory,
+            currentSceneId: nextSceneId,
+          };
+        });
+
+        setSelectedInventoryItemId(null);
+        setActiveVerb(null);
+
+        const isGameOverCombo = !!rule.isGameOver || !!sc?.isGameOver;
+
+        setModalFeedback({
+          type: isGameOverCombo ? 'gameover' : 'item',
+          title: `🧩 ${targetItem.name} + ${sourceItem?.name || ''}`,
+          verbIconName: isGameOverCombo ? 'Skull' : 'Sparkles',
+          isGameOver: isGameOverCombo,
+          itemImageUrl: targetItem.imageFileData || targetItem.imageUrl || sourceItem?.imageFileData || sourceItem?.imageUrl,
+          message: rule.responseMessage || 'Has combinado los objetos con éxito.',
+        });
+        return;
+      }
+
+      setSelectedInventoryItemId(null);
+      setActiveVerb(null);
+
+      if (rule && !flagsMatch && rule.failMessage) {
+        setModalFeedback({
+          type: 'item',
+          title: 'Combinación no disponible',
+          verbIconName: 'Info',
+          message: rule.failMessage,
+        });
+      } else {
+        setModalFeedback({
+          type: 'item',
+          title: 'Sin efecto',
+          verbIconName: 'Info',
+          message: `No parece ocurrir nada al usar ${sourceItem?.name || 'este objeto'} con ${targetItem.name}.`,
+        });
+      }
+      return;
     }
+
+    setSelectedInventoryItemId(itemId);
+
+    const isItemGameOver = !!targetItem.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(targetItem.description || '');
+    const rawDesc = targetItem.description || 'Sin descripción adicional.';
+    const cleanDesc = rawDesc.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim();
+
+    setModalFeedback({
+      type: isItemGameOver ? 'gameover' : 'item',
+      title: targetItem.name,
+      verbIconName: isItemGameOver ? 'Skull' : 'Eye',
+      isGameOver: isItemGameOver,
+      itemImageUrl: targetItem.imageFileData || targetItem.imageUrl,
+      message: cleanDesc,
+    });
   };
 
   const handleClearCommand = () => {
@@ -413,6 +497,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         if (sc?.removeItemId) {
           newInventory = newInventory.filter((id) => id !== sc.removeItemId);
+        }
+
+        if (sc?.removeItem2Id) {
+          newInventory = newInventory.filter((id) => id !== sc.removeItem2Id);
         }
 
         if (sc?.appendStoryText) {
@@ -554,6 +642,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         if (fsc?.removeItemId) {
           newInventory = newInventory.filter((id) => id !== fsc.removeItemId);
+        }
+
+        if (fsc?.removeItem2Id) {
+          newInventory = newInventory.filter((id) => id !== fsc.removeItem2Id);
         }
 
         if (fsc?.appendStoryText) {
@@ -1497,6 +1589,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                           <span className="truncate">{item.name}</span>
                         </div>
                         {isSelected && <span className={`text-[10px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${isSepia ? 'bg-[#3b2d1d] text-[#fbf5e8]' : 'bg-slate-950 text-amber-400'}`}>Usando</span>}
+                        {selectedInventoryItemId && !isSelected && (
+                          <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
+                            🧩 Combinar
+                          </span>
+                        )}
                       </button>
                     );
                   })}

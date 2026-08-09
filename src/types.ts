@@ -20,6 +20,7 @@ export interface InventoryItem {
   imageFileData?: string; // Uploaded Base64 file data
   imageFileName?: string; // Filename for ZIP export (e.g. img/item_llave.png)
   isGameOver?: boolean; // Triggers end of game when inspected/used
+  combinations?: ActionRule[]; // Combinations / interactions with other inventory items
 }
 
 export type SoundEffectType =
@@ -61,6 +62,7 @@ export interface StateChange {
   setFlags?: Record<string, boolean>; // e.g., { habitacion_iluminada: true }
   addItemId?: string; // Add item to inventory
   removeItemId?: string; // Remove item from inventory
+  removeItem2Id?: string; // Optional second item to remove from inventory (e.g. for item combinations)
   goToSceneId?: string; // Jump to another scene
   appendStoryText?: string; // Append extra text paragraph to current scene
   revealHotspotIds?: string[]; // Enable hidden hotspots
