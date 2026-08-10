@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Search, BookOpen, Filter, Package, FileCode, Clock, User, Info, X, Lock, Sun, Moon, CheckCircle2, Compass, Layers, ArrowRight, Tag, ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
+import { Play, Download, Search, BookOpen, Filter, Package, Clock, User, Info, X, Lock, Sun, Moon, CheckCircle2, Compass, Layers, ArrowRight, Tag, ChevronLeft, ChevronRight, Maximize2, Share2, Check } from 'lucide-react';
 import { CloudProjectDoc, GameProject, UserProfile, GENRE_TAGS } from '../../types';
 import { getPublishedProjects, saveProjectToCloud } from '../../lib/firebase';
 import { sampleGameProject } from '../../data/sampleGame';
-import { generateStandaloneHTML } from '../../utils/htmlExporter';
 import { exportProjectAsZip } from '../../utils/zipExporter';
 import { renderTextWithLinks } from '../../utils/textUtils';
 
@@ -74,14 +73,29 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
     }
   };
 
-  const handleDownloadHTML = (doc: CloudProjectDoc) => {
+  const [copiedDocId, setCopiedDocId] = useState<string | null>(null);
+
+  const handleShareGameLink = (docId: string) => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}?juego=${encodeURIComponent(docId)}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setCopiedDocId(docId);
+        setTimeout(() => setCopiedDocId(null), 3000);
+      }).catch(() => {
+        prompt('Copia la dirección única de este juego:', shareUrl);
+      });
+    } else {
+      prompt('Copia la dirección única de este juego:', shareUrl);
+    }
+  };
+
+  const handleDownloadJSON = (doc: CloudProjectDoc) => {
     const dataToUse = doc.publishedData || doc.projectData;
-    const html = generateStandaloneHTML(dataToUse);
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const blob = new Blob([JSON.stringify(dataToUse, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${dataToUse.id || 'historia'}_v${doc.publishedVersion || 1}_autonomo.html`;
+    a.download = `${dataToUse.id || 'historia'}_v${doc.publishedVersion || 1}.adventure.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -418,52 +432,63 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       </div>
 
                       {/* Download option check */}
-                      {(() => {
-                        const isAuthor = currentUser && doc.authorId === currentUser.uid;
-                        const isAdmin = currentUser?.role === 'admin';
-                        const isAllowed = doc.allowDownload ?? doc.projectData?.allowDownload ?? false;
-                        const canDownload = isAllowed || isAuthor || isAdmin;
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          onClick={() => handleShareGameLink(doc.id)}
+                          className={`py-1.5 px-2 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${
+                            copiedDocId === doc.id
+                              ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-600'
+                              : isClean
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                              : 'bg-slate-950 hover:bg-slate-800 text-amber-300 border-amber-500/30'
+                          }`}
+                          title="Copiar enlace único para compartir este texto-juego"
+                        >
+                          {copiedDocId === doc.id ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>¡Enlace copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Share2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                              <span>Compartir URL</span>
+                            </>
+                          )}
+                        </button>
 
-                        if (canDownload) {
-                          return (
-                            <div className="grid grid-cols-2 gap-2 pt-1">
+                        {(() => {
+                          const isAuthor = currentUser && doc.authorId === currentUser.uid;
+                          const isAdmin = currentUser?.role === 'admin';
+                          const isAllowed = doc.allowDownload ?? doc.projectData?.allowDownload ?? false;
+                          const canDownload = isAllowed || isAuthor || isAdmin;
+
+                          if (canDownload) {
+                            return (
                               <button
-                                onClick={() => handleDownloadHTML(doc)}
+                                onClick={() => handleDownloadJSON(doc)}
                                 className={`py-1.5 px-2 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${
                                   isClean
                                     ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                                     : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-white/10'
                                 }`}
-                                title="Descargar archivo HTML autónomo"
+                                title="Descargar archivo del juego en JSON"
                               >
-                                <FileCode className="w-3.5 h-3.5 text-amber-600" />
-                                <span>HTML</span>
+                                <Download className="w-3.5 h-3.5 text-amber-600" />
+                                <span>JSON</span>
                               </button>
-                              <button
-                                onClick={() => handleDownloadZIP(doc)}
-                                className={`py-1.5 px-2 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${
-                                  isClean
-                                    ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                                    : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-white/10'
-                                }`}
-                                title="Descargar paquete ZIP autónomo"
-                              >
-                                <Package className="w-3.5 h-3.5 text-sky-600" />
-                                <span>Paquete ZIP</span>
-                              </button>
-                            </div>
-                          );
-                        } else {
+                            );
+                          }
                           return (
-                            <div className={`py-1 px-2 rounded-lg text-[10px] italic text-center font-mono flex items-center justify-center gap-1 mt-1 border ${
+                            <div className={`py-1.5 px-2 rounded-lg text-[10px] italic text-center font-mono flex items-center justify-center gap-1 border ${
                               isClean ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-black/40 border-white/5 text-slate-500'
                             }`}>
                               <Lock className="w-3 h-3" />
-                              <span>Descarga restringida</span>
+                              <span>Privado</span>
                             </div>
                           );
-                        }
-                      })()}
+                        })()}
+                      </div>
                     </div>
                   </div>
                 );
@@ -641,6 +666,27 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-white/10 bg-black/40 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleShareGameLink(selectedDocModal.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                    copiedDocId === selectedDocModal.id
+                      ? 'bg-emerald-500 text-slate-950 border-emerald-600'
+                      : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  }`}
+                >
+                  {copiedDocId === selectedDocModal.id ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>¡Enlace copiado al portapapeles!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Compartir URL</span>
+                    </>
+                  )}
+                </button>
+
                 {(() => {
                   const isAuthor = currentUser && selectedDocModal.authorId === currentUser.uid;
                   const isAdmin = currentUser?.role === 'admin';
@@ -650,11 +696,12 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   if (canModalDownload) {
                     return (
                       <button
-                        onClick={() => handleDownloadHTML(selectedDocModal)}
+                        onClick={() => handleDownloadJSON(selectedDocModal)}
                         className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                        title="Descargar archivo JSON del proyecto"
                       >
-                        <FileCode className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Descargar HTML</span>
+                        <Download className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Descargar JSON</span>
                       </button>
                     );
                   }

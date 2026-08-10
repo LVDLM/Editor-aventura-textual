@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameProject, UserProfile, CloudProjectDoc, PublicationStatus } from '../../types';
 import { getUserProjects, saveProjectToCloud, updateProjectStatusInCloud, deleteProjectFromCloud } from '../../lib/firebase';
-import { generateStandaloneHTML } from '../../utils/htmlExporter';
 import { exportProjectAsZip } from '../../utils/zipExporter';
-import { Plus, Edit3, Play, CloudUpload, Send, Trash2, FileCode, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen, Upload, FileJson } from 'lucide-react';
+import { Plus, Edit3, Play, CloudUpload, Send, Trash2, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen, Upload, FileJson } from 'lucide-react';
 
 interface ProjectWorkspaceProps {
   currentUser: UserProfile | null;
@@ -472,19 +471,18 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => {
-                          const html = generateStandaloneHTML(doc.projectData);
-                          const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+                          const blob = new Blob([JSON.stringify(doc.projectData, null, 2)], { type: 'application/json' });
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
                           a.href = url;
-                          a.download = `${doc.projectData.id || 'historia'}_autonomo.html`;
+                          a.download = `${doc.projectData.id || 'historia'}.adventure.json`;
                           a.click();
                           URL.revokeObjectURL(url);
                         }}
                         className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-amber-400 rounded-lg text-xs"
-                        title="Descargar HTML Autónomo"
+                        title="Descargar Proyecto JSON"
                       >
-                        <FileCode className="w-4 h-4" />
+                        <FileJson className="w-4 h-4" />
                       </button>
                       <button
                         onClick={async () => {

@@ -4,7 +4,7 @@ import { GeneralSettings } from './GeneralSettings';
 import { SceneEditor } from './SceneEditor';
 import { InventoryManager } from './InventoryManager';
 import { FlagsManager } from './FlagsManager';
-import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal } from 'lucide-react';
+import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal, CheckCircle, Save } from 'lucide-react';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 
 interface GameEditorProps {
@@ -14,6 +14,7 @@ interface GameEditorProps {
   onOpenExport?: () => void;
   currentUser?: UserProfile | null;
   webAspect?: 'clean' | 'classic';
+  lastAutoSaveTime?: string;
 }
 
 export const GameEditor: React.FC<GameEditorProps> = ({
@@ -23,6 +24,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
   onOpenExport,
   currentUser,
   webAspect = 'clean',
+  lastAutoSaveTime,
 }) => {
   const [activeTab, setActiveTab] = useState<'scenes' | 'settings' | 'inventory' | 'flags'>('scenes');
   const [editorWidth, setEditorWidth] = useState<'standard' | 'wide' | 'full'>(() => {
@@ -59,9 +61,18 @@ export const GameEditor: React.FC<GameEditorProps> = ({
               🛠️
             </div>
             <div>
-              <h2 className={`font-bold text-lg ${isClean ? 'text-slate-900' : 'text-white'}`}>
-                Editor de Aventuras Gráficas
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className={`font-bold text-lg ${isClean ? 'text-slate-900' : 'text-white'}`}>
+                  Editor de Aventuras Gráficas
+                </h2>
+                <div
+                  className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold flex items-center gap-1.5"
+                  title="Autoguardado borrador local activo. Tus cambios en párrafos, acciones de palabras e imágenes se guardan automáticamente."
+                >
+                  <CheckCircle className="w-3 h-3 text-emerald-500" />
+                  <span>Autoguardado local activo {lastAutoSaveTime ? `(${lastAutoSaveTime})` : ''}</span>
+                </div>
+              </div>
               <p className={`text-xs ${isClean ? 'text-slate-500' : 'text-white/40'}`}>
                 Diseña escenas, marca palabras interactivas y define la lógica de tu aventura.
               </p>

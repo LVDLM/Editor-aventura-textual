@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { GameProject, UserProfile } from '../types';
-import { generateStandaloneHTML } from '../utils/htmlExporter';
 import { exportProjectAsZip, projectHasImages } from '../utils/zipExporter';
 import { saveProjectToCloud } from '../lib/firebase';
-import { Download, FileCode, Upload, X, Archive, FileArchive, Cloud } from 'lucide-react';
+import { Download, Upload, X, Archive, Cloud } from 'lucide-react';
 
 interface ExportModalProps {
   project: GameProject;
@@ -214,93 +213,43 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           <div className="bg-amber-950/20 border border-white/10 rounded-xl p-3 text-xs text-slate-300 flex items-start gap-2.5">
             <span className="text-base shrink-0">🛠️</span>
             <div className="space-y-0.5">
-              <p className="font-semibold text-amber-300 text-xs">Guardado del Diseño del Juego (Editor)</p>
+              <p className="font-semibold text-amber-300 text-xs">Guardado y Descarga del Proyecto (Editor)</p>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Este panel te permite guardar la historia en la nube o descargar la estructura completa en JSON/HTML. <strong className="text-amber-200">Esto NO guarda el progreso de la partida de un jugador</strong> (para eso usa "Guardar/Cargar Partida").
+                Este panel te permite guardar la historia en la nube o descargar la estructura completa en formato JSON/ZIP. <strong className="text-amber-200">Esto NO guarda el progreso de la partida de un jugador</strong> (para eso usa "Guardar/Cargar Partida").
               </p>
             </div>
-          </div>
-          {/* Export HTML / ZIP options */}
-          <div className="bg-slate-950 border border-amber-500/40 p-5 rounded-2xl space-y-4 shadow-inner">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0">
-                {hasImages ? <FileArchive className="w-6 h-6 text-amber-400" /> : <FileCode className="w-6 h-6" />}
-              </div>
-              <div>
-                <h4 className="font-bold text-base text-amber-300">
-                  {hasImages ? 'Exportar Juego Completo (Paquete ZIP con carpeta IMG)' : 'Exportar Juego Completo en HTML Autónomo'}
-                </h4>
-                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                  {hasImages
-                    ? 'Tu juego incluye imágenes locales. Se generará un archivo ZIP que contiene la estructura HTML autónoma y la carpeta IMG con todas tus imágenes.'
-                    : 'Genera un único archivo .html independiente que incluye el motor de lectura, los verbos, el selector de dificultad, el sistema de salvado/carga y todo tu juego.'}
-                </p>
-              </div>
-            </div>
-
-            {hasImages ? (
-              <div className="space-y-2">
-                <button
-                  onClick={handleExportZip}
-                  disabled={isExportingZip}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition-colors disabled:opacity-50"
-                >
-                  <Archive className="w-4 h-4" />
-                  <span>{isExportingZip ? 'Generando ZIP con carpeta IMG...' : 'Descargar Juego Completo en ZIP (.zip)'}</span>
-                </button>
-                <button
-                  onClick={handleExportHTML}
-                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700 transition-colors"
-                >
-                  <FileCode className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Descargar sólo el archivo HTML autónomo</span>
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <button
-                  onClick={handleExportHTML}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Descargar HTML del Juego Independiente</span>
-                </button>
-                <button
-                  onClick={handleExportZip}
-                  disabled={isExportingZip}
-                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 font-medium rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-800 transition-colors"
-                >
-                  <Archive className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Exportar como ZIP (.zip)</span>
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Export / Import JSON Project */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-2">
-              <h5 className="font-bold text-xs text-slate-200">Guardar Proyecto (.json)</h5>
-              <p className="text-[11px] text-slate-400">
-                Descarga una copia de seguridad en JSON para seguir editando más tarde.
+            <div className="bg-slate-950 border border-amber-500/40 p-4 rounded-2xl space-y-3 shadow-sm">
+              <h5 className="font-bold text-sm text-amber-300 flex items-center gap-1.5">
+                <Download className="w-4 h-4 text-amber-400" />
+                <span>Exportar Proyecto (.json)</span>
+              </h5>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Descarga el archivo completo del proyecto en JSON para guardarlo localmente o compartirlo con otros autores.
               </p>
               <button
                 onClick={handleExportJSON}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors"
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 shadow transition-all cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5 text-amber-400" />
-                <span>Descargar Proyecto JSON</span>
+                <Download className="w-4 h-4" />
+                <span>Descargar Proyecto en JSON</span>
               </button>
             </div>
 
-            <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-2">
-              <h5 className="font-bold text-xs text-slate-200">Cargar Proyecto (.json)</h5>
-              <p className="text-[11px] text-slate-400">
-                Abre un proyecto previamente guardado para editarlo o jugarlo.
+            <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-3 shadow-sm">
+              <h5 className="font-bold text-sm text-slate-200 flex items-center gap-1.5">
+                <Upload className="w-4 h-4 text-blue-400" />
+                <span>Cargar Proyecto (.json)</span>
+              </h5>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Abre un proyecto guardado anteriormente en tu equipo para continuar editando o probarlo en el motor.
               </p>
-              <label className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors">
-                <Upload className="w-3.5 h-3.5 text-blue-400" />
-                <span>Abrir Proyecto JSON</span>
+              <label className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                <Upload className="w-4 h-4 text-blue-400" />
+                <span>Abrir Archivo JSON</span>
                 <input
                   type="file"
                   accept=".json"
@@ -310,6 +259,34 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </label>
             </div>
           </div>
+
+          {/* ZIP Package Export */}
+          {hasImages && (
+            <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-3 shadow-inner">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0">
+                  <Archive className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-200">
+                    Exportar Paquete ZIP (Con Carpeta de Imágenes)
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                    Tu proyecto incluye imágenes locales. Genera un paquete ZIP comprimido con todos los recursos del juego.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleExportZip}
+                disabled={isExportingZip}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-700 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Archive className="w-4 h-4" />
+                <span>{isExportingZip ? 'Generando ZIP...' : 'Descargar Paquete ZIP (.zip)'}</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

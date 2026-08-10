@@ -16,7 +16,7 @@ import { UserProfilePage } from './components/Portal/UserProfilePage';
 import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
 import { Footer } from './components/Footer';
 import { setSoundEnabled } from './utils/audio';
-import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS } from './lib/firebase';
+import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export default function App() {
@@ -33,10 +33,17 @@ export default function App() {
     return sampleGameProject;
   });
 
-  // Save last edited project to localStorage whenever it changes
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<string>('');
+
+  // Auto-save last edited project to localStorage whenever it changes
   useEffect(() => {
     if (project) {
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       localStorage.setItem('motordeaventuras_last_edited_project', JSON.stringify(project));
+      if (project.id) {
+        localStorage.setItem(`motordeaventuras_autosave_${project.id}`, JSON.stringify(project));
+      }
+      setLastAutoSaveTime(timeStr);
     }
   }, [project]);
 
@@ -44,6 +51,47 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('catalog');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [soundEnabled, setSoundState] = useState<boolean>(true);
+
+  // Deep linking: Load game from URL search parameter '?juego=<id>' or '?game=<id>' on load
+  useEffect(() => {
+    const checkUrlGame = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const gameParam = params.get('juego') || params.get('game');
+      if (gameParam) {
+        if (gameParam === 'demo' || gameParam === 'sample') {
+          setProject(sampleGameProject);
+          setCurrentCloudDocId(null);
+          resetGameStateForProject(sampleGameProject);
+          setCurrentView('play');
+        } else {
+          const docData = await getProjectByIdFromCloud(gameParam);
+          if (docData) {
+            const targetProj = docData.publishedData || docData.projectData;
+            setProject(targetProj);
+            setCurrentCloudDocId(docData.id);
+            resetGameStateForProject(targetProj);
+            setCurrentView('play');
+          }
+        }
+      }
+    };
+    checkUrlGame();
+  }, []);
+
+  // Synchronize URL search parameter when playing a game or navigating views
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const currentGameId = currentCloudDocId || project?.id;
+
+    if (currentView === 'play' && currentGameId) {
+      if (params.get('juego') !== currentGameId) {
+        const newUrl = `${window.location.pathname}?juego=${encodeURIComponent(currentGameId)}`;
+        window.history.replaceState({ view: 'play', gameId: currentGameId }, '', newUrl);
+      }
+    } else if (currentView !== 'play' && (params.has('juego') || params.has('game'))) {
+      window.history.replaceState({ view: currentView }, '', window.location.pathname);
+    }
+  }, [currentView, currentCloudDocId, project?.id]);
 
   // Global web aspect selector state: 'clean' vs 'classic'
   const [webAspect, setWebAspect] = useState<'clean' | 'classic'>(() => {

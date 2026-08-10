@@ -183,6 +183,19 @@ export async function deleteUserAccountAndData(uid: string): Promise<void> {
 
 // Projects Cloud Operations
 
+export async function getProjectByIdFromCloud(docId: string): Promise<CloudProjectDoc | null> {
+  try {
+    const ref = doc(db, 'projects', docId);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() } as CloudProjectDoc;
+    }
+  } catch (e) {
+    console.error('Error fetching project by ID:', e);
+  }
+  return null;
+}
+
 /**
  * Fetch all published projects for the public portal (using published snapshot if present)
  */
