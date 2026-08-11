@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameProject, Hotspot, VerbType, InventoryItem, SaveSlotData, AppendedTextEntry } from '../types';
+import { GameProject, Hotspot, VerbType, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter } from '../types';
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS } from '../utils/verbs';
@@ -108,6 +108,35 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     x: number;
     y: number;
   } | null>(null);
+
+  // Active Pop-up Dialogue Modal state
+  const [activeDialogue, setActiveDialogue] = useState<{
+    character: GameCharacter;
+    blockId?: string;
+    currentNodeId: string;
+    dialogueBlock: DialogueBlock;
+    currentNpcReply?: string;
+    receivedItemIds?: string[];
+  } | null>(null);
+
+  const closeActiveDialogue = (currentReceivedItems?: string[]) => {
+    const itemsToNotify = currentReceivedItems || activeDialogue?.receivedItemIds || [];
+    if (itemsToNotify.length > 0) {
+      const lastItemId = itemsToNotify[itemsToNotify.length - 1];
+      const itemObj = project.inventoryItems.find((i) => i.id === lastItemId);
+      if (itemObj) {
+        setModalFeedback({
+          type: 'action',
+          title: 'OBJETO RECIBIDO',
+          verbIconName: 'Plus',
+          isAutosaved: true,
+          itemImageUrl: itemObj.imageFileData || itemObj.imageUrl,
+          message: `¡Has conseguido: ${itemObj.name.toUpperCase()}!`,
+        });
+      }
+    }
+    setActiveDialogue(null);
+  };
 
   // Quick Time Event (QTE) State
   const [qteTimeLeft, setQteTimeLeft] = useState<number>(0);
@@ -449,6 +478,87 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     const ruleIndex = matchingRules.length > 0 ? Math.min(currentUseCount, matchingRules.length - 1) : -1;
     const rule = ruleIndex >= 0 ? matchingRules[ruleIndex] : null;
 
+    // Check if interaction triggers a Pop-up Dialogue Modal
+    const currentSceneObj = project.scenes.find((s) => s.id === gameState.currentSceneId);
+    const parentBlock = currentSceneObj?.textBlocks.find((b) => isWordMatchInText(hotspot.word, b.text));
+
+    let dialogueToStart: DialogueBlock | null = rule?.dialogue || parentBlock?.dialogue || null;
+    let characterToStart: GameCharacter | null =
+      (rule?.characterId ? project.characters?.find((c) => c.id === rule.characterId) : null) ||
+      (parentBlock?.characterId ? project.characters?.find((c) => c.id === parentBlock.characterId) : null) ||
+      null;
+
+    if (verbToUse === 'hablar') {
+      if (!characterToStart || !dialogueToStart) {
+        const searchWord = (hotspot.label || hotspot.word).toLowerCase();
+        const matchedChar = project.characters?.find((c) =>
+          c.name.toLowerCase().includes(searchWord) || searchWord.includes(c.name.toLowerCase())
+        );
+
+        if (matchedChar) {
+          characterToStart = matchedChar;
+          if (!dialogueToStart) {
+            const blockWithDialogue = currentSceneObj?.textBlocks.find(
+              (b) => b.characterId === matchedChar.id && b.dialogue
+            );
+            dialogueToStart = blockWithDialogue?.dialogue || {
+              characterId: matchedChar.id,
+              greeting: rule?.responseMessage || matchedChar.description || '¿Qué deseas?',
+              nodes: [
+                {
+                  id: 'node_root',
+                  title: 'Inicio',
+                  npcPrompt: rule?.responseMessage || matchedChar.description || '¿Qué deseas?',
+                  options: [
+                    {
+                      id: 'opt_close',
+                      playerText: 'Nada por ahora.',
+                      endConversation: true,
+                    },
+                  ],
+                },
+              ],
+            };
+          }
+        } else if (rule?.responseMessage || parentBlock) {
+          const charName = hotspot.label || hotspot.word;
+          const dynamicChar: GameCharacter = {
+            id: `char_dyn_${hotspot.id}`,
+            name: charName.charAt(0).toUpperCase() + charName.slice(1),
+            description: 'Personaje de la historia.',
+          };
+          characterToStart = dynamicChar;
+          const promptText = rule?.responseMessage || parentBlock?.dialogue?.greeting || 'Te observa en silencio...';
+          dialogueToStart = parentBlock?.dialogue || {
+            characterId: dynamicChar.id,
+            greeting: promptText,
+            nodes: [
+              {
+                id: 'node_root',
+                title: 'Inicio',
+                npcPrompt: promptText,
+                options: [
+                  {
+                    id: 'opt_close',
+                    playerText: 'Despedirse.',
+                    endConversation: true,
+                  },
+                ],
+              },
+            ],
+          };
+        }
+      }
+
+      if (characterToStart && dialogueToStart) {
+        handleStartDialogue(characterToStart, dialogueToStart, parentBlock?.id);
+        setActiveVerb(null);
+        setSelectedInventoryItemId(null);
+        setContextMenu(null);
+        return;
+      }
+    }
+
     let messageToShow: string | null = null;
 
     if (rule) {
@@ -607,11 +717,23 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       // Fallback response - check if any rule for this verb specifies fail configurations (failMessage, failStateChange, failIsGameOver, failSoundEffect)
       const failedRule = rulesForVerb.find((a) => a.failMessage || a.failStateChange || a.failIsGameOver || a.failSoundEffect);
 
+      let lookCharDesc: string | null = null;
+      if (verbToUse === 'mirar') {
+        const searchWord = (hotspot.label || hotspot.word).toLowerCase();
+        const matchedChar = project.characters?.find((c) =>
+          c.name.toLowerCase().includes(searchWord) || searchWord.includes(c.name.toLowerCase())
+        );
+        if (matchedChar && matchedChar.description) {
+          lookCharDesc = matchedChar.description;
+        }
+      }
+
       const fallbackText =
         failedRule?.failMessage ||
+        lookCharDesc ||
         (hotspot.customDefaultResponses && hotspot.customDefaultResponses[verbToUse]) ||
         (project.defaultResponses && project.defaultResponses[verbToUse]) ||
-        'Eso no parece surtir effecto.';
+        'Eso no parece surtir efecto.';
 
       const fsc = failedRule?.failStateChange;
       const isFailGameOver =
@@ -797,6 +919,144 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       }
       return <React.Fragment key={idx}>{part}</React.Fragment>;
     });
+  };
+
+  const handleStartDialogue = (
+    character: GameCharacter,
+    dialogueBlock: DialogueBlock,
+    blockId?: string
+  ) => {
+    playSound('select');
+    const initialNodeId =
+      dialogueBlock.initialNodeId ||
+      dialogueBlock.nodes?.[0]?.id ||
+      'node_root';
+    setActiveDialogue({
+      character,
+      blockId,
+      currentNodeId: initialNodeId,
+      dialogueBlock,
+    });
+  };
+
+  const handleSelectDialogueOption = (
+    option: DialogueOption,
+    character: GameCharacter,
+    blockId?: string
+  ) => {
+    playSound(option.soundEffect || 'select');
+
+    // Item giving (+Objeto)
+    const giveItemObj = option.giveItemId
+      ? project.inventoryItems.find((i) => i.id === option.giveItemId)
+      : null;
+
+    // Item consuming (-Objeto)
+    const consumeItemObj =
+      option.requiredItemId && option.consumeRequiredItem
+        ? project.inventoryItems.find((i) => i.id === option.requiredItemId)
+        : null;
+
+    // Prepare response text
+    let responseText = '';
+    if (option.playerText) {
+      responseText += `— ${option.playerText}\n\n`;
+    }
+    if (option.npcResponse) {
+      responseText += `${character.name}: ${option.npcResponse}`;
+    }
+
+    if (giveItemObj) {
+      responseText += `\n\n[Recibido: ${giveItemObj.name}]`;
+    }
+    if (consumeItemObj) {
+      responseText += `\n\n[Entregado: ${consumeItemObj.name}]`;
+    }
+
+    // Track items received during this dialogue session
+    const currentReceived = activeDialogue?.receivedItemIds || [];
+    const updatedReceived = giveItemObj ? [...currentReceived, giveItemObj.id] : currentReceived;
+
+    setGameState((prev: any) => {
+      const newFlags = { ...prev.flags, ...(option.setFlags || {}) };
+      let newInventory = [...prev.inventory];
+      let nextSceneId = prev.currentSceneId;
+
+      if (option.giveItemId && !newInventory.includes(option.giveItemId)) {
+        newInventory.push(option.giveItemId);
+      }
+
+      if (option.requiredItemId && option.consumeRequiredItem) {
+        newInventory = newInventory.filter((id) => id !== option.requiredItemId);
+      }
+
+      if (option.goToSceneId) {
+        nextSceneId = option.goToSceneId;
+      }
+
+      const usedDialogueOptionIds = [...(prev.usedDialogueOptionIds || [])];
+      if (!usedDialogueOptionIds.includes(option.id)) {
+        usedDialogueOptionIds.push(option.id);
+      }
+
+      const newAppended = { ...prev.appendedTextsPerScene };
+      if (responseText.trim()) {
+        const sceneAppended = newAppended[prev.currentSceneId] || [];
+        newAppended[prev.currentSceneId] = [
+          ...sceneAppended,
+          { text: responseText, blockId },
+        ];
+      }
+
+      if (option.appendStoryText) {
+        const sceneAppended = newAppended[prev.currentSceneId] || [];
+        newAppended[prev.currentSceneId] = [
+          ...newAppended[prev.currentSceneId],
+          { text: option.appendStoryText, blockId },
+        ];
+      }
+
+      return {
+        ...prev,
+        flags: newFlags,
+        inventory: newInventory,
+        currentSceneId: nextSceneId,
+        usedDialogueOptionIds,
+        appendedTextsPerScene: newAppended,
+        isGameOver: option.isGameOver || prev.isGameOver,
+      };
+    });
+
+    // Advance tree node, update current reply, or close dialogue pop-up
+    if (option.endConversation || option.nextNodeId === 'end' || option.goToSceneId) {
+      closeActiveDialogue(updatedReceived);
+    } else if (option.nextNodeId && option.nextNodeId !== activeDialogue?.currentNodeId) {
+      setActiveDialogue((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentNodeId: option.nextNodeId!,
+              currentNpcReply: undefined,
+              receivedItemIds: updatedReceived,
+            }
+          : null
+      );
+    } else if (option.npcResponse) {
+      setActiveDialogue((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentNpcReply: option.npcResponse,
+              receivedItemIds: updatedReceived,
+            }
+          : null
+      );
+    }
+
+    if (giveItemObj || option.goToSceneId) {
+      setShowSaveNotification(true);
+      setTimeout(() => setShowSaveNotification(false), 2500);
+    }
   };
 
   // Parses HTML formatting tags (h1, h2, b, i, u, p, etc.) and renders styled elements while maintaining interactive hotspot words and line breaks
@@ -1771,6 +2031,117 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Pop-up Conversation Modal (Aventura Gráfica Style) */}
+      {activeDialogue && (() => {
+        const { character, dialogueBlock, currentNodeId, blockId, currentNpcReply } = activeDialogue;
+
+        // Get active node or fallback to root
+        const nodes = dialogueBlock.nodes && dialogueBlock.nodes.length > 0
+          ? dialogueBlock.nodes
+          : [
+              {
+                id: 'node_root',
+                title: 'Inicio',
+                npcPrompt: dialogueBlock.greeting || '¿Qué deseas?',
+                options: dialogueBlock.options || [],
+              },
+            ];
+
+        const currentNode = nodes.find((n) => n.id === currentNodeId) || nodes[0];
+        const npcPrompt = currentNpcReply || currentNode?.npcPrompt || dialogueBlock.greeting || 'Te observa en silencio...';
+
+        // Filter available player options based on flags and used options
+        const availableOptions = (currentNode?.options || []).filter((opt) => {
+          if (gameState.usedDialogueOptionIds?.includes(opt.id)) {
+            return false;
+          }
+          if (opt.requiredItemId && !gameState.inventory.includes(opt.requiredItemId)) {
+            return false;
+          }
+          if (opt.requiredFlags && !checkConditions(opt.requiredFlags)) {
+            return false;
+          }
+          if (!checkConditions(opt.visibleIfFlags, opt.hiddenIfFlags)) {
+            return false;
+          }
+          return true;
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-lg bg-slate-950 border border-amber-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+              
+              {/* Modal Header */}
+              <div className="px-5 py-3.5 bg-slate-900 border-b border-amber-500/20 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3">
+                  {character.imageFileData || character.imageUrl ? (
+                    <img
+                      src={character.imageFileData || character.imageUrl}
+                      alt={character.name}
+                      className="w-10 h-10 object-cover rounded-lg border border-amber-500/40 shadow shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold flex items-center justify-center shrink-0 text-base shadow">
+                      {character.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <h3 className="font-bold text-amber-300 text-base">{character.name}</h3>
+                </div>
+
+                <button
+                  onClick={() => closeActiveDialogue()}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="Cerrar conversación"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body: NPC Prompt + Player Options */}
+              <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                {/* NPC Dialogue Prompt Box */}
+                <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/20 text-amber-100 font-serif text-base leading-relaxed shadow-inner">
+                  <span className="text-amber-400 font-bold mr-2">{character.name}:</span>
+                  "{npcPrompt}"
+                </div>
+
+                {/* Clickable Player Options List (Clean, without numbers or headers) */}
+                {availableOptions.length > 0 ? (
+                  <div className="space-y-2 pt-1">
+                    {availableOptions.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleSelectDialogueOption(opt, character, blockId)}
+                        className="w-full text-left p-3.5 rounded-xl bg-slate-900 hover:bg-amber-950/50 border border-amber-500/30 hover:border-amber-400 text-slate-100 hover:text-white text-sm font-medium transition-all group cursor-pointer shadow-sm"
+                      >
+                        <span className="group-hover:translate-x-1 transition-transform inline-block leading-snug">
+                          "{opt.playerText || '...'}"
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic text-center py-2">
+                    (No hay más opciones de respuesta. Puedes despedirte).
+                  </p>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 py-3 bg-slate-900 border-t border-slate-800 flex items-center justify-end">
+                <button
+                  onClick={() => closeActiveDialogue()}
+                  className="px-4 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-amber-200 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Despedirse
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

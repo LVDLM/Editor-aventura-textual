@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS } from '../../types';
+import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
 import { playSound } from '../../utils/audio';
 import { isWordMatchInText } from '../../utils/textUtils';
 import { HotspotEditorModal } from './HotspotEditorModal';
+import { DialogueEditor } from './DialogueEditor';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 import { ValidationPanel } from './ValidationPanel';
 import { GamePlayer } from '../GamePlayer';
@@ -45,6 +46,7 @@ import {
   Volume2,
   Play,
   RotateCcw,
+  MessageSquare,
 } from 'lucide-react';
 
 interface SceneEditorProps {
@@ -499,6 +501,64 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
         }),
       }));
     }
+  };
+
+  const [editingDialogueContext, setEditingDialogueContext] = useState<{
+    type: 'block' | 'hotspot';
+    blockId: string;
+    hotspotId?: string;
+    actionId?: string;
+    dialogue?: DialogueBlock;
+  } | null>(null);
+
+  const handleUpdateBlockDialogue = (blockId: string, dialogue: DialogueBlock | undefined) => {
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          textBlocks: s.textBlocks.map((b) => {
+            if (b.id !== blockId) return b;
+            return {
+              ...b,
+              characterId: dialogue?.characterId,
+              dialogue,
+            };
+          }),
+        };
+      }),
+    }));
+  };
+
+  const handleUpdateHotspotDialogue = (
+    hotspotId: string,
+    actionId?: string,
+    dialogue?: DialogueBlock
+  ) => {
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          hotspots: s.hotspots.map((hs) => {
+            if (hs.id !== hotspotId) return hs;
+            const updatedActions = hs.actions.map((act) => {
+              if (actionId ? act.id === actionId : act.verb === 'hablar') {
+                return {
+                  ...act,
+                  characterId: dialogue?.characterId || act.characterId,
+                  dialogue,
+                };
+              }
+              return act;
+            });
+            return { ...hs, actions: updatedActions };
+          }),
+        };
+      }),
+    }));
   };
 
   const handleToggleBlockFlagCondition = (
@@ -1975,6 +2035,146 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     })()}
                   </div>
 
+                  {/* Dialogue Editor Section directly below Keywords block */}
+                  {(() => {
+                    const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
+                      isWordMatchInText(hs.word, block.text)
+                    );
+
+                    const hotspotDialogues: Array<{
+                      hotspot: Hotspot;
+                      action: any;
+                    }> = [];
+
+                    blockHotspots.forEach((hs) => {
+                      hs.actions.forEach((act) => {
+                        if (act.verb === 'hablar' || act.dialogue) {
+                          hotspotDialogues.push({ hotspot: hs, action: act });
+                        }
+                      });
+                    });
+
+                    const hasBlockDialogue = !!block.dialogue;
+                    const totalDialogues = (hasBlockDialogue ? 1 : 0) + hotspotDialogues.length;
+
+                    return (
+                      <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                            <MessageSquare className="w-4 h-4 text-amber-400" />
+                            <span>Diálogos y Conversaciones en este Párrafo ({totalDialogues})</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Edita o corrige el árbol de diálogo fácilmente
+                          </span>
+                        </div>
+
+                        {totalDialogues === 0 ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <p className="text-[11px] text-slate-400 italic">
+                              No hay un diálogo creado para este párrafo o sus palabras clave.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const initialDialogue: DialogueBlock = {
+                                  characterId: project.characters[0]?.id || 'char_npc',
+                                  greeting: 'Hola, ¿en qué puedo ayudarte?',
+                                  nodes: [
+                                    {
+                                      id: 'node_root',
+                                      title: 'Inicio de Conversación',
+                                      npcPrompt: 'Hola, ¿en qué puedo ayudarte?',
+                                      options: [
+                                        {
+                                          id: 'opt_close',
+                                          playerText: 'Despedirse',
+                                          npcResponse: 'Hasta luego.',
+                                          endConversation: true,
+                                        },
+                                      ],
+                                    },
+                                  ],
+                                };
+                                handleUpdateBlockDialogue(block.id, initialDialogue);
+                                setEditingDialogueContext({
+                                  type: 'block',
+                                  blockId: block.id,
+                                  dialogue: initialDialogue,
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border border-amber-400/30"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Crear Árbol de Diálogo en este Párrafo</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 pt-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {hasBlockDialogue && (
+                                <div className="flex items-center gap-2 bg-amber-950/60 border border-amber-500/40 rounded-xl px-3 py-1.5 shadow-sm">
+                                  <span className="text-xs font-bold text-amber-200">
+                                    💬 Diálogo Párrafo #{index + 1}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingDialogueContext({
+                                        type: 'block',
+                                        blockId: block.id,
+                                        dialogue: block.dialogue,
+                                      })
+                                    }
+                                    className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                    <span>Editar / Corregir Diálogo</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateBlockDialogue(block.id, undefined)}
+                                    className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors cursor-pointer"
+                                    title="Eliminar diálogo"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+
+                              {hotspotDialogues.map(({ hotspot, action }) => (
+                                <div
+                                  key={`hs_dia_${hotspot.id}_${action.id}`}
+                                  className="flex items-center gap-2 bg-slate-950 border border-amber-500/30 rounded-xl px-3 py-1.5 shadow-sm"
+                                >
+                                  <span className="text-xs font-bold text-slate-200">
+                                    🗣️ Diálogo con "{hotspot.word}"
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingDialogueContext({
+                                        type: 'hotspot',
+                                        blockId: block.id,
+                                        hotspotId: hotspot.id,
+                                        actionId: action.id,
+                                        dialogue: action.dialogue,
+                                      })
+                                    }
+                                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-[11px] rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                    <span>Editar / Corregir Diálogo</span>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Flag Condition Controls */}
                   <div className="bg-slate-900/80 border border-white/5 rounded-lg p-3 space-y-2 text-xs">
                     <div className="flex items-center gap-1.5 text-slate-300 text-xs font-bold">
@@ -2194,6 +2394,62 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           onClose={() => setActiveHotspotForEdit(null)}
           onAddGlobalFlag={handleAddGlobalFlag}
         />
+      )}
+
+      {/* Dialogue Editor Modal Overlay */}
+      {editingDialogueContext && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-4xl bg-slate-950 border border-amber-500/40 rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
+              <h3 className="text-base font-bold text-amber-300 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-amber-400" />
+                <span>Editor de Árbol de Diálogo de la Escena</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingDialogueContext(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1">
+              <DialogueEditor
+                project={project}
+                dialogue={editingDialogueContext.dialogue}
+                onChange={(updatedDialogue) => {
+                  if (editingDialogueContext.type === 'block') {
+                    handleUpdateBlockDialogue(editingDialogueContext.blockId, updatedDialogue);
+                  } else if (
+                    editingDialogueContext.type === 'hotspot' &&
+                    editingDialogueContext.hotspotId
+                  ) {
+                    handleUpdateHotspotDialogue(
+                      editingDialogueContext.hotspotId,
+                      editingDialogueContext.actionId,
+                      updatedDialogue
+                    );
+                  }
+                  setEditingDialogueContext((prev) =>
+                    prev ? { ...prev, dialogue: updatedDialogue } : null
+                  );
+                }}
+                webAspect="classic"
+              />
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setEditingDialogueContext(null)}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-all cursor-pointer shadow"
+              >
+                Guardar y Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

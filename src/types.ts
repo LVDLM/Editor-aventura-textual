@@ -81,6 +81,8 @@ export interface ActionRule {
   
   // What happens when triggered (Conditions MET)
   responseMessage: string; // Message printed in narrative response box
+  characterId?: string; // Optional character triggered by action
+  dialogue?: DialogueBlock; // Optional dialogue block triggered by action
   stateChange?: StateChange;
   isGameOver?: boolean; // Direct game over flag on action rule
   soundEffect?: SoundEffectType; // Sound effect triggered with this action response
@@ -103,6 +105,52 @@ export interface Hotspot {
   customDefaultResponses?: Partial<Record<VerbType, string>>;
 }
 
+export interface GameCharacter {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl?: string;
+  imageFileData?: string;
+  imageFileName?: string;
+  healthPoints?: number;
+  initialItemId?: string; // Default item held by character
+}
+
+export interface DialogueOption {
+  id: string;
+  playerText: string; // What the player says / selects
+  npcResponse: string; // What the NPC replies
+  nextNodeId?: string; // ID of next DialogueNode in tree, or undefined/empty to keep current node
+  requiredItemId?: string; // Requires item in player's inventory (-item / requirement)
+  consumeRequiredItem?: boolean; // If true, removes requiredItemId from player inventory (-item)
+  giveItemId?: string; // Character gives item to player (+item)
+  requiredFlags?: Record<string, boolean>;
+  visibleIfFlags?: Record<string, boolean>;
+  hiddenIfFlags?: Record<string, boolean>;
+  setFlags?: Record<string, boolean>;
+  appendStoryText?: string; // Extra narrative text paragraph inserted into story log
+  goToSceneId?: string; // Leads to a new scene / advances story
+  isOneTime?: boolean; // Disappears after selection
+  endConversation?: boolean; // Closes dialogue window
+  isGameOver?: boolean;
+  soundEffect?: SoundEffectType;
+}
+
+export interface DialogueNode {
+  id: string;
+  title: string; // E.g. "Nodo 1: Saludo inicial", "Nodo 2: Insultos", "Nodo 3: Entrega de objeto"
+  npcPrompt?: string; // What the NPC says at this node (e.g. "¡Luchas como un granjero!")
+  options: DialogueOption[];
+}
+
+export interface DialogueBlock {
+  characterId: string;
+  greeting?: string; // Default initial NPC prompt
+  initialNodeId?: string; // Starting node ID
+  nodes?: DialogueNode[]; // Tree of conversation nodes
+  options?: DialogueOption[]; // Legacy flat options
+}
+
 export interface SceneTextBlock {
   id: string;
   type?: 'portada' | 'introduccion' | 'normal';
@@ -114,6 +162,8 @@ export interface SceneTextBlock {
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
   isGameOver?: boolean; // Marks paragraph as triggering end of game
+  characterId?: string; // Character associated with this paragraph
+  dialogue?: DialogueBlock; // Dialogue attached to this paragraph
 }
 
 export type SceneType = 'portada' | 'introduccion' | 'normal' | 'qte';
@@ -181,6 +231,7 @@ export interface GameProject {
   defaultResponses: Record<VerbType, string>;
   globalFlags: Record<string, boolean>; // Initial default flags
   inventoryItems: InventoryItem[];
+  characters?: GameCharacter[];
   scenes: Scene[];
 }
 
@@ -195,6 +246,7 @@ export interface SaveSlotData {
   currentSceneName: string;
   inventoryItemIds: string[];
   flags: Record<string, boolean>;
+  usedDialogueOptionIds?: string[];
   narrativeHistory: { id: string; type: 'story' | 'response' | 'system'; text: string; timestamp?: string }[];
   appendedTextsPerScene: Record<string, AppendedTextEntry[]>;
   usedHotspotIds?: string[];

@@ -4,7 +4,8 @@ import { GeneralSettings } from './GeneralSettings';
 import { SceneEditor } from './SceneEditor';
 import { InventoryManager } from './InventoryManager';
 import { FlagsManager } from './FlagsManager';
-import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal, CheckCircle, Save } from 'lucide-react';
+import { CharacterManager } from './CharacterManager';
+import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal, CheckCircle, Save, User } from 'lucide-react';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 
 interface GameEditorProps {
@@ -26,7 +27,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
   webAspect = 'clean',
   lastAutoSaveTime,
 }) => {
-  const [activeTab, setActiveTab] = useState<'scenes' | 'settings' | 'inventory' | 'flags'>('scenes');
+  const [activeTab, setActiveTab] = useState<'scenes' | 'inventory' | 'characters' | 'flags' | 'settings'>('scenes');
   const [editorWidth, setEditorWidth] = useState<'standard' | 'wide' | 'full'>(() => {
     return (localStorage.getItem('editor_width_preference') as any) || 'wide';
   });
@@ -192,6 +193,20 @@ export const GameEditor: React.FC<GameEditorProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('characters')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'characters'
+                ? 'bg-amber-600 text-white shadow'
+                : isClean
+                ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                : 'text-white/40 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            <span>3. Personajes (NPCs)</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('flags')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'flags'
@@ -202,7 +217,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
             }`}
           >
             <ToggleLeft className="w-4 h-4" />
-            <span>3. Banderas y Variables</span>
+            <span>4. Banderas y Variables</span>
           </button>
 
           <button
@@ -216,7 +231,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>4. Configuración y Fallbacks</span>
+            <span>5. Configuración y Fallbacks</span>
           </button>
         </div>
 
@@ -226,6 +241,9 @@ export const GameEditor: React.FC<GameEditorProps> = ({
         )}
         {activeTab === 'inventory' && (
           <InventoryManager project={project} updateProject={updateProject} />
+        )}
+        {activeTab === 'characters' && (
+          <CharacterManager project={project} updateProject={updateProject} webAspect={webAspect} />
         )}
         {activeTab === 'flags' && (
           <FlagsManager project={project} updateProject={updateProject} />

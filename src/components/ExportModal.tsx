@@ -57,17 +57,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     }
   };
 
-  const handleExportHTML = () => {
-    const html = generateStandaloneHTML(project);
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${project.id || 'juego'}_autonomo.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleExportZip = async () => {
     try {
       setIsExportingZip(true);
