@@ -203,7 +203,7 @@ export async function getPublishedProjects(): Promise<CloudProjectDoc[]> {
   try {
     const q = query(
       collection(db, 'projects'),
-      where('status', 'in', ['published', 'pending_review'])
+      where('status', '==', 'published')
     );
     const snap = await getDocs(q);
     const list: CloudProjectDoc[] = [];
