@@ -285,6 +285,76 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
         </div>
       </div>
 
+      {/* Default End Game Message (Párrafo Final) */}
+      <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+        isClean ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'
+      }`}>
+        <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${
+          isClean ? 'border-slate-200' : 'border-slate-800'
+        }`}>
+          <div>
+            <h3 className={`font-bold text-base ${isClean ? 'text-slate-900' : 'text-slate-100'}`}>
+              Mensaje del Cartel de Final de la Aventura
+            </h3>
+          </div>
+          <span className={`text-xs ${isClean ? 'text-amber-800' : 'text-amber-400'}`}>
+            Personalización del cierre
+          </span>
+        </div>
+
+        <p className={`text-xs leading-relaxed ${isClean ? 'text-slate-600' : 'text-slate-400'}`}>
+          Configura los textos que se mostrarán en el recuadro final cuando el lector alcance un párrafo o escena marcado de tipo &quot;Final&quot;.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={`block text-xs font-semibold mb-1 ${isClean ? 'text-slate-700' : 'text-slate-300'}`}>
+              Título del Cartel Final
+            </label>
+            <input
+              type="text"
+              value={project.gameCompleteTitle ?? '¡FIN DE LA AVENTURA!'}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateProject((prev) => ({
+                  ...prev,
+                  gameCompleteTitle: val,
+                }));
+              }}
+              className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none transition-colors border ${
+                isClean
+                  ? 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-amber-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500'
+              }`}
+              placeholder="Ej: ¡FIN DE LA AVENTURA!"
+            />
+          </div>
+
+          <div>
+            <label className={`block text-xs font-semibold mb-1 ${isClean ? 'text-slate-700' : 'text-slate-300'}`}>
+              Subtítulo / Mensaje Secundario
+            </label>
+            <input
+              type="text"
+              value={project.gameCompleteSubtitle ?? 'Has completado felizmente la historia.'}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateProject((prev) => ({
+                  ...prev,
+                  gameCompleteSubtitle: val,
+                }));
+              }}
+              className={`w-full rounded-xl px-3.5 py-2 text-sm outline-none transition-colors border ${
+                isClean
+                  ? 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:border-amber-500'
+                  : 'bg-slate-950 border-slate-800 text-slate-100 focus:border-amber-500'
+              }`}
+              placeholder="Ej: Has completado felizmente la historia."
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Default Verb Fallback Messages */}
       <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
         isClean ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'

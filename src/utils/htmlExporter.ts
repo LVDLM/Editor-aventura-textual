@@ -506,7 +506,8 @@ ${jsonProject}
       if (gameState.isGameOver) return true;
       const scene = getActiveScene();
       if (!scene) return false;
-      const hasBlockGameOver = (scene.textBlocks || []).some(b => b.isGameOver || checkGameOverTag(b.text));
+      if (scene.type === 'final') return true;
+      const hasBlockGameOver = (scene.textBlocks || []).some(b => b.isGameOver || b.type === 'final' || checkGameOverTag(b.text));
       if (hasBlockGameOver) return true;
       const appended = gameState.appendedTexts[scene.id] || [];
       const hasAppendedGameOver = appended.some(t => checkGameOverTag(t));
@@ -585,7 +586,7 @@ ${jsonProject}
       return html;
     }
 
-    function renderTextBlock(text, scene) {
+    function renderTextBlock(text, scene, block) {
       if (checkGameOverTag(text)) {
         const parts = text.split(GAME_OVER_TAG_GLOBAL);
         let html = '';
@@ -604,7 +605,33 @@ ${jsonProject}
         });
         return html;
       }
-      return parseInteractiveText(text, scene);
+
+      let html = parseInteractiveText(text, scene);
+      if (block && (block.type === 'final' || block.isGameOver)) {
+        if (block.type === 'final') {
+          const title = (PROJECT.gameCompleteTitle || '¡FIN DE LA AVENTURA!').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const subtitle = (PROJECT.gameCompleteSubtitle || 'Has completado felizmente la historia.').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          html += '<div style="margin: 1.5rem 0; padding: 1.25rem; background: #0f172a; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 16px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);">' +
+                    '<div>' +
+                      '<div style="color: #fde68a; font-weight: 900; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.05em;">' + title + '</div>' +
+                      '<div style="color: #cbd5e1; font-size: 0.8rem; margin-top: 0.25rem;">' + subtitle + '</div>' +
+                    '</div>' +
+                    '<div style="display: flex; gap: 0.5rem;">' +
+                      '<button class="btn" style="background: #f59e0b; color: #0f172a; font-weight: 800;" onclick="resetGame()">🔄 Volver a jugar</button>' +
+                      '<button class="btn" onclick="loadGame()">📂 Cargar partida</button>' +
+                    '</div>' +
+                  '</div>';
+        } else if (block.isGameOver) {
+          html += '<div style="margin: 1.25rem 0; padding: 1.25rem; background: #450a0a; border: 1px solid #f43f5e; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; box-shadow: 0 4px 15px rgba(244, 63, 94, 0.2);">' +
+                    '<span style="color: #fda4af; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;">💀 Fin de la partida</span>' +
+                    '<div style="display: flex; gap: 0.5rem;">' +
+                      '<button class="btn" style="background: #e11d48; color: #fff;" onclick="resetGame()">🔄 Reiniciar</button>' +
+                      '<button class="btn" onclick="loadGame()">📂 Cargar partida</button>' +
+                    '</div>' +
+                  '</div>';
+        }
+      }
+      return html;
     }
 
     function getImageSrc(itemOrBlock) {
@@ -633,6 +660,8 @@ ${jsonProject}
         combinedHTML += '<div style="font-size: 0.75rem; font-weight: bold; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(245, 158, 11, 0.2); padding-bottom: 0.5rem;">✨ Escena de Portada</div>';
       } else if (scene.type === 'introduccion') {
         combinedHTML += '<div style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(14, 165, 233, 0.2); padding-bottom: 0.5rem;">📖 Escena de Introducción</div>';
+      } else if (scene.type === 'final') {
+        combinedHTML += '<div style="font-size: 0.75rem; font-weight: bold; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; border-bottom: 1px solid rgba(245, 158, 11, 0.3); padding-bottom: 0.5rem;">Escena de Final (Conclusión)</div>';
       }
 
       // Group appended texts by blockId or unattached
@@ -669,7 +698,7 @@ ${jsonProject}
           }
 
           if (hasText) {
-            combinedHTML += '<p style="margin-bottom: 0.75rem;">' + renderTextBlock(block.text, scene) + '</p>';
+            combinedHTML += '<p style="margin-bottom: 0.75rem;">' + renderTextBlock(block.text, scene, block) + '</p>';
           }
 
           combinedHTML += '</div>';

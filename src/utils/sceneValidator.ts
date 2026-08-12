@@ -26,12 +26,14 @@ export function validateProjectScenes(project: GameProject): SceneValidationIssu
     outgoingMap[s.id] = new Set();
     hasGameOverAction[s.id] = false;
 
-    // Check if any block has game over flag or text tag like [Terminar / Cargar partida]
+    // Check if any block has game over flag, type 'final', or text tag like [Terminar / Cargar partida]
     if (
+      s.type === 'final' ||
       s.textBlocks?.some(
         (b) =>
           b.isGameOver ||
-          /\[(?:Terminar \/ Cargar partida|Terminar|Fin de partida|Fin|Game Over|Cargar partida)\]/i.test(
+          b.type === 'final' ||
+          /\[(?:Terminar \/ Cargar partida|Terminar|Fin de partida|Fin|Game Over|Cargar partida|FIN)\]/i.test(
             b.text || ''
           )
       )
@@ -96,8 +98,8 @@ export function validateProjectScenes(project: GameProject): SceneValidationIssu
       });
     }
 
-    // 2. Dead end (No outgoing links to other scenes and no GameOver marker)
-    if (outgoing.size === 0 && !hasGameOverAction[scene.id] && !isPortada) {
+    // 2. Dead end (No outgoing links to other scenes and no GameOver or Final marker)
+    if (outgoing.size === 0 && !hasGameOverAction[scene.id] && !isPortada && scene.type !== 'final') {
       issues.push({
         id: `dead_end_${scene.id}`,
         sceneId: scene.id,
@@ -105,13 +107,13 @@ export function validateProjectScenes(project: GameProject): SceneValidationIssu
         type: 'dead_end',
         severity: 'warning',
         title: 'Callejón sin salida (Sin enlaces salientes)',
-        message: `El párrafo/escena "${scene.name}" no ofrece ninguna acción para avanzar a otra escena ni está marcado como Final de Juego.`,
-        suggestion: 'Añade una acción "Cambiar de Escena" en alguna palabra clave o marca la escena/párrafo como Final de Juego.',
+        message: `El párrafo/escena "${scene.name}" no ofrece ninguna acción para avanzar a otra escena ni está marcado como Párrafo Final.`,
+        suggestion: 'Añade una acción "Cambiar de Escena" en alguna palabra clave o cambia el tipo de párrafo/escena a "Final".',
       });
     }
 
-    // 3. No return option to previous paragraph/scene (excluding portada, introducción, or initial scenes)
-    if (!isInitial && incoming.size > 0 && !hasGameOverAction[scene.id] && !isPortada && scene.type !== 'introduccion') {
+    // 3. No return option to previous paragraph/scene (excluding portada, introducción, final, or initial scenes)
+    if (!isInitial && incoming.size > 0 && !hasGameOverAction[scene.id] && !isPortada && scene.type !== 'introduccion' && scene.type !== 'final') {
       const incomingList = Array.from(incoming);
 
       // Filter out parents that are portada, introducción, or initial scene

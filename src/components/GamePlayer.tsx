@@ -252,8 +252,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const isSceneGameOver =
     !!gameState.isGameOver ||
     (currentScene?.textBlocks || []).some(
-      (b) => b.isGameOver || /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(b.text)
+      (b) => b.isGameOver || b.type === 'final' || /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(b.text)
     ) ||
+    currentScene?.type === 'final' ||
     ((currentScene && gameState.appendedTextsPerScene[currentScene.id]) || []).some((t) => {
       const textVal = typeof t === 'string' ? t : t.text;
       return /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(textVal);
@@ -1171,7 +1172,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   };
 
   // Parses [Terminar / Cargar partida] or similar bracket tags into interactive End Game action bars
-  const renderTextWithTags = (rawText: string, isBlockGameOver?: boolean) => {
+  const renderTextWithTags = (rawText: string, isBlockGameOver?: boolean, isBlockFinal?: boolean) => {
     if (!rawText) return null;
 
     const tagRegex = /(\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\])/gi;
@@ -1247,6 +1248,41 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
                 >
                   <Bookmark className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Cargar partida</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    if (isBlockFinal) {
+      const finalTitle = project.gameCompleteTitle?.trim() || '¡FIN DE LA AVENTURA!';
+      const finalSubtitle = project.gameCompleteSubtitle?.trim() || 'Has completado felizmente la historia.';
+
+      return (
+        <>
+          {renderedContent}
+          <div className="my-6 p-5 rounded-2xl bg-slate-900 border border-amber-500/40 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            <div>
+              <div className="text-base font-black text-amber-300 uppercase tracking-wide">{finalTitle}</div>
+              <div className="text-xs text-slate-300 font-normal mt-0.5">{finalSubtitle}</div>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={onReset}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-lg flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Volver a jugar</span>
+              </button>
+              {onOpenSaveLoad && (
+                <button
+                  onClick={onOpenSaveLoad}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-500/30 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Bookmark className="w-4 h-4 text-amber-400" />
                   <span>Cargar partida</span>
                 </button>
               )}
@@ -1566,12 +1602,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
               return (
                 <>
-                  {currentScene?.textBlocks.map((block) => {
+                  {currentScene?.textBlocks.map((block, index) => {
                     if (!checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
                       return null;
                     }
                     const blockImg = block.imageFileData || block.imageUrl;
                     const isPortada = block.type === 'portada' || currentScene?.type === 'portada';
+                    const isFinal = block.type === 'final' || (currentScene?.type === 'final' && index === currentScene.textBlocks.length - 1);
                     const hasText = !!(block.text && block.text.trim().length > 0);
                     const attachedTexts = blockAppendedMap[block.id] || [];
 
@@ -1595,7 +1632,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                             </div>
                           )}
 
-                          {hasText && renderTextWithTags(block.text, block.isGameOver)}
+                          {hasText && renderTextWithTags(block.text, block.isGameOver, isFinal)}
                         </div>
 
                         {/* Appended Story Paragraphs attached to THIS block */}

@@ -153,7 +153,7 @@ export interface DialogueBlock {
 
 export interface SceneTextBlock {
   id: string;
-  type?: 'portada' | 'introduccion' | 'normal';
+  type?: 'portada' | 'introduccion' | 'normal' | 'final';
   text: string; // Narrative text content
   imageUrl?: string; // URL or Base64 data URL
   imageFileData?: string; // Uploaded Base64 file data
@@ -166,7 +166,7 @@ export interface SceneTextBlock {
   dialogue?: DialogueBlock; // Dialogue attached to this paragraph
 }
 
-export type SceneType = 'portada' | 'introduccion' | 'normal' | 'qte';
+export type SceneType = 'portada' | 'introduccion' | 'normal' | 'qte' | 'final';
 
 export interface QTEStep {
   id: string;
@@ -228,6 +228,9 @@ export interface GameProject {
   allowDownload?: boolean; // Whether users other than author/admin can download story
   genreTags?: string[]; // Genre tags chosen by author/admin
   
+  gameCompleteTitle?: string; // Custom title for end message banner (e.g., "¡FIN DE LA AVENTURA!")
+  gameCompleteSubtitle?: string; // Custom subtitle for end message banner (e.g., "Has completado felizmente la historia.")
+
   defaultResponses: Record<VerbType, string>;
   globalFlags: Record<string, boolean>; // Initial default flags
   inventoryItems: InventoryItem[];

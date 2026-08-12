@@ -104,7 +104,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
   // New scene form
   const [newSceneName, setNewSceneName] = useState('');
-  const [newSceneType, setNewSceneType] = useState<'normal' | 'portada' | 'introduccion' | 'qte'>('normal');
+  const [newSceneType, setNewSceneType] = useState<'normal' | 'portada' | 'introduccion' | 'qte' | 'final'>('normal');
   
   // Selection keyword helper
   const [selectedText, setSelectedText] = useState('');
@@ -187,7 +187,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   const handleCreateScene = () => {
     const timestamp = Date.now();
     const sceneId = `scene_${timestamp}`;
-    const name = newSceneName.trim() || (newSceneType === 'portada' ? 'Portada' : newSceneType === 'introduccion' ? 'Introducción' : 'Nueva Escena');
+    const name = newSceneName.trim() || (newSceneType === 'portada' ? 'Portada' : newSceneType === 'introduccion' ? 'Introducción' : newSceneType === 'final' ? 'Final Feliz' : 'Nueva Escena');
 
     let defaultText = 'Escribe aquí la narración de tu escena.';
     let hotspots: Hotspot[] = [];
@@ -252,17 +252,20 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
           ],
         },
       ];
+    } else if (newSceneType === 'final') {
+      defaultText = `¡FIN DE LA AVENTURA!\n\nHas alcanzado una conclusión favorable en la historia. ¡Enhorabuena por completar la aventura!`;
     }
 
     const newScene: Scene = {
       id: sceneId,
-      name: name || (newSceneType === 'qte' ? 'Escena QTE' : 'Nueva Escena'),
+      name: name || (newSceneType === 'qte' ? 'Escena QTE' : newSceneType === 'final' ? 'Párrafo Final' : 'Nueva Escena'),
       type: newSceneType,
-      description: newSceneType === 'portada' ? 'Carátula inicial' : newSceneType === 'introduccion' ? 'Prólogo narrativo' : newSceneType === 'qte' ? 'Evento de tiempo rápido' : 'Escena de aventura',
+      description: newSceneType === 'portada' ? 'Carátula inicial' : newSceneType === 'introduccion' ? 'Prólogo narrativo' : newSceneType === 'qte' ? 'Evento de tiempo rápido' : newSceneType === 'final' ? 'Final feliz de la historia' : 'Escena de aventura',
       textBlocks: [
         {
           id: `block_${timestamp}`,
           text: defaultText,
+          type: newSceneType === 'final' ? 'final' : undefined,
           coverMode: newSceneType === 'portada' ? 'with_text' : undefined,
         },
       ],
@@ -373,7 +376,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     }));
   };
 
-  const handleUpdateBlockType = (blockId: string, type: 'portada' | 'introduccion' | 'normal') => {
+  const handleUpdateBlockType = (blockId: string, type: 'portada' | 'introduccion' | 'normal' | 'final') => {
     updateProject((prev) => ({
       ...prev,
       scenes: prev.scenes.map((s) => {
@@ -712,7 +715,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               >
                 {project.scenes.map((s, idx) => (
                   <option key={s.id} value={s.id} className="bg-slate-900 text-white">
-                    {idx + 1}. {s.name} ({s.type === 'portada' ? 'Portada' : s.type === 'introduccion' ? 'Intro' : s.type === 'qte' ? 'QTE' : 'Normal'})
+                    {idx + 1}. {s.name} ({s.type === 'portada' ? 'Portada' : s.type === 'introduccion' ? 'Intro' : s.type === 'qte' ? 'QTE' : s.type === 'final' ? 'Final' : 'Normal'})
                   </option>
                 ))}
               </select>
@@ -804,6 +807,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               <option value="portada">Escena de Portada</option>
               <option value="introduccion">Escena de Introducción</option>
               <option value="qte">Escena Especial: Quick Time Event (QTE)</option>
+              <option value="final">Escena de Final (Conclusión)</option>
             </select>
 
             <button
@@ -847,6 +851,11 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       {scene.type === 'introduccion' && (
                         <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 font-mono font-bold px-1 py-0.2 rounded">
                           INTRO
+                        </span>
+                      )}
+                      {scene.type === 'final' && (
+                        <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold px-1 py-0.2 rounded">
+                          FINAL
                         </span>
                       )}
                       {isQTE && (
@@ -1162,6 +1171,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 <option value="portada">Escena de Portada (Carátula)</option>
                 <option value="introduccion">Escena de Introducción (Prólogo)</option>
                 <option value="qte">Escena Especial: Quick Time Event (QTE)</option>
+                <option value="final">Escena de Final (Conclusión)</option>
               </select>
             </div>
 
@@ -1627,6 +1637,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         <option value="portada">🖼️ Portada</option>
                         <option value="introduccion">📖 Introducción</option>
                         <option value="normal">📝 Normal</option>
+                        <option value="final">Final (Fin de historia)</option>
                       </select>
 
                       {/* Cover Mode Options for Portada */}
@@ -1660,6 +1671,11 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       {block.isGameOver && (
                         <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-bold flex items-center gap-1">
                           💀 Fin de Partida
+                        </span>
+                      )}
+                      {block.type === 'final' && (
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-2 py-0.5 rounded font-bold flex items-center gap-1 shadow-sm">
+                          Párrafo Final
                         </span>
                       )}
                       {visibleFlagsList.length > 0 && (
