@@ -210,42 +210,41 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
 
   return (
     <div className={`min-h-[calc(100vh-60px)] py-8 px-4 sm:px-6 transition-colors duration-200 ${
-      isClean ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0a0a0d] text-slate-100'
+      isClean ? 'bg-[#F4EFE3] text-[#2A2118]' : 'bg-[#1F1913] text-[#F4EFE3]'
     }`}>
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Header Profile Hero Card */}
-        <div className={`rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border ${
+        <div className={`rounded-3xl p-6 sm:p-8 shadow-sm relative overflow-hidden border ${
           isClean
-            ? 'bg-gradient-to-r from-amber-500/10 via-white to-slate-50 border-slate-200 text-slate-900'
-            : 'bg-gradient-to-r from-slate-900 via-[#12131a] to-slate-900 border-white/10 text-slate-100'
+            ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]'
+            : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3]'
         }`}>
-          <div className="absolute -top-12 -right-12 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             
             {/* Left: User Avatar & Information */}
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-bold text-2xl sm:text-3xl shadow-lg shrink-0 border-2 border-amber-400/40">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#A4332A] flex items-center justify-center text-white font-serif font-bold text-2xl sm:text-3xl shadow-sm shrink-0 border-2 border-[#8B2A22]">
                 {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'L'}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className={`text-xl sm:text-2xl font-black ${isClean ? 'text-slate-900' : 'text-white'}`}>
+                  <h1 className={`text-xl sm:text-2xl font-serif font-bold ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
                     {currentUser.displayName || 'Usuario Lector'}
                   </h1>
                   <span
-                    className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                    className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border font-sans ${
                       currentUser.role === 'admin'
-                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        ? 'bg-[#A4332A]/10 text-[#A4332A] border-[#A4332A]/30'
+                        : 'bg-[#E5DCB8]/60 text-[#2A2118] border-[#E5DCB8]'
                     }`}
                   >
                     {currentUser.role === 'admin' ? '🛡️ Administrador' : '✍️ Autor / Lector'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 font-mono">{currentUser.email}</p>
-                <p className="text-[11px] text-slate-500 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-slate-600" />
+                <p className={`text-xs font-mono ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>{currentUser.email}</p>
+                <p className={`text-[11px] flex items-center gap-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                  <Clock className="w-3 h-3 text-[#C9A24B]" />
                   <span>Miembro desde: {new Date(currentUser.createdAt).toLocaleDateString('es-ES')}</span>
                 </p>
               </div>
@@ -255,9 +254,13 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
             <div className="flex items-center gap-3 shrink-0 flex-wrap">
               <button
                 onClick={handleSignOut}
-                className="px-4 py-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-white/20 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                className={`px-4 py-2 border text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                  isClean
+                    ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                    : 'bg-[#1F1913] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+                }`}
               >
-                <LogOut className="w-4 h-4 text-rose-400" />
+                <LogOut className="w-4 h-4 text-[#A4332A]" />
                 <span>Cerrar Sesión</span>
               </button>
             </div>
@@ -265,19 +268,21 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
         </div>
 
         {errorMsg && (
-          <div className="bg-rose-950/40 border border-rose-500/40 text-rose-300 p-4 rounded-2xl text-xs flex items-center gap-2.5">
+          <div className="bg-[#A4332A]/10 border border-[#A4332A]/30 text-[#A4332A] dark:text-rose-300 p-4 rounded-2xl text-xs flex items-center gap-2.5">
             <AlertTriangle className="w-5 h-5 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {/* Section 1: Editar Nombre / Nick */}
-        <div className="bg-slate-900/90 border border-white/10 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center gap-2.5 border-b border-white/10 pb-3">
-            <User className="w-5 h-5 text-amber-400" />
+        <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+        }`}>
+          <div className={`flex items-center gap-2.5 border-b pb-3 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
+            <User className="w-5 h-5 text-[#A4332A]" />
             <div>
-              <h2 className="font-bold text-white text-base">Nick de Usuario y Nombre Público</h2>
-              <p className="text-[11px] text-slate-400">
+              <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Nick de Usuario y Nombre Público</h2>
+              <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                 Este es el nombre o alias que se mostrará por defecto al crear o firmar tus historias interactivas.
               </p>
             </div>
@@ -285,14 +290,14 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
 
           <form onSubmit={handleSaveDisplayName} className="space-y-3 max-w-xl">
             {nameSuccessMessage && (
-              <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-400" />
+              <div className="bg-[#3B6D11]/20 border border-[#3B6D11]/40 text-[#3B6D11] dark:text-emerald-300 px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2">
+                <Check className="w-4 h-4 text-[#3B6D11]" />
                 <span>{nameSuccessMessage}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className={`block text-xs font-semibold mb-1.5 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
                 Editar Nombre de Usuario / Nick
               </label>
               <div className="flex items-center gap-3">
@@ -301,12 +306,16 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
                   value={displayNameInput}
                   onChange={(e) => setDisplayNameInput(e.target.value)}
                   placeholder="Ej: Laura Martínez"
-                  className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-amber-500 outline-none"
+                  className={`flex-1 border rounded-xl px-4 py-2.5 text-sm outline-none transition-colors ${
+                    isClean
+                      ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                      : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-[#C9A24B]'
+                  }`}
                 />
                 <button
                   type="submit"
                   disabled={isSavingName || !displayNameInput.trim()}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-md shrink-0 flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm shrink-0 flex items-center gap-1.5"
                 >
                   {isSavingName ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -321,22 +330,24 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
         </div>
 
         {/* Section 1.5: Selector de Rol y Permisos de Cuenta */}
-        <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+        <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+        }`}>
+          <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
             <div className="flex items-center gap-2.5">
-              <Shield className="w-5 h-5 text-amber-400" />
+              <Shield className="w-5 h-5 text-[#C9A24B]" />
               <div>
-                <h2 className="font-bold text-white text-base">Tipo de Perfil de Usuario y Permisos</h2>
-                <p className="text-[11px] text-slate-400">
+                <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Tipo de Perfil de Usuario y Permisos</h2>
+                <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                   Selecciona tu rol para alternar entre el modo Autor / Lector y el modo Administrador de la plataforma.
                 </p>
               </div>
             </div>
             <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border font-sans ${
                 currentUser.role === 'admin'
-                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                  : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                  ? 'bg-[#A4332A]/10 text-[#A4332A] border-[#A4332A]/30'
+                  : 'bg-[#E5DCB8]/60 text-[#2A2118] border-[#E5DCB8]'
               }`}
             >
               Rol Actual: {currentUser.role === 'admin' ? '🛡️ Administrador' : '✍️ Autor / Lector'}
@@ -348,22 +359,22 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
             <div
               className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
                 currentUser.role === 'author'
-                  ? 'bg-sky-950/40 border-sky-500/60 ring-1 ring-sky-500/40'
-                  : 'bg-slate-950/60 border-white/5 opacity-80 hover:opacity-100'
+                  ? isClean ? 'bg-[#F4EFE3] border-[#A4332A]' : 'bg-[#1F1913] border-[#C9A24B]'
+                  : isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
               }`}
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sky-300 text-sm flex items-center gap-1.5">
-                    <User className="w-4 h-4" /> Perfil Autor / Lector
+                  <h3 className={`font-bold text-sm flex items-center gap-1.5 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    <User className="w-4 h-4 text-[#A4332A]" /> Perfil Autor / Lector
                   </h3>
                   {currentUser.role === 'author' && (
-                    <span className="text-[10px] bg-sky-500/20 text-sky-300 font-bold px-2 py-0.5 rounded-full border border-sky-500/40">
+                    <span className="text-[10px] bg-[#3B6D11] text-white font-bold px-2 py-0.5 rounded">
                       Activo
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                   Ideal para jugar aventuras narrativas, crear tus propias historias en el editor, guardarlas en la nube y solicitar su publicación en el catálogo.
                 </p>
               </div>
@@ -372,7 +383,11 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
                 <button
                   onClick={() => handleToggleRole('author')}
                   disabled={isChangingRole}
-                  className="w-full py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition-colors shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                  className={`w-full py-2 border rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                    isClean
+                      ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                      : 'bg-[#2C241C] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+                  }`}
                 >
                   {isChangingRole && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>Cambiar a Rol Autor / Lector</span>
@@ -384,23 +399,23 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
             <div
               className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
                 currentUser.role === 'admin'
-                  ? 'bg-rose-950/40 border-rose-500/60 ring-1 ring-rose-500/40'
-                  : 'bg-slate-950/60 border-white/5 opacity-80 hover:opacity-100'
+                  ? isClean ? 'bg-[#F4EFE3] border-[#A4332A]' : 'bg-[#1F1913] border-[#C9A24B]'
+                  : isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
               }`}
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-rose-300 text-sm flex items-center gap-1.5">
-                    <Shield className="w-4 h-4" /> Perfil Administrador
+                  <h3 className={`font-bold text-sm flex items-center gap-1.5 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    <Shield className="w-4 h-4 text-[#A4332A]" /> Perfil Administrador
                   </h3>
                   {currentUser.role === 'admin' && (
-                    <span className="text-[10px] bg-rose-500/20 text-rose-300 font-bold px-2 py-0.5 rounded-full border border-rose-500/40">
+                    <span className="text-[10px] bg-[#A4332A] text-white font-bold px-2 py-0.5 rounded">
                       Activo
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Acceso completo al panel de moderación <strong>"Admin"</strong> en el menú superior para auditar, revisar, publicar o rechazar relatos enviados por la comunidad.
+                <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                  Acceso completo al panel de moderación en el menú superior para auditar, revisar, publicar o rechazar relatos enviados por la comunidad.
                 </p>
               </div>
 
@@ -408,7 +423,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
                 <button
                   onClick={() => handleToggleRole('admin')}
                   disabled={isChangingRole}
-                  className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition-colors shadow flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   {isChangingRole && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>Cambiar a Rol Administrador</span>
@@ -419,20 +434,22 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
         </div>
 
         {/* Section 2: Historial de Publicaciones */}
-        <div className="bg-slate-900/90 border border-white/10 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+        <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+        }`}>
+          <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
             <div className="flex items-center gap-2.5">
-              <BookOpen className="w-5 h-5 text-amber-400" />
+              <BookOpen className="w-5 h-5 text-[#A4332A]" />
               <div>
-                <h2 className="font-bold text-white text-base">Historial de Publicaciones (Mis Obras)</h2>
-                <p className="text-[11px] text-slate-400">
+                <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Historial de Publicaciones (Mis Obras)</h2>
+                <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                   Todas las historias interactivas de texto creadas, editadas o subidas a la nube con tu cuenta.
                 </p>
               </div>
             </div>
             <button
               onClick={() => setCurrentView('workspace')}
-              className="px-3 py-1.5 bg-sky-950/80 border border-sky-500/30 hover:border-sky-500 text-sky-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all"
+              className="px-3 py-1.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Abrir Gestor de Proyectos</span>
@@ -445,17 +462,19 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
               <p className="text-xs">Cargando tus historias creadas...</p>
             </div>
           ) : userProjects.length === 0 ? (
-            <div className="bg-slate-950/60 border border-white/5 rounded-2xl p-8 text-center space-y-3">
-              <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
+            <div className={`border rounded-2xl p-8 text-center space-y-3 ${
+              isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+            }`}>
+              <BookOpen className="w-10 h-10 text-[#6B5C46] mx-auto" />
               <div className="space-y-1">
-                <p className="font-bold text-slate-200 text-sm">Aún no has creado ninguna historia pública</p>
-                <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                <p className={`font-serif font-bold text-sm ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Aún no has creado ninguna historia pública</p>
+                <p className={`text-xs max-w-md mx-auto leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                   Puedes comenzar creando tu propio relato interactivo en el Editor o utilizando la plantilla del tutorial.
                 </p>
               </div>
               <button
                 onClick={() => setCurrentView('workspace')}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow"
+                className="px-4 py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Crear Nuevo Relato</span>
@@ -466,20 +485,22 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
               {userProjects.map((docItem) => (
                 <div
                   key={docItem.id}
-                  className="bg-slate-950 border border-white/10 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-amber-500/40 transition-all shadow-md"
+                  className={`border rounded-2xl p-4 flex flex-col justify-between space-y-3 transition-all ${
+                    isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+                  }`}
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-bold text-white text-sm line-clamp-1">{docItem.title}</h3>
+                      <h3 className={`font-serif font-bold text-sm line-clamp-1 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>{docItem.title}</h3>
                       <span
                         className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
                           docItem.status === 'published'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            ? 'bg-[#3B6D11]/20 text-[#3B6D11] border-[#3B6D11]/40'
                             : docItem.status === 'pending_review'
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            ? 'bg-[#C9A24B]/20 text-[#8F6F20] border-[#C9A24B]/40'
                             : docItem.status === 'rejected'
-                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                            ? 'bg-[#A4332A]/20 text-[#A4332A] border-[#A4332A]/40'
+                            : 'bg-slate-200 text-slate-700 border-slate-300'
                         }`}
                       >
                         {docItem.status === 'published'
@@ -492,32 +513,36 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
                       </span>
                     </div>
 
-                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                    <p className={`text-xs line-clamp-2 leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                       {docItem.description || 'Sin descripción'}
                     </p>
 
-                    <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1">
-                      <span>Autor: <strong className="text-slate-300">{docItem.authorName}</strong></span>
+                    <div className={`text-[11px] flex items-center justify-between pt-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                      <span>Autor: <strong className={isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}>{docItem.authorName}</strong></span>
                       <span>{docItem.projectData?.scenes?.length || 0} escenas</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                  <div className={`flex items-center gap-2 pt-2 border-t ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
                     <button
                       onClick={() => {
                         if (docItem.projectData) {
                           onLoadProjectToEditor(docItem.projectData, docItem.id);
                         }
                       }}
-                      className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                      className={`flex-1 py-1.5 border rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                        isClean
+                          ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                          : 'bg-[#2C241C] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+                      }`}
                     >
-                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                      <Edit3 className="w-3.5 h-3.5 text-[#A4332A]" />
                       <span>Editar</span>
                     </button>
 
                     <button
                       onClick={() => setProjectToDelete(docItem)}
-                      className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors"
+                      className={`p-1.5 transition-colors ${isClean ? 'text-[#6B5C46] hover:text-[#A4332A]' : 'text-[#D1C7B7] hover:text-rose-400'}`}
                       title="Eliminar relato"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -530,31 +555,35 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
         </div>
 
         {/* Section 3: Historial de Lecturas */}
-        <div className="bg-slate-900/90 border border-white/10 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+        <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+        }`}>
+          <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
             <div className="flex items-center gap-2.5">
-              <FolderOpen className="w-5 h-5 text-sky-400" />
+              <FolderOpen className="w-5 h-5 text-[#C9A24B]" />
               <div>
-                <h2 className="font-bold text-white text-base">Historial de Lecturas (Partidas Guardadas)</h2>
-                <p className="text-[11px] text-slate-400">
+                <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Historial de Lecturas (Partidas Guardadas)</h2>
+                <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                   Partidas en curso y progresos de lectura guardados en tu dispositivo local.
                 </p>
               </div>
             </div>
-            <span className="text-xs text-slate-400 font-mono">
+            <span className={`text-xs font-mono ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
               {readingHistory.length} partida(s) registrada(s)
             </span>
           </div>
 
           {isLoadingHistory ? (
-            <div className="py-8 text-center text-xs text-slate-400">
+            <div className={`py-8 text-center text-xs ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
               Cargando historial de lecturas...
             </div>
           ) : readingHistory.length === 0 ? (
-            <div className="bg-slate-950/60 border border-white/5 rounded-2xl p-6 text-center text-xs text-slate-400 space-y-2">
-              <FolderOpen className="w-8 h-8 text-slate-600 mx-auto" />
-              <p>No tienes partidas guardadas en el historial de lecturas.</p>
-              <p className="text-[11px] text-slate-500">
+            <div className={`border rounded-2xl p-6 text-center text-xs space-y-2 ${
+              isClean ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#6B5C46]' : 'bg-[#1F1913] border-[#42362B] text-[#D1C7B7]'
+            }`}>
+              <FolderOpen className="w-8 h-8 text-[#6B5C46] mx-auto" />
+              <p className={`font-bold font-serif ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>No tienes partidas guardadas en el historial de lecturas.</p>
+              <p className="text-[11px]">
                 Al jugar cualquier relato y usar la opción de guardado o autoguardado, aparecerá aquí listado.
               </p>
             </div>
@@ -563,33 +592,34 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
               {readingHistory.map(({ key, slotData }) => (
                 <div
                   key={key}
-                  className="bg-slate-950 border border-white/10 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-sky-500/40 transition-all shadow-md"
+                  className={`border rounded-2xl p-4 flex flex-col justify-between space-y-3 transition-all ${
+                    isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+                  }`}
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-300 truncate">
+                      <span className={`text-xs font-serif font-bold truncate ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
                         {slotData.gameTitle || 'Historia Interactiva'}
                       </span>
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1 shrink-0 font-mono">
-                        <Clock className="w-3 h-3 text-slate-500" />
+                      <span className={`text-[10px] flex items-center gap-1 shrink-0 font-mono ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                        <Clock className="w-3 h-3 text-[#C9A24B]" />
                         {slotData.timestamp}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-slate-200">
-                      <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span className="truncate">Escena: {slotData.currentSceneName}</span>
+                    <div className={`flex items-center gap-1.5 text-xs ${isClean ? 'text-[#2A2118]' : 'text-[#D1C7B7]'}`}>
+                      <MapPin className="w-3.5 h-3.5 text-[#C9A24B] shrink-0" />
+                      <span className="truncate font-serif">Escena: {slotData.currentSceneName}</span>
                     </div>
 
-                    <p className="text-[11px] text-slate-400">
+                    <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                       Objetos en inventario: {slotData.inventoryItemIds?.length || 0}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                  <div className={`flex items-center gap-2 pt-2 border-t ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
                     <button
                       onClick={() => {
-                        // Dummy project shell with ID to trigger loading in play view
                         const dummyProj: GameProject = {
                           id: slotData.gameId,
                           title: slotData.gameTitle,
@@ -613,15 +643,15 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
                         };
                         onLoadGameStateToPlay(dummyProj, slotData);
                       }}
-                      className="flex-1 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      className="flex-1 py-1.5 bg-[#3B6D11] hover:bg-[#2F570E] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm"
                     >
-                      <Play className="w-3.5 h-3.5 fill-slate-950" />
+                      <Play className="w-3.5 h-3.5 fill-white" />
                       <span>Reanudar Partida</span>
                     </button>
 
                     <button
                       onClick={() => handleDeleteSaveSlot(key)}
-                      className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors"
+                      className={`p-1.5 transition-colors ${isClean ? 'text-[#6B5C46] hover:text-[#A4332A]' : 'text-[#D1C7B7] hover:text-rose-400'}`}
                       title="Borrar registro de lectura"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -633,77 +663,58 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
           )}
         </div>
 
-        {/* Section 4: Privacidad y Normativa de la UE (RGPD) */}
-        <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-6 shadow-xl space-y-3">
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              <div>
-                <h2 className="font-bold text-white text-base">Protección de Datos y Privacidad (RGPD / UE)</h2>
-                <p className="text-[11px] text-slate-400">
-                  Garantías de privacidad en cumplimiento del Reglamento General de Protección de Datos de la Unión Europea.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onOpenPrivacyModal}
-              className="px-3.5 py-1.5 bg-emerald-950/80 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Ver Política Completa de Privacidad</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
-            <div className="bg-slate-950 p-3 rounded-xl border border-white/5 space-y-1">
-              <span className="font-bold text-emerald-300 flex items-center gap-1">
-                <span>🔒</span> Transparencia
-              </span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Tus datos solo se usan para prestar el servicio. No comercializamos ni rastreamos tu actividad con cookies publicitarias.
-              </p>
-            </div>
-            <div className="bg-slate-950 p-3 rounded-xl border border-white/5 space-y-1">
-              <span className="font-bold text-emerald-300 flex items-center gap-1">
-                <span>📥</span> Portabilidad (Art. 20)
-              </span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Puedes exportar libremente el código completo de tus historias en HTML/JSON autónomo en cualquier momento.
-              </p>
-            </div>
-            <div className="bg-slate-950 p-3 rounded-xl border border-white/5 space-y-1">
-              <span className="font-bold text-emerald-300 flex items-center gap-1">
-                <span>🗑️</span> Derecho al Olvido (Art. 17)
-              </span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Dispones del derecho a la supresión completa e inmediata de tu cuenta y todos tus datos mediante la zona peligrosa.
+        {/* Section 4: Privacidad y Normativa de la UE (RGPD) - Compact / Discreet */}
+        <div className={`border rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 ${
+          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+        }`}>
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-5 h-5 text-[#3B6D11] shrink-0" />
+            <div>
+              <h2 className={`font-serif font-bold text-sm ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Protección de Datos y Privacidad (RGPD)</h2>
+              <p className={`text-xs ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                Cumplimiento del Reglamento General de Protección de Datos de la Unión Europea (RGPD). No rastreamos tus datos personales.
               </p>
             </div>
           </div>
+          <button
+            onClick={onOpenPrivacyModal}
+            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+              isClean
+                ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                : 'bg-[#1F1913] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 text-[#A4332A]" />
+            <span>Ver Política de Privacidad</span>
+          </button>
         </div>
 
         {/* Section 5: Zona Peligrosa - Eliminar Cuenta */}
-        <div className="bg-gradient-to-r from-rose-950/30 via-slate-900 to-rose-950/30 border border-rose-500/40 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center gap-2.5 border-b border-rose-500/30 pb-3">
-            <AlertTriangle className="w-5 h-5 text-rose-400" />
+        <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+          isClean ? 'bg-[#FFFDF6] border-[#A4332A]/30' : 'bg-[#2C241C] border-[#A4332A]/40'
+        }`}>
+          <div className="flex items-center gap-2.5 border-b border-[#A4332A]/20 pb-3">
+            <AlertTriangle className="w-5 h-5 text-[#A4332A]" />
             <div>
-              <h2 className="font-bold text-rose-200 text-base">Zona de Gestión de Cuenta y Supresión</h2>
-              <p className="text-[11px] text-slate-400">
-                Opciones irreversibles para eliminar tu presencia y todos los datos en la plataforma.
+              <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Gestión y Supresión de Cuenta</h2>
+              <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                Opciones irreversibles para borrar tu presencia y datos en la plataforma.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-950/80 p-4 rounded-xl border border-rose-500/20">
+          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border ${
+            isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+          }`}>
             <div className="space-y-0.5">
-              <p className="font-bold text-xs text-rose-300">Eliminar cuenta y suprimir todos mis datos personales</p>
-              <p className="text-[11px] text-slate-400 leading-relaxed max-w-xl">
+              <p className="font-bold text-xs text-[#A4332A]">Eliminar cuenta y suprimir todos mis datos personales</p>
+              <p className={`text-[11px] leading-relaxed max-w-xl ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
                 Esta acción borrará de manera permanente tu perfil en Firestore, todas las historias de tu autoría alojadas en la nube y tus partidas locales.
               </p>
             </div>
             <button
               onClick={() => setShowDeleteAccountModal(true)}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
+              className="px-4 py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs shadow-sm transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
             >
               <Trash2 className="w-4 h-4" />
               <span>Eliminar Cuenta</span>
@@ -715,30 +726,34 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
       {/* Modal: Confirm Project Deletion */}
       {projectToDelete && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
           onClick={() => setProjectToDelete(null)}
         >
           <div
-            className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl cursor-default text-slate-100"
+            className={`border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl cursor-default ${
+              isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3]'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 text-rose-400 border-b border-white/10 pb-3">
+            <div className="flex items-center gap-3 text-[#A4332A] border-b border-[#A4332A]/20 pb-3">
               <AlertTriangle className="w-6 h-6 shrink-0" />
-              <h3 className="font-bold text-base text-white">¿Eliminar relato de la nube?</h3>
+              <h3 className="font-serif font-bold text-base">¿Eliminar relato de la nube?</h3>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Estás a punto de borrar definitivamente la historia <strong className="text-white">&quot;{projectToDelete.title}&quot;</strong>. Esta acción no se puede deshacer.
+            <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+              Estás a punto de borrar definitivamente la historia <strong className={isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}>&quot;{projectToDelete.title}&quot;</strong>. Esta acción no se puede deshacer.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 onClick={() => setProjectToDelete(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl"
+                className={`px-4 py-2 border text-xs font-semibold rounded-xl cursor-pointer ${
+                  isClean ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]' : 'bg-[#1F1913] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+                }`}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleDeleteProject}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow"
+                className="px-4 py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer"
               >
                 Sí, Eliminar Historia
               </button>
@@ -750,60 +765,68 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
       {/* Modal: Account Deletion (RGPD Derecha al olvido) */}
       {showDeleteAccountModal && (
         <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
           onClick={() => setShowDeleteAccountModal(false)}
         >
           <div
-            className="bg-[#0f0b10] border border-rose-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl cursor-default text-slate-100"
+            className={`border rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl cursor-default ${
+              isClean ? 'bg-[#FFFDF6] border-[#A4332A]/40 text-[#2A2118]' : 'bg-[#2C241C] border-[#A4332A]/40 text-[#F4EFE3]'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 text-rose-400 border-b border-rose-500/30 pb-3">
-              <AlertTriangle className="w-7 h-7 text-rose-500 shrink-0" />
+            <div className="flex items-center gap-3 text-[#A4332A] border-b border-[#A4332A]/20 pb-3">
+              <AlertTriangle className="w-7 h-7 text-[#A4332A] shrink-0" />
               <div>
-                <h3 className="font-bold text-lg text-rose-200">Supresión Irreversible de Cuenta (RGPD)</h3>
-                <p className="text-[11px] text-rose-300/80">Derecho al Olvido (Reglamento UE 2016/679)</p>
+                <h3 className="font-serif font-bold text-lg text-[#A4332A]">Supresión Irreversible de Cuenta (RGPD)</h3>
+                <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>Derecho al Olvido (Reglamento UE 2016/679)</p>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+            <div className={`space-y-3 text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
               <p>
                 Al confirmar esta acción, procederemos inmediatamente a:
               </p>
-              <ul className="list-disc list-inside space-y-1 text-slate-400 pl-2">
+              <ul className="list-disc list-inside space-y-1 pl-2">
                 <li>Eliminar tu cuenta de usuario y credenciales de acceso.</li>
                 <li>Eliminar tu perfil y registro en la base de datos Firestore.</li>
                 <li>Borrar todas las historias y relatos de tu autoría alojados en el servidor.</li>
                 <li>Limpiar tus partidas guardadas locales en el navegador.</li>
               </ul>
-              <div className="bg-rose-950/60 border border-rose-500/30 rounded-xl p-3 text-[11px] text-rose-200 font-semibold">
+              <div className="bg-[#A4332A]/10 border border-[#A4332A]/30 rounded-xl p-3 text-[11px] text-[#A4332A] font-semibold">
                 ⚠️ ATENCIÓN: Esta operación es permanente e irrevocable. No se podrán recuperar las historias borradas.
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-300">
-                Escribe <span className="text-rose-400 font-mono font-black">ELIMINAR</span> para confirmar:
+              <label className={`block text-xs font-bold ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                Escribe <span className="text-[#A4332A] font-mono font-black">ELIMINAR</span> para confirmar:
               </label>
               <input
                 type="text"
                 value={deleteConfirmationText}
                 onChange={(e) => setDeleteConfirmationText(e.target.value)}
                 placeholder="Escribe ELIMINAR"
-                className="w-full bg-slate-950 border border-rose-500/40 rounded-xl px-3.5 py-2 text-sm text-rose-200 focus:border-rose-400 outline-none font-mono tracking-wider"
+                className={`w-full border rounded-xl px-3.5 py-2 text-sm focus:border-[#A4332A] outline-none font-mono tracking-wider ${
+                  isClean
+                    ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#A4332A]'
+                    : 'bg-[#1F1913] border-[#42362B] text-rose-300'
+                }`}
               />
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 onClick={() => setShowDeleteAccountModal(false)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl"
+                className={`px-4 py-2 border text-xs font-semibold rounded-xl cursor-pointer ${
+                  isClean ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]' : 'bg-[#1F1913] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+                }`}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleConfirmAccountDeletion}
                 disabled={deleteConfirmationText.trim().toUpperCase() !== 'ELIMINAR' || isDeletingAccount}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-lg disabled:opacity-40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white text-xs font-bold rounded-xl shadow-md disabled:opacity-40 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 {isDeletingAccount && <RefreshCw className="w-4 h-4 animate-spin" />}
                 <span>Confirmar y Eliminar Todo</span>

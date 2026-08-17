@@ -66,24 +66,24 @@ export const Navbar: React.FC<NavbarProps> = ({
   // Render ultra-compact top bar when collapsed
   if (isHeaderCollapsed) {
     return (
-      <header className={`border-b px-3 sm:px-6 py-1 sticky top-0 z-30 shadow-lg backdrop-blur-md flex items-center justify-between gap-2 min-h-[42px] transition-colors duration-300 ${
-        isClean ? 'bg-white/95 border-slate-200 text-slate-800' : 'bg-slate-950/95 border-white/10 text-white'
+      <header className={`border-b px-3 sm:px-6 py-1.5 sticky top-0 z-30 shadow-sm flex items-center justify-between gap-2 min-h-[42px] transition-colors duration-300 ${
+        isClean ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3]'
       }`}>
         {/* Left: Save Game Button (when playing) or Current Title */}
         <div className="flex items-center gap-2">
           {currentView === 'play' ? (
             <button
               onClick={onOpenSaveLoad}
-              className="flex items-center gap-1.5 px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all shadow-md cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
               title="Guardar o cargar tu partida en progreso"
             >
-              <Bookmark className="w-3.5 h-3.5 text-emerald-200" />
+              <Bookmark className="w-3.5 h-3.5 text-amber-200" />
               <span>Guardar Partida</span>
             </button>
           ) : (
-            <div className={`flex items-center gap-2 text-xs font-semibold ${isClean ? 'text-slate-700' : 'text-slate-300'}`}>
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              <span className="truncate max-w-[180px] sm:max-w-xs">{gameTitle || 'Textoaventura'}</span>
+            <div className={`flex items-center gap-2 text-xs font-semibold ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+              <span className="w-2 h-2 rounded-full bg-[#C9A24B]"></span>
+              <span className="truncate max-w-[180px] sm:max-w-xs font-serif">{gameTitle || 'Urdimbre'}</span>
             </div>
           )}
         </div>
@@ -92,22 +92,22 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={toggleSound}
-            className={`p-1 rounded-lg transition-colors cursor-pointer ${
-              isClean ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-white/5 hover:bg-white/10 text-white/70'
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isClean ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#2A2118] border border-[#E5DCB8]' : 'bg-[#382E25] hover:bg-[#45392E] text-[#F4EFE3] border border-[#42362B]'
             }`}
             title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
           >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-amber-500" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-[#C9A24B]" /> : <VolumeX className="w-3.5 h-3.5 text-[#6B5C46]" />}
           </button>
 
           {setIsHeaderCollapsed && (
             <button
               onClick={() => setIsHeaderCollapsed(false)}
-              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm"
-              title="Desplegar encabezados y menú principal de la web"
+              className="flex items-center gap-1.5 px-3 py-1 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 text-[#A4332A] dark:text-[#C9A24B] border border-[#A4332A]/30 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm"
+              title="Mostrar menú de navegación"
             >
-              <ChevronDown className="w-4 h-4 text-amber-500 animate-bounce" />
-              <span className="hidden sm:inline">Desplegar Encabezados</span>
+              <ChevronDown className="w-4 h-4 text-[#A4332A] animate-pulse" />
+              <span className="hidden sm:inline">Mostrar Menú</span>
             </button>
           )}
         </div>
@@ -116,43 +116,43 @@ export const Navbar: React.FC<NavbarProps> = ({
   }
 
   return (
-    <header className={`border-b px-4 sm:px-6 py-2.5 sticky top-0 z-30 shadow-md transition-colors duration-300 ${
+    <header className={`border-b px-4 sm:px-6 py-2.5 sticky top-0 z-30 shadow-sm transition-colors duration-300 ${
       isClean
-        ? 'bg-white/95 border-slate-200 text-slate-900 backdrop-blur-md'
-        : 'bg-[#0f0f12] border-white/10 text-white'
+        ? 'bg-[#F4EFE3]/95 border-[#E5DCB8] text-[#2A2118] backdrop-blur-md'
+        : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3]'
     }`}>
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         {/* Brand & App Title */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setCurrentView('catalog')}
-            className="w-8 h-8 bg-amber-500 hover:bg-amber-400 rounded-lg flex items-center justify-center text-slate-950 font-extrabold shadow-md transition-all shrink-0 cursor-pointer"
+            className="w-8 h-8 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-lg flex items-center justify-center font-serif font-black shadow-sm transition-all shrink-0 cursor-pointer"
             title="Ir a la Biblioteca Principal"
           >
-            N
+            U
           </button>
           <div>
-            <h1 className="text-sm sm:text-base font-bold tracking-tight flex items-center gap-2">
-              <span className={`cursor-pointer transition-colors ${isClean ? 'text-slate-900 hover:text-amber-600' : 'text-white hover:text-amber-400'}`} onClick={() => setCurrentView('catalog')}>
+            <h1 className="text-sm sm:text-base font-serif font-bold tracking-tight flex items-center gap-2">
+              <span className={`cursor-pointer transition-colors ${isClean ? 'text-[#2A2118] hover:text-[#A4332A]' : 'text-[#F4EFE3] hover:text-[#C9A24B]'}`} onClick={() => setCurrentView('catalog')}>
                 Urdimbre: Aventuras textuales.
               </span>
             </h1>
-            <p className={`text-[11px] truncate max-w-[160px] sm:max-w-xs ${isClean ? 'text-slate-500' : 'text-white/50'}`} title={gameTitle}>
-              {currentView === 'play' || currentView === 'edit' ? gameTitle : 'Biblioteca de historias para jugar.'}
+            <p className={`text-[11px] truncate max-w-[160px] sm:max-w-xs ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`} title={gameTitle}>
+              {currentView === 'play' || currentView === 'edit' ? gameTitle : 'Biblioteca de historias para jugar'}
             </p>
           </div>
         </div>
 
         {/* Platform Navigation Tabs */}
         <div className={`flex items-center rounded-xl p-1 border flex-wrap ${
-          isClean ? 'bg-slate-100 border-slate-200' : 'bg-black/60 border-white/10'
+          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
         }`}>
           <button
             onClick={() => setCurrentView('catalog')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               currentView === 'catalog'
-                ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
-                : isClean ? 'text-slate-600 hover:text-slate-900' : 'text-white/60 hover:text-white'
+                ? 'bg-[#A4332A] text-white shadow-sm font-bold'
+                : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
@@ -164,8 +164,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setCurrentView('edit')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 currentView === 'edit'
-                  ? isClean ? 'bg-slate-200 text-slate-900 font-bold shadow-sm' : 'bg-white/15 text-white font-bold shadow-inner'
-                  : isClean ? 'text-slate-600 hover:text-slate-900' : 'text-white/60 hover:text-white'
+                  ? 'bg-[#A4332A] text-white shadow-sm font-bold'
+                  : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
               }`}
               title={
                 isTutorial
@@ -182,8 +182,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setCurrentView('workspace')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               currentView === 'workspace'
-                ? 'bg-sky-500 text-slate-950 font-bold shadow-md'
-                : isClean ? 'text-slate-600 hover:text-slate-900' : 'text-white/60 hover:text-white'
+                ? 'bg-[#A4332A] text-white shadow-sm font-bold'
+                : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -205,16 +205,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
               currentUser
                 ? currentView === 'profile'
-                  ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-md font-bold'
-                  : currentUser.role === 'admin'
-                  ? 'bg-rose-100 border-rose-300 text-rose-900 hover:bg-rose-200'
-                  : 'bg-sky-100 border-sky-300 text-sky-900 hover:bg-sky-200'
-                : 'bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30'
+                  ? 'bg-[#A4332A] border-[#8B2A22] text-white shadow-sm font-bold'
+                  : 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:border-[#A4332A]'
+                : 'bg-[#A4332A]/10 border-[#A4332A]/30 text-[#A4332A] hover:bg-[#A4332A]/20'
             }`}
           >
             {currentUser ? (
               <>
-                {currentUser.role === 'admin' ? <Shield className="w-3.5 h-3.5 text-rose-600" /> : <User className="w-3.5 h-3.5 text-sky-600" />}
+                {currentUser.role === 'admin' ? <Shield className="w-3.5 h-3.5 text-[#A4332A]" /> : <User className="w-3.5 h-3.5 text-[#C9A24B]" />}
                 <span className="truncate max-w-[100px]">{currentUser.displayName}</span>
               </>
             ) : (
@@ -237,10 +235,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm ${
                 currentView === 'admin'
-                  ? 'bg-rose-600 border-rose-500 text-white shadow-md'
-                  : isClean
-                  ? 'bg-sky-100 border-sky-300 text-sky-900 hover:bg-sky-200'
-                  : 'bg-sky-950/50 border-sky-700/60 text-sky-300 hover:bg-sky-900/60'
+                  ? 'bg-[#A4332A] border-[#8B2A22] text-white shadow-sm'
+                  : 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:border-[#A4332A]'
               }`}
               title={
                 currentView === 'admin'
@@ -255,7 +251,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </>
               ) : (
                 <>
-                  <User className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                  <User className="w-3.5 h-3.5 text-[#6B5C46]" />
                   <span>Lector</span>
                 </>
               )}
@@ -266,10 +262,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           {currentView === 'play' && (
             <button
               onClick={onOpenSaveLoad}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm"
               title="Guardar o cargar tu progreso en la partida actual"
             >
-              <Bookmark className="w-3.5 h-3.5 text-emerald-200" />
+              <Bookmark className="w-3.5 h-3.5 text-amber-200" />
               <span>Guardar/Cargar Partida</span>
             </button>
           )}
@@ -278,22 +274,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={onOpenHelp}
             className={`p-2 rounded-xl border transition-colors cursor-pointer ${
-              isClean ? 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900' : 'bg-black/40 border-white/10 text-white/40 hover:text-white'
+              isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#6B5C46] hover:text-[#2A2118]' : 'bg-[#1F1913] border-[#42362B] text-[#D1C7B7] hover:text-white'
             }`}
             title="Guía y Ayuda"
           >
             <HelpCircle className="w-4 h-4" />
           </button>
 
-          {/* Recoger Encabezados */}
+          {/* Ocultar Menú */}
           {setIsHeaderCollapsed && (
             <button
               onClick={() => setIsHeaderCollapsed(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm ml-1"
-              title="Recoger encabezados de la web y de la lectura para pantalla completa de texto y botones"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 border border-[#A4332A]/30 text-[#A4332A] rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm ml-1"
+              title="Ocultar menú para lectura inmersiva a pantalla completa"
             >
-              <ChevronUp className="w-4 h-4 text-amber-500" />
-              <span className="hidden sm:inline">Recoger Encabezados</span>
+              <ChevronUp className="w-4 h-4 text-[#A4332A]" />
+              <span className="hidden sm:inline">Ocultar Menú</span>
             </button>
           )}
         </div>

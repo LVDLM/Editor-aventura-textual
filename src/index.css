@@ -1,1 +1,58 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-paper: #F4EFE3;
+    --color-surface: #FFFDF6;
+    --color-darkwood: #2C241C;
+    --color-darkwood-card: #382E25;
+    --color-text-main: #2A2118;
+    --color-text-sub: #6B5C46;
+    --color-accent-primary: #A4332A;
+    --color-accent-secondary: #C9A24B;
+    --color-success: #3B6D11;
+    --color-border-light: #E5DCB8;
+    --color-border-dark: #42362B;
+
+    --font-serif: 'Lora', Georgia, serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-text-main);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .font-serif {
+    font-family: var(--font-serif);
+  }
+}
+
+.font-serif {
+  font-family: 'Lora', Georgia, serif;
+}
+
+.font-sans {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Custom Scrollbar for Vintage aesthetic */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(44, 36, 28, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C9A24B;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #A4332A;
+}

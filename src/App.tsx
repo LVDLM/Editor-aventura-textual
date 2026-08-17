@@ -501,6 +501,7 @@ export default function App() {
           currentGameState={gameState}
           onLoadGameState={(loadedState) => setGameState(loadedState)}
           onClose={() => setShowSaveLoad(false)}
+          webAspect={webAspect}
         />
       )}
 
@@ -511,6 +512,7 @@ export default function App() {
           onClose={() => setShowExport(false)}
           currentUser={currentUser}
           onOpenAuth={() => setShowAuthModal(true)}
+          webAspect={webAspect}
         />
       )}
 
@@ -528,6 +530,7 @@ export default function App() {
           onConfirmNewProject={handleCreateNewProject}
           onOpenSaveExport={() => setShowExport(true)}
           onClose={() => setShowNewProjectModal(false)}
+          webAspect={webAspect}
         />
       )}
 

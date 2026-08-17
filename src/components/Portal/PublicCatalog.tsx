@@ -138,59 +138,57 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
   return (
     <div className={`flex-1 transition-colors duration-300 w-full min-h-full ${
-      isClean ? 'bg-[#f8fafc] text-slate-800' : 'bg-[#0a0a0c] text-slate-200'
+      isClean ? 'bg-[#F4EFE3] text-[#2A2118]' : 'bg-[#1F1913] text-[#F4EFE3]'
     }`}>
       <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-8">
         
-        {/* HERO HEADER SECTION (NO ICONS ON SPECIFIED TEXTS) */}
+        {/* HERO HEADER SECTION */}
         {isClean ? (
-          <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-10 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="bg-[#FFFDF6] border border-[#E5DCB8] rounded-3xl p-6 sm:p-10 shadow-sm relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
             <div className="space-y-3 max-w-2xl">
-              {/* NO ICON beside "Biblioteca Abierta de Textoaventuras Interactivas" */}
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 border border-amber-200 text-amber-900 text-xs font-bold">
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#E5DCB8]/50 border border-[#C9A24B]/40 text-[#2A2118] text-xs font-bold font-sans">
                 <span>Biblioteca Abierta de Textoaventuras Interactivas</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+              <h1 className="text-3xl sm:text-4xl font-serif font-bold text-[#2A2118] tracking-tight leading-tight">
                 Una aventura gráfica donde los gráficos los pone tu imaginación
               </h1>
-              <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+              <p className="text-sm sm:text-base text-[#6B5C46] leading-relaxed">
                 Disfruta de una experiencia visual única adaptable a cualquier tipo de resolución de pantalla, ya sea con una imagen pixelada o con todos los detalles. Haz clic sobre palabras clave y objetos dentro del texto para explorar cada escena, resolver acertijos y decidir el rumbo del relato.
               </p>
             </div>
 
-            {/* Creator Callout Card (NO ICONS beside "Espacio de creación" and "Crear mi Aventura Ahora") */}
-            <div className="w-full md:w-80 shrink-0 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 space-y-3 text-slate-900 shadow-sm">
-              <div className="text-amber-900 font-extrabold text-xs uppercase tracking-wider">
+            {/* Creator Callout Card */}
+            <div className="w-full md:w-80 shrink-0 bg-[#F4EFE3] border border-[#E5DCB8] rounded-2xl p-5 space-y-3 text-[#2A2118] shadow-sm">
+              <div className="text-[#A4332A] font-extrabold text-xs uppercase tracking-wider font-sans">
                 <span>Espacio de creación</span>
               </div>
-              <p className="text-xs text-slate-700 leading-relaxed font-medium">
+              <p className="text-xs text-[#6B5C46] leading-relaxed font-medium">
                 Crea tu propio texto-juego Point &amp; Click sin escribir una sola línea de código. Publica para la comunidad o exporta archivos HTML y paquetes ZIP independientes.
               </p>
               <button
                 onClick={onOpenWorkspace}
-                className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs transition-all shadow-sm hover:shadow flex items-center justify-center cursor-pointer active:scale-95"
+                className="w-full py-2.5 px-4 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-all shadow-sm hover:shadow flex items-center justify-center cursor-pointer active:scale-95 font-sans"
               >
                 <span>Crear mi Aventura Ahora</span>
               </button>
             </div>
           </div>
         ) : (
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-950/50 via-slate-900 to-slate-950 border border-amber-500/20 p-6 sm:p-10 shadow-2xl">
+          <div className="relative overflow-hidden rounded-3xl bg-[#2C241C] border border-[#42362B] p-6 sm:p-10 shadow-xl">
             <div className="relative z-10 max-w-3xl space-y-4">
-              {/* NO ICON beside "Biblioteca Abierta de Textoaventuras Interactivas" */}
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+              <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#C9A24B]/20 border border-[#C9A24B]/40 text-[#C9A24B] text-xs font-semibold font-sans">
                 <span>Biblioteca Abierta de Textoaventuras Interactivas</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              <h1 className="text-3xl sm:text-4xl font-serif font-bold text-[#F4EFE3] tracking-tight">
                 Una aventura gráfica donde los gráficos los pone tu imaginación
               </h1>
-              <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+              <p className="text-sm sm:text-base text-[#D1C7B7] leading-relaxed">
                 Disfruta de una experiencia visual única adaptable a cualquier tipo de resolución de pantalla, ya sea con una imagen pixelada o con todos los detalles. Haz clic sobre palabras clave y objetos dentro del texto para explorar cada escena, resolver acertijos y decidir el rumbo del relato.
               </p>
               <div className="pt-2 flex flex-wrap gap-3">
                 <button
                   onClick={onOpenWorkspace}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition-all shadow-lg flex items-center cursor-pointer"
+                  className="px-5 py-2.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center cursor-pointer font-sans"
                 >
                   <span>Crear mi Aventura Ahora</span>
                 </button>
@@ -199,14 +197,14 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
           </div>
         )}
 
-        {/* SEARCH BAR & GENRE TAG FILTERS (POSITIONED ABOVE THE TEXTS SECTION) */}
+        {/* SEARCH BAR & GENRE TAG FILTERS */}
         <div className={`p-5 rounded-2xl border space-y-4 shadow-sm ${
-          isClean ? 'bg-white border-slate-200' : 'bg-slate-900/80 border-white/10'
+          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
         }`}>
           {/* Search Bar Input */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="relative w-full sm:w-96">
-              <Search className={`w-4 h-4 absolute left-3.5 top-3 ${isClean ? 'text-slate-400' : 'text-slate-400'}`} />
+              <Search className={`w-4 h-4 absolute left-3.5 top-3 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`} />
               <input
                 type="text"
                 value={searchTerm}
@@ -214,20 +212,20 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 placeholder="Buscar lecturas por título, autor o sinopsis..."
                 className={`w-full rounded-xl py-2 pl-9 pr-3 text-xs outline-none transition-all ${
                   isClean
-                    ? 'bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:bg-white'
-                    : 'bg-slate-950 border border-white/10 text-white placeholder-slate-500 focus:border-amber-500'
+                    ? 'bg-[#F4EFE3] border border-[#E5DCB8] text-[#2A2118] placeholder-[#6B5C46]/60 focus:border-[#A4332A] focus:bg-[#FFFDF6]'
+                    : 'bg-[#1F1913] border border-[#42362B] text-[#F4EFE3] placeholder-[#D1C7B7]/50 focus:border-[#C9A24B]'
                 }`}
               />
             </div>
 
-            <span className={`text-xs font-semibold ${isClean ? 'text-slate-600' : 'text-slate-400'}`}>
+            <span className={`text-xs font-medium ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
               {filtered.length} {filtered.length === 1 ? 'historia disponible' : 'historias disponibles'}
             </span>
           </div>
 
           {/* Alphabetical Genre Tags Selector Chips */}
-          <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-white/5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+          <div className="space-y-1.5 pt-1 border-t border-[#E5DCB8]/60 dark:border-[#42362B]">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#A4332A] dark:text-[#C9A24B]">
               <Tag className="w-3.5 h-3.5" />
               <span>Filtrar por Género:</span>
             </div>
@@ -237,10 +235,10 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 onClick={() => setSelectedGenre('all')}
                 className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   selectedGenre === 'all'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    ? 'bg-[#A4332A] text-white shadow-sm'
                     : isClean
-                    ? 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
-                    : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-white/10'
+                    ? 'bg-[#F4EFE3] text-[#6B5C46] hover:bg-[#E5DCB8] border border-[#E5DCB8]'
+                    : 'bg-[#1F1913] text-[#D1C7B7] hover:bg-[#382E25] border border-[#42362B]'
                 }`}
               >
                 Todas
@@ -252,10 +250,10 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   onClick={() => setSelectedGenre(genre)}
                   className={`px-3 py-1 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
                     selectedGenre === genre
-                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                      ? 'bg-[#A4332A] text-white font-bold shadow-sm'
                       : isClean
-                      ? 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
-                      : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-white/10'
+                      ? 'bg-[#F4EFE3] text-[#6B5C46] hover:bg-[#E5DCB8] border border-[#E5DCB8]'
+                      : 'bg-[#1F1913] text-[#D1C7B7] hover:bg-[#382E25] border border-[#42362B]'
                   }`}
                 >
                   #{genre}
@@ -265,30 +263,29 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
           </div>
         </div>
 
-        {/* PUBLISHED STORIES SECTION (MAX 6 CARDS INITIALLY + SEE MORE OPTION) */}
+        {/* PUBLISHED STORIES SECTION */}
         {loading ? (
           <div className="text-center py-16 space-y-3">
-            <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className={`text-xs font-medium ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
+            <div className="w-8 h-8 border-2 border-[#A4332A] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className={`text-xs font-medium ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
               Cargando biblioteca de lecturas interactivas...
             </p>
           </div>
         ) : filtered.length === 0 ? (
           <div className={`rounded-3xl border p-10 text-center space-y-4 max-w-xl mx-auto shadow-sm ${
-            isClean ? 'bg-white border-slate-200' : 'bg-slate-900/40 border-white/5'
+            isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
           }`}>
-            <BookOpen className="w-12 h-12 text-slate-400 mx-auto" />
-            <h3 className={`text-lg font-bold ${isClean ? 'text-slate-900' : 'text-white'}`}>
+            <BookOpen className="w-12 h-12 text-[#6B5C46] mx-auto" />
+            <h3 className={`text-lg font-serif font-bold ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
               No hay historias publicadas en esta categoría
             </h3>
-            <p className={`text-xs leading-relaxed ${isClean ? 'text-slate-600' : 'text-slate-400'}`}>
+            <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
               Sé el primero en publicar una historia o inicializa la plataforma con la aventura de demostración oficial.
             </p>
-            {/* NO ICON beside "Publicar Aventura de Ejemplo" */}
             <button
               onClick={handleSeedDemoGame}
               disabled={seeding}
-              className="px-5 py-2.5 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs transition-all flex items-center justify-center mx-auto cursor-pointer shadow-sm hover:shadow"
+              className="px-5 py-2.5 bg-[#A4332A] text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center mx-auto cursor-pointer shadow-sm hover:shadow"
             >
               <span>{seeding ? 'Publicando demo...' : 'Publicar Aventura de Ejemplo ("El Misterio de la Habitación Oscura")'}</span>
             </button>
@@ -303,14 +300,15 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 const coverImg = getProjectCoverImage(targetData);
                 const synopsisText = targetData?.synopsis || targetData?.description || doc.description;
                 const storyTags = doc.genreTags || targetData?.genreTags || [];
+                const primaryGenre = storyTags[0] || doc.genre || 'aventura';
 
                 return (
                   <div
                     key={doc.id}
                     className={`border rounded-2xl p-6 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md group overflow-hidden ${
                       isClean
-                        ? 'bg-white border-slate-200 hover:border-amber-500/60'
-                        : 'bg-slate-900/80 hover:bg-slate-900 border-white/10 hover:border-amber-500/40'
+                        ? 'bg-[#FFFDF6] border-[#E5DCB8] hover:border-[#A4332A]/60'
+                        : 'bg-[#2C241C] hover:bg-[#382E25] border-[#42362B] hover:border-[#C9A24B]/60'
                     }`}
                   >
                     <div className="space-y-3">
@@ -321,8 +319,8 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                             e.stopPropagation();
                             setFullCoverImage({ src: coverImg, title: doc.title });
                           }}
-                          className={`w-full h-40 rounded-xl overflow-hidden border relative cursor-pointer group-hover:border-amber-500/50 transition-colors shadow-inner ${
-                            isClean ? 'border-slate-200 bg-slate-100' : 'border-white/10 bg-slate-950'
+                          className={`w-full h-40 rounded-xl overflow-hidden border relative cursor-pointer group-hover:border-[#A4332A]/50 transition-colors shadow-inner ${
+                            isClean ? 'border-[#E5DCB8] bg-[#F4EFE3]' : 'border-[#42362B] bg-[#1F1913]'
                           }`}
                           title="Haz clic para ver la portada completa"
                         >
@@ -331,49 +329,44 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                             alt={`Portada de ${doc.title}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-2.5">
-                            <span className="text-[10px] text-amber-300 font-bold bg-slate-950/90 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 hover:bg-amber-500 hover:text-slate-950 transition-colors">
-                              <Maximize2 className="w-3 h-3 text-amber-400" /> Ver Portada completa
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-2.5">
+                            <span className="text-[10px] text-[#F4EFE3] font-bold bg-[#2C241C]/90 px-2 py-0.5 rounded border border-[#C9A24B]/30 flex items-center gap-1 hover:bg-[#A4332A] hover:text-white transition-colors">
+                              <Maximize2 className="w-3 h-3 text-[#C9A24B]" /> Ver Portada completa
                             </span>
                           </div>
                         </div>
                       )}
 
                       <div>
-                        <h3
-                          onClick={() => setSelectedDocModal(doc)}
-                          className={`text-lg font-black group-hover:text-amber-600 transition-colors line-clamp-1 cursor-pointer flex items-center gap-2 ${
-                            isClean ? 'text-slate-900' : 'text-white'
-                          }`}
-                        >
-                          <span className="truncate">{doc.title}</span>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 shrink-0 font-bold">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          {/* Single Genre Badge */}
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold capitalize ${
+                            isClean
+                              ? 'bg-[#E5DCB8]/60 text-[#2A2118] border border-[#E5DCB8]'
+                              : 'bg-[#1F1913] text-[#C9A24B] border border-[#42362B]'
+                          }`}>
+                            #{primaryGenre}
+                          </span>
+                          {/* Discreet version */}
+                          <span className="text-[10px] text-[#6B5C46] font-mono">
                             v{doc.publishedVersion || 1}
                           </span>
+                        </div>
+
+                        <h3
+                          onClick={() => setSelectedDocModal(doc)}
+                          className={`text-lg font-serif font-bold group-hover:text-[#A4332A] transition-colors line-clamp-1 cursor-pointer ${
+                            isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'
+                          }`}
+                        >
+                          {doc.title}
                         </h3>
-                        <p className={`text-xs flex items-center gap-1 mt-1 ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
-                          <User className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Por <strong className={isClean ? 'text-slate-800' : 'text-slate-200'}>{doc.authorName}</strong></span>
+
+                        <p className={`text-xs flex items-center gap-1 mt-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                          <User className="w-3.5 h-3.5 text-[#A4332A]" />
+                          <span>Por <strong className={isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}>{doc.authorName}</strong></span>
                         </p>
                       </div>
-
-                      {/* Genre Tags on Card */}
-                      {storyTags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {storyTags.map((t) => (
-                            <span
-                              key={t}
-                              className={`text-[10px] px-2 py-0.5 rounded-md font-semibold capitalize ${
-                                isClean
-                                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                                  : 'bg-amber-950/60 text-amber-300 border border-amber-500/30'
-                              }`}
-                            >
-                              #{t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
 
                       {/* Synopsis block */}
                       <div
@@ -381,26 +374,26 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                         title="Haz click para ver la ficha de lectura completa"
                         className={`p-3.5 rounded-xl cursor-pointer transition-colors border relative group/synopsis ${
                           isClean
-                            ? 'bg-slate-50 border-slate-100 hover:bg-amber-50/80 hover:border-amber-300/80 text-slate-700'
-                            : 'bg-slate-950/80 border-white/5 hover:border-amber-500/40 text-slate-300'
+                            ? 'bg-[#F4EFE3]/60 border-[#E5DCB8] hover:bg-[#F4EFE3] text-[#2A2118]'
+                            : 'bg-[#1F1913] border-[#42362B] hover:border-[#C9A24B]/40 text-[#D1C7B7]'
                         }`}
                       >
                         <p className="text-xs leading-relaxed line-clamp-3 font-serif italic">
                           "{synopsisText || 'Sin descripción disponible.'}"
                         </p>
-                        <div className="mt-2 text-[10px] text-amber-600 dark:text-amber-400 font-sans font-bold flex items-center gap-1 opacity-70 group-hover/synopsis:opacity-100 transition-opacity">
-                          <Info className="w-3 h-3 text-amber-500" /> Haz click para ver la ficha de lectura completa
+                        <div className="mt-2 text-[10px] text-[#A4332A] dark:text-[#C9A24B] font-sans font-bold flex items-center gap-1 opacity-80 group-hover/synopsis:opacity-100 transition-opacity">
+                          <Info className="w-3 h-3 text-[#C9A24B]" /> Ver ficha de lectura completa
                         </div>
                       </div>
 
-                      <div className={`flex items-center gap-4 text-[11px] pt-2 border-t font-medium ${
-                        isClean ? 'border-slate-100 text-slate-500' : 'border-white/5 text-slate-400 font-mono'
+                      {/* Clean grouped metadata line */}
+                      <div className={`text-[11px] pt-2 border-t flex items-center justify-between font-mono ${
+                        isClean ? 'border-[#E5DCB8] text-[#6B5C46]' : 'border-[#42362B] text-[#D1C7B7]'
                       }`}>
-                        <span>🎬 {scenesCount} escenas</span>
-                        <span>📦 {itemsCount} objetos</span>
+                        <span>{scenesCount} escenas · {itemsCount} objetos</span>
                         {doc.publishedAt && (
-                          <span className="flex items-center gap-1 ml-auto">
-                            <Clock className="w-3 h-3 text-slate-400" />
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-[#6B5C46]" />
                             {new Date(doc.publishedAt).toLocaleDateString()}
                           </span>
                         )}
@@ -408,13 +401,13 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     </div>
 
                     {/* Card Action Buttons */}
-                    <div className="pt-5 space-y-2">
+                    <div className="pt-4 space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => onPlayProject(doc.publishedData || doc.projectData)}
-                          className="py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
+                          className="py-2.5 px-3 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
                         >
-                          <Play className="w-3.5 h-3.5 fill-slate-950" />
+                          <Play className="w-3.5 h-3.5 fill-white" />
                           <span>Leer e Interactuar</span>
                         </button>
 
@@ -422,11 +415,11 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                           onClick={() => setSelectedDocModal(doc)}
                           className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${
                             isClean
-                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
-                              : 'bg-slate-950 hover:bg-slate-800 text-amber-300 border-amber-500/30'
+                              ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                              : 'bg-[#1F1913] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
                           }`}
                         >
-                          <Info className="w-3.5 h-3.5 text-amber-600" />
+                          <Info className="w-3.5 h-3.5 text-[#C9A24B]" />
                           <span>Más detalles</span>
                         </button>
                       </div>
@@ -437,10 +430,10 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                           onClick={() => handleShareGameLink(doc.id)}
                           className={`py-1.5 px-2 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${
                             copiedDocId === doc.id
-                              ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-600'
+                              ? 'bg-[#3B6D11] text-white font-bold border-[#3B6D11]'
                               : isClean
-                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
-                              : 'bg-slate-950 hover:bg-slate-800 text-amber-300 border-amber-500/30'
+                              ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                              : 'bg-[#1F1913] hover:bg-[#382E25] text-[#D1C7B7] border-[#42362B]'
                           }`}
                           title="Copiar enlace único para compartir este texto-juego"
                         >
@@ -451,7 +444,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                             </>
                           ) : (
                             <>
-                              <Share2 className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                              <Share2 className="w-3.5 h-3.5 text-[#C9A24B]" />
                               <span>Compartir URL</span>
                             </>
                           )}
@@ -469,19 +462,19 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                                 onClick={() => handleDownloadJSON(doc)}
                                 className={`py-1.5 px-2 rounded-lg text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer border ${
                                   isClean
-                                    ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                                    : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-white/10'
+                                    ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                                    : 'bg-[#1F1913] hover:bg-[#382E25] text-[#D1C7B7] border-[#42362B]'
                                 }`}
                                 title="Descargar archivo del juego en JSON"
                               >
-                                <Download className="w-3.5 h-3.5 text-amber-600" />
+                                <Download className="w-3.5 h-3.5 text-[#A4332A]" />
                                 <span>JSON</span>
                               </button>
                             );
                           }
                           return (
                             <div className={`py-1.5 px-2 rounded-lg text-[10px] italic text-center font-mono flex items-center justify-center gap-1 border ${
-                              isClean ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-black/40 border-white/5 text-slate-500'
+                              isClean ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#6B5C46]' : 'bg-[#1F1913] border-[#42362B] text-[#6B5C46]'
                             }`}>
                               <Lock className="w-3 h-3" />
                               <span>Privado</span>
@@ -495,15 +488,15 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
               })}
             </div>
 
-            {/* "Ver más lecturas" Button / Carousel Toggle when more than 6 stories exist */}
+            {/* "Ver más lecturas" Button */}
             {filtered.length > 6 && (
               <div className="text-center pt-4">
                 <button
                   onClick={() => setShowAllStories(!showAllStories)}
                   className={`px-6 py-3 rounded-2xl text-xs font-bold transition-all border shadow-sm cursor-pointer ${
                     isClean
-                      ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
-                      : 'bg-slate-900 hover:bg-slate-800 border-amber-500/40 text-amber-300'
+                      ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] border-[#E5DCB8] text-[#2A2118]'
+                      : 'bg-[#2C241C] hover:bg-[#382E25] border-[#42362B] text-[#F4EFE3]'
                   }`}
                 >
                   {showAllStories
