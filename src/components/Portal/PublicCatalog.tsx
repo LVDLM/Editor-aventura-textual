@@ -21,6 +21,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   webAspect = 'clean',
   onAspectChange,
 }) => {
+  const isClean = webAspect === 'clean';
   const [publishedProjects, setPublishedProjects] = useState<CloudProjectDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,8 +134,6 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
   // Limit to max 6 stories initially
   const visibleStories = showAllStories ? filtered : filtered.slice(0, 6);
-
-  const isClean = webAspect === 'clean';
 
   return (
     <div className={`flex-1 transition-colors duration-300 w-full min-h-full ${
@@ -548,29 +547,39 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
       {/* Selected Story Details Modal */}
       {selectedDocModal && (
         <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
           onClick={() => setSelectedDocModal(null)}
         >
           <div
-            className="bg-[#0f121d] border border-amber-500/40 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden cursor-default animate-in fade-in zoom-in-95 duration-200"
+            className={`rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden cursor-default animate-in fade-in zoom-in-95 duration-200 border transition-colors ${
+              isClean
+                ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]'
+                : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3]'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-black/40">
+            <div className={`px-6 py-4 border-b flex items-center justify-between ${
+              isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
+            }`}>
               <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-white text-base">Ficha del Texto-Juego</h3>
+                <BookOpen className={`w-5 h-5 ${isClean ? 'text-[#A4332A]' : 'text-[#C9A24B]'}`} />
+                <h3 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                  Ficha del Texto-Juego
+                </h3>
               </div>
               <button
                 onClick={() => setSelectedDocModal(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                  isClean ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50' : 'text-[#A89880] hover:text-[#F4EFE3] hover:bg-[#3B3026]'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Content */}
-            <div className="p-6 overflow-y-auto space-y-5 text-slate-300 text-xs sm:text-sm leading-relaxed">
+            <div className="p-6 overflow-y-auto space-y-5 text-xs sm:text-sm leading-relaxed">
               {/* Cover Image */}
               {(selectedDocModal.publishedData ? getProjectCoverImage(selectedDocModal.publishedData) : getProjectCoverImage(selectedDocModal.projectData)) && (
                 <div
@@ -584,11 +593,17 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   <img
                     src={(selectedDocModal.publishedData ? getProjectCoverImage(selectedDocModal.publishedData) : getProjectCoverImage(selectedDocModal.projectData))!}
                     alt={`Carátula de ${selectedDocModal.title}`}
-                    className="w-full max-h-64 object-cover rounded-xl border-2 border-amber-500/40 shadow-xl mx-auto group-hover:border-amber-400 transition-all"
+                    className={`w-full max-h-64 object-cover rounded-xl border-2 shadow-md mx-auto group-hover:opacity-90 transition-all ${
+                      isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'
+                    }`}
                   />
-                  <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
-                    <span className="text-xs bg-slate-950/90 text-amber-300 font-bold px-3 py-1.5 rounded-lg border border-amber-500/40 flex items-center gap-1.5 shadow-lg">
-                      <Maximize2 className="w-4 h-4 text-amber-400" /> Ver Portada completa
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                    <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 shadow-lg ${
+                      isClean
+                        ? 'bg-[#FFFDF6] text-[#2A2118] border-[#E5DCB8]'
+                        : 'bg-[#2C241C] text-[#F4EFE3] border-[#42362B]'
+                    }`}>
+                      <Maximize2 className={`w-4 h-4 ${isClean ? 'text-[#A4332A]' : 'text-[#C9A24B]'}`} /> Ver Portada completa
                     </span>
                   </div>
                 </div>
@@ -596,15 +611,24 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
               {/* Title, Author & Tags */}
               <div className="space-y-2">
-                <h2 className="text-xl font-extrabold text-white">{selectedDocModal.title}</h2>
-                <p className="text-xs text-amber-400 font-medium">
-                  Autor / Creador: <strong className="text-amber-200">{selectedDocModal.authorName}</strong>
+                <h2 className={`text-xl font-serif font-bold ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                  {selectedDocModal.title}
+                </h2>
+                <p className={`text-xs font-medium ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>
+                  Autor / Creador: <strong className={isClean ? 'text-[#A4332A] font-bold' : 'text-[#C9A24B] font-bold'}>{selectedDocModal.authorName}</strong>
                 </p>
 
                 {(selectedDocModal.genreTags || selectedDocModal.projectData?.genreTags)?.length ? (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {(selectedDocModal.genreTags || selectedDocModal.projectData?.genreTags)?.map((t) => (
-                      <span key={t} className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-md font-semibold capitalize">
+                      <span
+                        key={t}
+                        className={`text-[10px] border px-2 py-0.5 rounded-md font-bold capitalize ${
+                          isClean
+                            ? 'bg-[#E5DCB8]/60 text-[#2A2118] border-[#C9A24B]/40'
+                            : 'bg-[#3B3026] text-[#C9A24B] border-[#42362B]'
+                        }`}
+                      >
                         #{t}
                       </span>
                     ))}
@@ -613,11 +637,17 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
               </div>
 
               {/* Synopsis Section */}
-              <div className="bg-slate-950/80 p-4 rounded-xl border border-white/10 space-y-2">
-                <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider">
+              <div className={`p-4 rounded-xl border space-y-2 ${
+                isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
+              }`}>
+                <h4 className={`font-serif font-bold text-xs uppercase tracking-wider ${
+                  isClean ? 'text-[#A4332A]' : 'text-[#C9A24B]'
+                }`}>
                   Sinopsis
                 </h4>
-                <p className="text-slate-200 leading-relaxed whitespace-pre-line text-xs sm:text-sm">
+                <p className={`leading-relaxed whitespace-pre-line text-xs sm:text-sm ${
+                  isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'
+                }`}>
                   {selectedDocModal.projectData?.synopsis ||
                     selectedDocModal.projectData?.description ||
                     selectedDocModal.description ||
@@ -627,29 +657,49 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
               {/* Credits & Sources */}
               {selectedDocModal.projectData?.credits && (
-                <div className="bg-slate-950/80 p-4 rounded-xl border border-white/10 space-y-2">
-                  <h4 className="font-bold text-amber-400 text-xs uppercase tracking-wider">
+                <div className={`p-4 rounded-xl border space-y-2 ${
+                  isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
+                }`}>
+                  <h4 className={`font-serif font-bold text-xs uppercase tracking-wider ${
+                    isClean ? 'text-[#A4332A]' : 'text-[#C9A24B]'
+                  }`}>
                     Créditos, Fuentes de Imágenes y Colaboradores
                   </h4>
-                  <p className="text-slate-300 font-mono text-xs leading-relaxed whitespace-pre-line bg-slate-900 p-3 rounded-lg border border-slate-800">
-                    {renderTextWithLinks(selectedDocModal.projectData.credits)}
-                  </p>
+                  <div className={`text-xs leading-relaxed whitespace-pre-line p-3 rounded-lg border ${
+                    isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3]'
+                  }`}>
+                    {renderTextWithLinks(selectedDocModal.projectData.credits, {
+                      linkClassName: isClean
+                        ? 'text-[#A4332A] underline font-bold hover:opacity-80 transition-opacity'
+                        : 'text-[#C9A24B] underline font-bold hover:opacity-80 transition-opacity',
+                    })}
+                  </div>
                 </div>
               )}
 
               {/* Specs */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-xs">
-                <div className="bg-slate-950 p-3 rounded-xl border border-white/5 text-center">
-                  <span className="block text-slate-500 text-[10px] uppercase font-bold">Escenas</span>
-                  <span className="font-bold text-slate-200">{selectedDocModal.projectData?.scenes?.length || 0}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                <div className={`p-3 rounded-xl border text-center ${
+                  isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
+                }`}>
+                  <span className={`block text-[10px] uppercase font-bold ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>Escenas</span>
+                  <span className={`font-serif font-bold text-sm ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    {selectedDocModal.projectData?.scenes?.length || 0}
+                  </span>
                 </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-white/5 text-center">
-                  <span className="block text-slate-500 text-[10px] uppercase font-bold">Objetos</span>
-                  <span className="font-bold text-slate-200">{selectedDocModal.projectData?.inventoryItems?.length || 0}</span>
+                <div className={`p-3 rounded-xl border text-center ${
+                  isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
+                }`}>
+                  <span className={`block text-[10px] uppercase font-bold ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>Objetos</span>
+                  <span className={`font-serif font-bold text-sm ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    {selectedDocModal.projectData?.inventoryItems?.length || 0}
+                  </span>
                 </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-white/5 text-center col-span-2 sm:col-span-1">
-                  <span className="block text-slate-500 text-[10px] uppercase font-bold">Publicado</span>
-                  <span className="font-bold text-slate-200">
+                <div className={`p-3 rounded-xl border text-center col-span-2 sm:col-span-1 ${
+                  isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
+                }`}>
+                  <span className={`block text-[10px] uppercase font-bold ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>Publicado</span>
+                  <span className={`font-serif font-bold text-sm ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
                     {selectedDocModal.publishedAt ? new Date(selectedDocModal.publishedAt).toLocaleDateString() : 'Reciente'}
                   </span>
                 </div>
@@ -657,24 +707,28 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-white/10 bg-black/40 flex flex-wrap items-center justify-between gap-3">
+            <div className={`px-6 py-4 border-t flex flex-wrap items-center justify-between gap-3 ${
+              isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
+            }`}>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleShareGameLink(selectedDocModal.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
                     copiedDocId === selectedDocModal.id
-                      ? 'bg-emerald-500 text-slate-950 border-emerald-600'
-                      : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      ? 'bg-[#3B6D11] text-white border-[#3B6D11]'
+                      : isClean
+                        ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                        : 'bg-[#3B3026] hover:bg-[#4A3D30] text-[#F4EFE3] border-[#42362B]'
                   }`}
                 >
                   {copiedDocId === selectedDocModal.id ? (
                     <>
                       <Check className="w-3.5 h-3.5" />
-                      <span>¡Enlace copiado al portapapeles!</span>
+                      <span>¡Enlace copiado!</span>
                     </>
                   ) : (
                     <>
-                      <Share2 className="w-3.5 h-3.5 text-amber-400" />
+                      <Share2 className={`w-3.5 h-3.5 ${isClean ? 'text-[#A4332A]' : 'text-[#C9A24B]'}`} />
                       <span>Compartir URL</span>
                     </>
                   )}
@@ -690,17 +744,21 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     return (
                       <button
                         onClick={() => handleDownloadJSON(selectedDocModal)}
-                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer border ${
+                          isClean
+                            ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                            : 'bg-[#3B3026] hover:bg-[#4A3D30] text-[#F4EFE3] border-[#42362B]'
+                        }`}
                         title="Descargar archivo JSON del proyecto"
                       >
-                        <Download className="w-3.5 h-3.5 text-amber-400" />
+                        <Download className={`w-3.5 h-3.5 ${isClean ? 'text-[#A4332A]' : 'text-[#C9A24B]'}`} />
                         <span>Descargar JSON</span>
                       </button>
                     );
                   }
                   return (
-                    <span className="text-xs text-slate-400 italic flex items-center gap-1 font-mono">
-                      <Lock className="w-3.5 h-3.5 text-slate-500" /> Descarga no permitida por el autor
+                    <span className={`text-xs italic flex items-center gap-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>
+                      <Lock className="w-3.5 h-3.5" /> Descarga no permitida
                     </span>
                   );
                 })()}
@@ -709,7 +767,11 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelectedDocModal(null)}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+                  className={`px-4 py-2 font-bold rounded-xl text-xs transition-colors cursor-pointer border ${
+                    isClean
+                      ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                      : 'bg-[#3B3026] hover:bg-[#4A3D30] text-[#F4EFE3] border-[#42362B]'
+                  }`}
                 >
                   Cerrar
                 </button>
@@ -720,9 +782,13 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     setSelectedDocModal(null);
                     onPlayProject(data);
                   }}
-                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer active:scale-95"
+                  className={`px-6 py-2.5 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95 ${
+                    isClean
+                      ? 'bg-[#A4332A] hover:bg-[#8B2A22] text-white'
+                      : 'bg-[#C9A24B] hover:bg-[#B38E3B] text-[#2C241C]'
+                  }`}
                 >
-                  <Play className="w-4 h-4 fill-slate-950" />
+                  <Play className="w-4 h-4 fill-current" />
                   <span>¡Iniciar Texto-Juego!</span>
                 </button>
               </div>

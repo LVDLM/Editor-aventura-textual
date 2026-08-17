@@ -772,6 +772,9 @@ ${jsonProject}
 
     function formatTextWithLinks(str) {
       if (!str) return '';
+      if (/<[a-z][\s\S]*>/i.test(str)) {
+        return str.replace(/<a\s+(?:[^>]*?\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$2</a>');
+      }
       const escaped = escapeHTML(str);
       return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$1</a>');
     }

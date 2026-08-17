@@ -150,7 +150,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
             <span>Créditos Finales, Fuentes de Imágenes y Colaboradores</span>
           </label>
           <p className={`text-[11px] mb-1.5 ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
-            Información de créditos que acompañará la portada de tu historia. Los jugadores podrán verla al pulsar &quot;Ver más detalles&quot;.
+            Información de créditos que acompañará la portada de tu historia. Soporta etiquetas HTML como <code className="text-amber-600 font-bold">&lt;a href=&quot;...&quot;&gt;Enlace&lt;/a&gt;</code>, <code className="text-amber-600 font-bold">&lt;b&gt;</code> e <code className="text-amber-600 font-bold">&lt;i&gt;</code> para citas e hipervínculos interactivos.
           </p>
           <textarea
             rows={4}
@@ -167,7 +167,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                 ? 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400 focus:bg-white focus:border-amber-500'
                 : 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-amber-500'
             }`}
-            placeholder="Ejemplo:&#10;• Guion y Dirección: Laura Martínez&#10;• Ilustraciones: Diseñadas en Midjourney / Unsplash&#10;• Música y Sonido: Biblioteca de efectos Freesound.org&#10;• Colaboradores: Carlos R., Elena M."
+            placeholder="Ejemplo:&#10;• Guion y Dirección: Laura Martínez&#10;• Imagen de portada: <a href='https://pixabay.com'>Phuong Luu</a> de Pixabay&#10;• Sonido: Freesound.org&#10;• Colaboradores: Carlos R., Elena M."
           />
         </div>
 
