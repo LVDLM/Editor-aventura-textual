@@ -112,7 +112,7 @@ export default function App() {
     appendedTextsPerScene: {} as Record<string, string[]>,
     history: [] as { id: string; type: 'story' | 'response' | 'system'; text: string }[],
     usedHotspotIds: [] as string[],
-    difficulty: 'facil' as 'facil' | 'normal',
+    difficulty: 'normal' as 'facil' | 'normal' | 'dificil',
   });
 
   // Modals and UI Focus state
@@ -164,7 +164,7 @@ export default function App() {
       appendedTextsPerScene: {},
       history: [],
       usedHotspotIds: [],
-      difficulty: gameState.difficulty || 'facil',
+      difficulty: gameState.difficulty || 'normal',
     });
   };
 
@@ -182,7 +182,7 @@ export default function App() {
       author: currentUser?.displayName || 'Autor',
       version: '1.0.0',
       description: 'Escribe aquí la sinopsis de tu historia interactiva.',
-      theme: 'classic-retro',
+      theme: 'sepia-parchment',
       initialSceneId: 'escena_portada',
       defaultResponses: {
         mirar: 'Miras con atención, pero no observas nada fuera de lo normal.',

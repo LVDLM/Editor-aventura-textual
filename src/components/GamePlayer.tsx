@@ -916,12 +916,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         const isUsed = usedHotspots.includes(matchedHotspot.id);
 
         if (isHardMode || (isNormalMode && !isUsed)) {
-          // Hard mode or Normal mode before being used: render like standard text, clickable but without highlight
+          // Hard mode or Normal mode before being used: render like standard text, clickable but without highlight or cursor hint
           return (
             <span
               key={idx}
               onClick={(e) => handleWordClick(matchedHotspot, e)}
-              className="inline cursor-pointer hover:text-amber-300 transition-colors"
+              className="inline"
             >
               {part}
             </span>
@@ -1706,18 +1706,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 onClick={(e) => e.stopPropagation()}
                 className={`w-[calc(100vw-1.5rem)] max-w-lg p-4 sm:p-6 rounded-2xl border cursor-default max-h-[85vh] overflow-y-auto font-sans break-words ${
                   modalFeedback.type === 'gameover' || modalFeedback.isGameOver
-                    ? 'border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.35)] bg-slate-950/95'
-                    : modalFeedback.type === 'item'
-                    ? 'border-2 border-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.3)] bg-slate-900'
-                    : `${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-2xl`
+                    ? isSepia
+                      ? 'border-2 border-rose-800/80 bg-[#ebdcb9] text-[#3b2d1d] shadow-2xl'
+                      : 'border-2 border-rose-500 bg-slate-950/95 text-slate-100 shadow-[0_0_35px_rgba(244,63,94,0.35)]'
+                    : `${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} ${themeConfig.textMainClass} shadow-2xl border-2`
                 } space-y-4`}
               >
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className={`flex items-center justify-between border-b pb-3 ${
+                  modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                    ? isSepia ? 'border-[#cbb382]' : 'border-rose-500/30'
+                    : themeConfig.cardBorderClass
+                }`}>
                   <div className="flex items-center gap-2.5">
                     {modalFeedback.type === 'gameover' || modalFeedback.isGameOver ? (
-                      <Skull className="w-5 h-5 text-rose-400 shrink-0 animate-bounce" />
+                      <Skull className="w-5 h-5 text-rose-500 shrink-0 animate-bounce" />
                     ) : modalFeedback.type === 'item' ? (
-                      <PackageCheck className="w-5 h-5 text-amber-400 shrink-0" />
+                      <PackageCheck className={`w-5 h-5 ${themeConfig.accentClass} shrink-0`} />
                     ) : (
                       <div className={`w-5 h-5 ${themeConfig.accentClass} flex items-center justify-center shrink-0`}>
                         {getVerbIcon(modalFeedback.verbIconName || 'Eye')}
@@ -1728,10 +1732,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       <h3
                         className={`font-bold text-base ${
                           modalFeedback.type === 'gameover' || modalFeedback.isGameOver
-                            ? 'text-rose-300'
-                            : modalFeedback.type === 'item'
-                            ? 'text-amber-300'
-                            : themeConfig.textMainClass
+                            ? isSepia ? 'text-rose-900' : 'text-rose-300'
+                            : themeConfig.accentClass
                         }`}
                       >
                         {modalFeedback.title ||
@@ -1747,7 +1749,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       <motion.div
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-mono shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border shadow-sm ${
+                          isSepia
+                            ? 'bg-[#822b16]/15 border-[#822b16]/40 text-[#822b16]'
+                            : 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-400'
+                        }`}
                         title="Partida guardada automáticamente"
                       >
                         <motion.div
@@ -1755,9 +1761,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                           transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
                           className="flex items-center justify-center"
                         >
-                          <Save className="w-3.5 h-3.5 text-emerald-400" />
+                          <Save className={`w-3.5 h-3.5 ${isSepia ? 'text-[#822b16]' : 'text-emerald-400'}`} />
                         </motion.div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isSepia ? 'text-[#822b16]' : 'text-emerald-300'}`}>
                           Guardado
                         </span>
                       </motion.div>
@@ -1765,7 +1771,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   </div>
                   <button
                     onClick={() => setModalFeedback(null)}
-                    className="p-1 text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/10"
+                    className={`p-1 rounded-lg transition-colors ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -1777,24 +1783,26 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       <img
                         src={modalFeedback.itemImageUrl}
                         alt={modalFeedback.title || 'Objeto'}
-                        className="max-h-48 max-w-full rounded-xl border border-amber-500/40 object-contain mx-auto shadow-lg"
+                        className={`max-h-48 max-w-full rounded-xl border object-contain mx-auto shadow-lg ${themeConfig.cardBorderClass}`}
                       />
                     </div>
                   )}
                   <p
                     className={`text-base leading-relaxed whitespace-pre-line ${
                       modalFeedback.type === 'gameover' || modalFeedback.isGameOver
-                        ? 'text-rose-100 font-medium'
-                        : modalFeedback.type === 'item'
-                        ? 'text-amber-100 font-medium'
-                        : `${themeConfig.textMainClass} italic`
+                        ? isSepia ? 'text-rose-950 font-bold' : 'text-rose-100 font-medium'
+                        : themeConfig.textMainClass
                     }`}
                   >
                     {modalFeedback.message}
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-white/10">
+                <div className={`flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t ${
+                  modalFeedback.type === 'gameover' || modalFeedback.isGameOver
+                    ? isSepia ? 'border-[#cbb382]' : 'border-white/10'
+                    : themeConfig.cardBorderClass
+                }`}>
                   {modalFeedback.type === 'gameover' || modalFeedback.isGameOver ? (
                     <>
                       <button
@@ -1813,15 +1821,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                             setModalFeedback(null);
                             onOpenSaveLoad();
                           }}
-                          className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+                          className={`px-4 py-2 font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 cursor-pointer ${
+                            isSepia ? 'bg-[#822b16] hover:bg-[#6b2210] text-[#fbf5e8]' : 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                          }`}
                         >
-                          <Bookmark className="w-4 h-4 text-emerald-300" />
+                          <Bookmark className={`w-4 h-4 ${isSepia ? 'text-[#fbf5e8]' : 'text-emerald-300'}`} />
                           <span>Cargar partida</span>
                         </button>
                       )}
                       <button
                         onClick={() => setModalFeedback(null)}
-                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs transition-colors"
+                        className={`px-3.5 py-2 rounded-xl text-xs transition-colors border ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                       >
                         Cerrar
                       </button>
@@ -1829,7 +1839,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   ) : (
                     <button
                       onClick={() => setModalFeedback(null)}
-                      className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer"
+                      className={`px-5 py-2 font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer ${themeConfig.verbActiveBg} ${themeConfig.verbActiveText}`}
                     >
                       Entendido
                     </button>
@@ -1963,15 +1973,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-[calc(100vw-2rem)] max-w-sm bg-slate-900 border-2 border-amber-500/60 rounded-2xl shadow-2xl p-4 space-y-3 cursor-default"
+            className={`w-[calc(100vw-2rem)] max-w-sm border-2 rounded-2xl shadow-2xl p-4 space-y-3 cursor-default ${themeConfig.cardBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-2">
-              <span className="text-sm font-extrabold text-amber-300">
+            <div className={`flex items-center justify-between border-b pb-2 ${themeConfig.cardBorderClass}`}>
+              <span className={`text-sm font-extrabold ${themeConfig.accentClass}`}>
                 ¿Qué quieres hacer con "{contextMenu.word}"?
               </span>
               <button
                 onClick={() => setContextMenu(null)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
+                className={`p-1 rounded-lg transition-colors ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1986,7 +1996,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     onClick={() => {
                       if (hs) handleExecuteAction(hs, v.id);
                     }}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-200 bg-slate-950 hover:bg-amber-500 hover:text-slate-950 border border-slate-800 transition-all cursor-pointer"
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                   >
                     {getVerbIcon(v.iconName)}
                     <span>{v.label.split(' / ')[0]}</span>
@@ -2152,28 +2162,28 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-            <div className="w-full max-w-lg bg-slate-950 border border-amber-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className={`w-full max-w-lg border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] ${themeConfig.cardBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}>
               
               {/* Modal Header */}
-              <div className="px-5 py-3.5 bg-slate-900 border-b border-amber-500/20 flex items-center justify-between gap-3 shrink-0">
+              <div className={`px-5 py-3.5 border-b flex items-center justify-between gap-3 shrink-0 ${themeConfig.buttonBgClass} ${themeConfig.cardBorderClass}`}>
                 <div className="flex items-center gap-3">
                   {character.imageFileData || character.imageUrl ? (
                     <img
                       src={character.imageFileData || character.imageUrl}
                       alt={character.name}
-                      className="w-10 h-10 object-cover rounded-lg border border-amber-500/40 shadow shrink-0"
+                      className={`w-10 h-10 object-cover rounded-lg border shadow shrink-0 ${themeConfig.cardBorderClass}`}
                     />
                   ) : (
-                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold flex items-center justify-center shrink-0 text-base shadow">
+                    <div className={`w-10 h-10 rounded-lg font-bold flex items-center justify-center shrink-0 text-base shadow border ${themeConfig.accentBgClass} ${themeConfig.accentClass} ${themeConfig.accentBorderClass}`}>
                       {character.name.charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <h3 className="font-bold text-amber-300 text-base">{character.name}</h3>
+                  <h3 className={`font-bold text-base ${themeConfig.accentClass}`}>{character.name}</h3>
                 </div>
 
                 <button
                   onClick={() => closeActiveDialogue()}
-                  className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
                   title="Cerrar conversación"
                 >
                   <X className="w-5 h-5" />
@@ -2183,8 +2193,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               {/* Modal Body: NPC Prompt + Player Options */}
               <div className="p-5 overflow-y-auto space-y-4 flex-1">
                 {/* NPC Dialogue Prompt Box */}
-                <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/20 text-amber-100 font-serif text-base leading-relaxed shadow-inner">
-                  <span className="text-amber-400 font-bold mr-2">{character.name}:</span>
+                <div className={`p-4 rounded-xl border text-base leading-relaxed shadow-inner ${themeConfig.actionBoxBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}>
+                  <span className={`font-bold mr-2 ${themeConfig.accentClass}`}>{character.name}:</span>
                   "{npcPrompt}"
                 </div>
 
@@ -2195,7 +2205,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       <button
                         key={opt.id}
                         onClick={() => handleSelectDialogueOption(opt, character, blockId)}
-                        className="w-full text-left p-3.5 rounded-xl bg-slate-900 hover:bg-amber-950/50 border border-amber-500/30 hover:border-amber-400 text-slate-100 hover:text-white text-sm font-medium transition-all group cursor-pointer shadow-sm"
+                        className={`w-full text-left p-3.5 rounded-xl border text-sm font-medium transition-all group cursor-pointer shadow-sm ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                       >
                         <span className="group-hover:translate-x-1 transition-transform inline-block leading-snug">
                           "{opt.playerText || '...'}"
@@ -2204,17 +2214,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400 italic text-center py-2">
+                  <p className={`text-xs italic text-center py-2 ${themeConfig.textMutedClass}`}>
                     (No hay más opciones de respuesta. Puedes despedirte).
                   </p>
                 )}
               </div>
 
               {/* Modal Footer */}
-              <div className="px-5 py-3 bg-slate-900 border-t border-slate-800 flex items-center justify-end">
+              <div className={`px-5 py-3 border-t flex items-center justify-end ${themeConfig.buttonBgClass} ${themeConfig.cardBorderClass}`}>
                 <button
                   onClick={() => closeActiveDialogue()}
-                  className="px-4 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-amber-200 text-xs font-bold transition-colors cursor-pointer"
+                  className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${themeConfig.verbActiveBg} ${themeConfig.verbActiveText}`}
                 >
                   Despedirse
                 </button>

@@ -8,7 +8,7 @@ export const sampleGameProject: GameProject = {
   description: 'Una misteriosa aventura gráfica en texto donde la observación y la deducción te permitirán escapar de una vieja mansión.',
   synopsis: 'Te despiertas en una estancia fría y a oscuras. Las ventanas están selladas y el único sonido es el crujir de las viejas vigas de madera. Para sobrevivir y encontrar la salida de esta mansión olvidada, deberás inspeccionar cada rincón, descifrar acertijos ocultos en diarios antiguos y reaccionar a tiempo ante inesperadas trampas.',
   credits: '• Diseño y Guion Narrativo: Editorial TextAdventure\n• Ilustraciones y Arte Visual: Generadas con Gemini AI Studio & Archivo Clásico\n• Motor de Juego: Motor de Aventuras en Texto (React + Tailwind)\n• Colaboradores: Comunidad de Autores de Ficción Interactiva\n• Agradecimientos Especiales: A todos los apasionados del género Point & Click clásico.',
-  theme: 'classic-retro',
+  theme: 'sepia-parchment',
   genreTags: ['aventura', 'misterio'],
   initialSceneId: 'scene_portada',
   
