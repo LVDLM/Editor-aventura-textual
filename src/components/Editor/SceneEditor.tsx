@@ -602,6 +602,39 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     }));
   };
 
+  const handlePurgeOrphanBlockFlags = (blockId: string) => {
+    const validKeys = Object.keys(project.globalFlags || {});
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          textBlocks: s.textBlocks.map((b) => {
+            if (b.id !== blockId) return b;
+            const updatedVis: Record<string, boolean> = {};
+            if (b.visibleIfFlags) {
+              Object.entries(b.visibleIfFlags).forEach(([k, v]) => {
+                if (validKeys.includes(k)) updatedVis[k] = v;
+              });
+            }
+            const updatedHid: Record<string, boolean> = {};
+            if (b.hiddenIfFlags) {
+              Object.entries(b.hiddenIfFlags).forEach(([k, v]) => {
+                if (validKeys.includes(k)) updatedHid[k] = v;
+              });
+            }
+            return {
+              ...b,
+              visibleIfFlags: Object.keys(updatedVis).length > 0 ? updatedVis : undefined,
+              hiddenIfFlags: Object.keys(updatedHid).length > 0 ? updatedHid : undefined,
+            };
+          }),
+        };
+      }),
+    }));
+  };
+
   const handleMouseUpTextSelection = () => {
     const sel = window.getSelection()?.toString().trim();
     if (sel && sel.length > 0) {
@@ -2192,67 +2225,97 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                   })()}
 
                   {/* Flag Condition Controls */}
-                  <div className="bg-slate-900/80 border border-white/5 rounded-lg p-3 space-y-2 text-xs">
-                    <div className="flex items-center gap-1.5 text-slate-300 text-xs font-bold">
-                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Condiciones de Visibilidad de este Párrafo (Banderas):</span>
-                    </div>
+                  {(() => {
+                    const registeredKeys = Object.keys(project.globalFlags || {});
+                    const visKeys = Object.keys(block.visibleIfFlags || {});
+                    const hidKeys = Object.keys(block.hiddenIfFlags || {});
+                    const allBlockFlagKeys = Array.from(new Set([...registeredKeys, ...visKeys, ...hidKeys]));
+                    const orphanCount = visKeys.concat(hidKeys).filter((k) => !registeredKeys.includes(k)).length;
 
-                    {flagKeys.length === 0 ? (
-                      <p className="text-[11px] text-slate-500 italic">
-                        No hay banderas globales registradas. Puedes crearlas abajo o en la pestaña "Banderas y Variables".
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        {/* Visible if flags */}
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                            <Eye className="w-3 h-3 text-emerald-400" />
-                            Mostrar SOLO si se cumplen TODAS estas banderas:
-                          </label>
-                          <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
-                            {flagKeys.map((fk) => {
-                              const isChecked = !!block.visibleIfFlags?.[fk];
-                              return (
-                                <label key={`blk_vis_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleToggleBlockFlagCondition(block.id, 'visibleIf', fk)}
-                                    className="accent-emerald-500 rounded"
-                                  />
-                                  <span className={isChecked ? 'font-bold text-emerald-300 font-mono' : 'font-mono'}>{fk}</span>
-                                </label>
-                              );
-                            })}
+                    return (
+                      <div className="bg-slate-900/80 border border-white/5 rounded-lg p-3 space-y-2 text-xs">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5 text-slate-300 text-xs font-bold">
+                            <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Condiciones de Visibilidad de este Párrafo (Banderas):</span>
                           </div>
+
+                          {orphanCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handlePurgeOrphanBlockFlags(block.id)}
+                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center gap-1 cursor-pointer shadow-sm"
+                              title="Elimina de este párrafo las condiciones asociadas a banderas borradas"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Limpiar {orphanCount} bandera{orphanCount > 1 ? 's' : ''} eliminada{orphanCount > 1 ? 's' : ''}</span>
+                            </button>
+                          )}
                         </div>
 
-                        {/* Hidden if flags */}
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                            <EyeOff className="w-3 h-3 text-rose-400" />
-                            Ocultar si se cumple CUALQUIERA de estas banderas:
-                          </label>
-                          <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
-                            {flagKeys.map((fk) => {
-                              const isChecked = !!block.hiddenIfFlags?.[fk];
-                              return (
-                                <label key={`blk_hid_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleToggleBlockFlagCondition(block.id, 'hiddenIf', fk)}
-                                    className="accent-rose-500 rounded"
-                                  />
-                                  <span className={isChecked ? 'font-bold text-rose-300 font-mono' : 'font-mono'}>{fk}</span>
-                                </label>
-                              );
-                            })}
+                        {allBlockFlagKeys.length === 0 ? (
+                          <p className="text-[11px] text-slate-500 italic">
+                            No hay banderas globales registradas. Puedes crearlas abajo o en la pestaña "Banderas y Variables".
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            {/* Visible if flags */}
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                                <Eye className="w-3 h-3 text-emerald-400" />
+                                Mostrar SOLO si se cumplen TODAS estas banderas:
+                              </label>
+                              <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
+                                {allBlockFlagKeys.map((fk) => {
+                                  const isChecked = !!block.visibleIfFlags?.[fk];
+                                  const isDeleted = !registeredKeys.includes(fk);
+                                  return (
+                                    <label key={`blk_vis_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleBlockFlagCondition(block.id, 'visibleIf', fk)}
+                                        className="accent-emerald-500 rounded"
+                                      />
+                                      <span className={isChecked ? 'font-bold text-emerald-300 font-mono' : 'font-mono'}>
+                                        {fk}
+                                        {isDeleted && <span className="ml-1.5 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Hidden if flags */}
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-bold text-rose-400 flex items-center gap-1">
+                                <EyeOff className="w-3 h-3 text-rose-400" />
+                                Ocultar si se cumple CUALQUIERA de estas banderas:
+                              </label>
+                              <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
+                                {allBlockFlagKeys.map((fk) => {
+                                  const isChecked = !!block.hiddenIfFlags?.[fk];
+                                  const isDeleted = !registeredKeys.includes(fk);
+                                  return (
+                                    <label key={`blk_hid_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleBlockFlagCondition(block.id, 'hiddenIf', fk)}
+                                        className="accent-rose-500 rounded"
+                                      />
+                                      <span className={isChecked ? 'font-bold text-rose-300 font-mono' : 'font-mono'}>
+                                        {fk}
+                                        {isDeleted && <span className="ml-1.5 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    )}
+                        )}
 
                     {/* Inline Flag Creator */}
                     <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap">
@@ -2289,9 +2352,11 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })()}
+            </div>
+          );
+        })}
 
             <button
               onClick={handleAddTextBlock}

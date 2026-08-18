@@ -534,44 +534,53 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
             </div>
 
             {/* Required Flags (Multiple Variable combination!) */}
-            {globalFlagKeys.length > 0 && (
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-2">
-                <label className="block text-xs font-bold text-amber-300">
-                  <span>Combinación de Banderas / Variables Requeridas para esta Acción:</span>
-                </label>
-                <p className="text-[11px] text-slate-400">
-                  Haz clic en cada bandera para alternar su condición: <span className="text-emerald-400 font-semibold">✅ SÍ (debe estar activada)</span> ➔ <span className="text-rose-400 font-semibold">❌ NO (debe estar desactivada)</span> ➔ <span className="text-slate-400">— Sin requisito</span>.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
-                  {globalFlagKeys.map((fk) => {
-                    const flagVal = requiredFlagsMap[fk];
-                    const isTrue = flagVal === true;
-                    const isFalse = flagVal === false;
-                    return (
-                      <button
-                        key={`req_${fk}`}
-                        type="button"
-                        onClick={() => toggleRequiredFlag(fk)}
-                        className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
-                          isTrue
-                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 font-bold'
-                            : isFalse
-                            ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold'
-                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        <span className="font-mono">{fk}</span>
-                        <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                          isTrue ? 'bg-emerald-500/30 text-emerald-300' : isFalse ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-500'
-                        }`}>
-                          {isTrue ? '✅ SÍ' : isFalse ? '❌ NO' : '—'}
-                        </span>
-                      </button>
-                    );
-                  })}
+            {(() => {
+              const allReqFlagKeys = Array.from(new Set([...globalFlagKeys, ...Object.keys(requiredFlagsMap)]));
+              if (allReqFlagKeys.length === 0) return null;
+
+              return (
+                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-2">
+                  <label className="block text-xs font-bold text-amber-300">
+                    <span>Combinación de Banderas / Variables Requeridas para esta Acción:</span>
+                  </label>
+                  <p className="text-[11px] text-slate-400">
+                    Haz clic en cada bandera para alternar su condición: <span className="text-emerald-400 font-semibold">✅ SÍ (debe estar activada)</span> ➔ <span className="text-rose-400 font-semibold">❌ NO (debe estar desactivada)</span> ➔ <span className="text-slate-400">— Sin requisito</span>.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                    {allReqFlagKeys.map((fk) => {
+                      const flagVal = requiredFlagsMap[fk];
+                      const isTrue = flagVal === true;
+                      const isFalse = flagVal === false;
+                      const isDeleted = !globalFlagKeys.includes(fk);
+                      return (
+                        <button
+                          key={`req_${fk}`}
+                          type="button"
+                          onClick={() => toggleRequiredFlag(fk)}
+                          className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            isTrue
+                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 font-bold'
+                              : isFalse
+                              ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold'
+                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          <span className="font-mono">
+                            {fk}
+                            {isDeleted && <span className="ml-1 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
+                          </span>
+                          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                            isTrue ? 'bg-emerald-500/30 text-emerald-300' : isFalse ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-500'
+                          }`}>
+                            {isTrue ? '✅ SÍ' : isFalse ? '❌ NO' : '—'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Dialogue Launcher for Hablar action */}
             {verb === 'hablar' && (

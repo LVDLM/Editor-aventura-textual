@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameProject } from '../../types';
-import { ToggleLeft, Plus, Trash2 } from 'lucide-react';
+import { ToggleLeft, Plus, Trash2, AlertTriangle, Sparkles } from 'lucide-react';
 
 interface FlagsManagerProps {
   project: GameProject;
@@ -10,6 +10,53 @@ interface FlagsManagerProps {
 export const FlagsManager: React.FC<FlagsManagerProps> = ({ project, updateProject }) => {
   const [flagName, setFlagName] = useState('');
   const [initialValue, setInitialValue] = useState(false);
+
+  const cleanOrphanFlagsFromProject = (prev: GameProject): GameProject => {
+    const validKeys = Object.keys(prev.globalFlags || {});
+
+    const cleanScenes = prev.scenes.map((scene) => ({
+      ...scene,
+      textBlocks: scene.textBlocks.map((block) => {
+        const vis: Record<string, boolean> = {};
+        if (block.visibleIfFlags) {
+          Object.entries(block.visibleIfFlags).forEach(([k, v]) => {
+            if (validKeys.includes(k)) vis[k] = v;
+          });
+        }
+        const hid: Record<string, boolean> = {};
+        if (block.hiddenIfFlags) {
+          Object.entries(block.hiddenIfFlags).forEach(([k, v]) => {
+            if (validKeys.includes(k)) hid[k] = v;
+          });
+        }
+        return {
+          ...block,
+          visibleIfFlags: Object.keys(vis).length > 0 ? vis : undefined,
+          hiddenIfFlags: Object.keys(hid).length > 0 ? hid : undefined,
+        };
+      }),
+      hotspots: scene.hotspots.map((hs) => ({
+        ...hs,
+        actions: hs.actions.map((act) => {
+          const req: Record<string, boolean> = {};
+          if (act.requiredFlags) {
+            Object.entries(act.requiredFlags).forEach(([k, v]) => {
+              if (validKeys.includes(k)) req[k] = v;
+            });
+          }
+          return {
+            ...act,
+            requiredFlags: Object.keys(req).length > 0 ? req : undefined,
+          };
+        }),
+      })),
+    }));
+
+    return {
+      ...prev,
+      scenes: cleanScenes,
+    };
+  };
 
   const handleAddFlag = () => {
     const cleanKey = flagName.trim().toLowerCase().replace(/\s+/g, '_');
@@ -27,14 +74,17 @@ export const FlagsManager: React.FC<FlagsManagerProps> = ({ project, updateProje
     setInitialValue(false);
   };
 
-  const handleDeleteFlag = (key: string) => {
+  const handleDeleteFlag = (keyToDelete: string) => {
     updateProject((prev) => {
       const nextFlags = { ...prev.globalFlags };
-      delete nextFlags[key];
-      return {
+      delete nextFlags[keyToDelete];
+
+      const tempProject: GameProject = {
         ...prev,
         globalFlags: nextFlags,
       };
+
+      return cleanOrphanFlagsFromProject(tempProject);
     });
   };
 
@@ -49,9 +99,54 @@ export const FlagsManager: React.FC<FlagsManagerProps> = ({ project, updateProje
   };
 
   const flagEntries = Object.entries(project.globalFlags || {});
+  const validKeys = Object.keys(project.globalFlags || {});
+
+  // Calculate orphan flags across project scenes
+  let orphanCount = 0;
+  project.scenes.forEach((scene) => {
+    scene.textBlocks.forEach((block) => {
+      if (block.visibleIfFlags) {
+        Object.keys(block.visibleIfFlags).forEach((k) => {
+          if (!validKeys.includes(k)) orphanCount++;
+        });
+      }
+      if (block.hiddenIfFlags) {
+        Object.keys(block.hiddenIfFlags).forEach((k) => {
+          if (!validKeys.includes(k)) orphanCount++;
+        });
+      }
+    });
+    scene.hotspots.forEach((hs) => {
+      hs.actions.forEach((act) => {
+        if (act.requiredFlags) {
+          Object.keys(act.requiredFlags).forEach((k) => {
+            if (!validKeys.includes(k)) orphanCount++;
+          });
+        }
+      });
+    });
+  });
 
   return (
     <div className="space-y-6">
+      {orphanCount > 0 && (
+        <div className="bg-rose-950/40 border border-rose-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-2.5 text-xs text-rose-200">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            <span>
+              Se han detectado <strong>{orphanCount} condiciones vinculadas a banderas borradas</strong> en los párrafos o acciones de tu juego.
+            </span>
+          </div>
+          <button
+            onClick={() => updateProject((prev) => cleanOrphanFlagsFromProject(prev))}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Limpiar todas las referencias obsoletas ({orphanCount})</span>
+          </button>
+        </div>
+      )}
+
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-md space-y-4">
         <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
           <ToggleLeft className="w-5 h-5 text-amber-400" />
