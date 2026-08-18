@@ -7,6 +7,7 @@ import {
   onAuthStateChanged,
   signInAnonymously,
   updateProfile,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
   User 
@@ -116,6 +117,61 @@ export async function createOrUpdateUserProfile(
 export async function setUserRoleInDb(uid: string, role: UserRole): Promise<void> {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, { role });
+}
+
+/**
+ * Admin: Fetch all registered users from Firestore
+ */
+export async function getAllUsersForAdmin(): Promise<UserProfile[]> {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    const list: UserProfile[] = [];
+    snap.forEach((docSnap) => {
+      list.push({ uid: docSnap.id, ...docSnap.data() } as UserProfile);
+    });
+    return list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  } catch (err) {
+    console.error('Error fetching all users for admin:', err);
+    return [];
+  }
+}
+
+/**
+ * Admin: Update user profile (display name, role, suspended status)
+ */
+export async function updateUserProfileByAdmin(
+  uid: string,
+  updates: Partial<UserProfile>
+): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+  const sanitized = JSON.parse(JSON.stringify(updates));
+  await updateDoc(userRef, sanitized);
+}
+
+/**
+ * Admin: Send password reset email to user's registered address
+ */
+export async function sendPasswordResetForUser(email: string): Promise<void> {
+  if (!email || !email.includes('@')) {
+    throw new Error('Dirección de correo electrónico no válida.');
+  }
+  await sendPasswordResetEmail(auth, email);
+}
+
+/**
+ * Admin: Delete a user profile and all their projects from Firestore
+ */
+export async function deleteUserByAdmin(uid: string): Promise<void> {
+  const userProjects = await getUserProjects(uid);
+  for (const proj of userProjects) {
+    try {
+      await deleteProjectFromCloud(proj.id);
+    } catch (e) {
+      console.warn(`Error deleting user project ${proj.id}:`, e);
+    }
+  }
+  const userRef = doc(db, 'users', uid);
+  await deleteDoc(userRef);
 }
 
 export async function updateUserProfileName(uid: string, newDisplayName: string): Promise<UserProfile> {
@@ -368,4 +424,66 @@ export async function updateProjectStatusInCloud(
 export async function deleteProjectFromCloud(docId: string): Promise<void> {
   const ref = doc(db, 'projects', docId);
   await deleteDoc(ref);
+}
+
+/**
+ * Admin: Reassign authorship of a single project document in Firestore
+ */
+export async function reassignProjectAuthorByAdmin(
+  docId: string,
+  newAuthor: { uid: string; displayName: string; email: string }
+): Promise<void> {
+  const ref = doc(db, 'projects', docId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const data = snap.data() as CloudProjectDoc;
+  const authorName = newAuthor.displayName || newAuthor.email.split('@')[0] || 'Autor';
+
+  const updatePayload: Record<string, any> = {
+    authorId: newAuthor.uid,
+    authorName: authorName,
+    authorEmail: newAuthor.email,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (data.projectData) {
+    updatePayload.projectData = {
+      ...data.projectData,
+      author: authorName
+    };
+  }
+  if (data.publishedData) {
+    updatePayload.publishedData = {
+      ...data.publishedData,
+      author: authorName
+    };
+  }
+
+  const sanitized = JSON.parse(JSON.stringify(updatePayload));
+  await updateDoc(ref, sanitized);
+}
+
+/**
+ * Admin: Bulk reassign all projects matching an email or authorId to a new author profile
+ */
+export async function reassignAllProjectsFromAuthorByAdmin(
+  targetEmailOrId: string,
+  newAuthor: { uid: string; displayName: string; email: string }
+): Promise<number> {
+  const allProjects = await getAllProjectsForAdmin();
+  const searchLower = targetEmailOrId.toLowerCase().trim();
+  let reassignedCount = 0;
+
+  for (const proj of allProjects) {
+    const projEmail = (proj.authorEmail || '').toLowerCase().trim();
+    const projId = (proj.authorId || '').toLowerCase().trim();
+
+    if (projEmail === searchLower || projId === searchLower || projEmail.includes(searchLower)) {
+      await reassignProjectAuthorByAdmin(proj.id, newAuthor);
+      reassignedCount++;
+    }
+  }
+
+  return reassignedCount;
 }

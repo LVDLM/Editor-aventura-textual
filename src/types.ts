@@ -264,6 +264,8 @@ export interface UserProfile {
   displayName: string;
   role: UserRole;
   createdAt: string;
+  isSuspended?: boolean;
+  suspendedReason?: string;
 }
 
 export type PublicationStatus = 'draft' | 'pending_review' | 'published' | 'rejected';
