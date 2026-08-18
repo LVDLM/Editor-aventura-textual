@@ -3,11 +3,16 @@ import { ShieldCheck, Lock } from 'lucide-react';
 
 interface PrivacyBannerProps {
   onOpenPrivacyModal: () => void;
+  webAspect?: 'clean' | 'classic';
 }
 
 const CONSENT_KEY = 'rgpd_privacy_consent_accepted_v1';
 
-export const PrivacyBanner: React.FC<PrivacyBannerProps> = ({ onOpenPrivacyModal }) => {
+export const PrivacyBanner: React.FC<PrivacyBannerProps> = ({
+  onOpenPrivacyModal,
+  webAspect = 'clean',
+}) => {
+  const isClean = webAspect === 'clean';
   const [hasConsented, setHasConsented] = useState<boolean>(true);
 
   useEffect(() => {
@@ -25,19 +30,51 @@ export const PrivacyBanner: React.FC<PrivacyBannerProps> = ({ onOpenPrivacyModal
   if (hasConsented) return null;
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 bg-[#0c0c10]/95 border-t border-amber-500/30 backdrop-blur-md p-4 shadow-2xl animate-slideUp text-white">
+    <div
+      className={`fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-md p-4 shadow-2xl animate-slideUp transition-colors ${
+        isClean
+          ? 'bg-[#FFFDF6]/95 border-[#E5DCB8] text-[#2A2118]'
+          : 'bg-[#2C241C]/95 border-[#42362B] text-[#F4EFE3]'
+      }`}
+    >
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
-          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+          <ShieldCheck
+            className={`w-5 h-5 shrink-0 mt-0.5 ${
+              isClean ? 'text-[#3B6D11]' : 'text-emerald-400'
+            }`}
+          />
           <div className="space-y-0.5 text-xs">
-            <p className="font-bold text-slate-100 flex items-center gap-1.5">
+            <p
+              className={`font-serif font-bold flex flex-wrap items-center gap-1.5 ${
+                isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'
+              }`}
+            >
               <span>Privacidad y Protección de Datos (Normativa UE / RGPD)</span>
-              <span className="text-[10px] text-emerald-400 font-mono font-normal">
+              <span
+                className={`text-[10px] font-sans font-bold px-2 py-0.5 rounded border ${
+                  isClean
+                    ? 'bg-[#3B6D11]/10 text-[#3B6D11] border-[#3B6D11]/30'
+                    : 'bg-[#3B6D11]/20 text-[#5B9E22] border-[#3B6D11]/40'
+                }`}
+              >
                 Sin cookies publicitarias
               </span>
             </p>
-            <p className="text-slate-300 text-[11px] leading-relaxed max-w-3xl">
-              Utilizamos únicamente almacenamiento local técnico (<code className="text-amber-300">localStorage</code>) para guardar tu sesión y el avance en tus partidas jugadas. No rastreamos tus datos ni los cedemos a terceros.
+            <p
+              className={`text-[11px] leading-relaxed max-w-3xl ${
+                isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'
+              }`}
+            >
+              Utilizamos únicamente almacenamiento local técnico (
+              <code
+                className={`font-mono font-bold ${
+                  isClean ? 'text-[#A4332A]' : 'text-[#C9A24B]'
+                }`}
+              >
+                localStorage
+              </code>
+              ) para guardar tu sesión y el avance en tus partidas jugadas. No rastreamos tus datos ni los cedemos a terceros.
             </p>
           </div>
         </div>
@@ -45,13 +82,21 @@ export const PrivacyBanner: React.FC<PrivacyBannerProps> = ({ onOpenPrivacyModal
         <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
           <button
             onClick={onOpenPrivacyModal}
-            className="text-xs text-amber-300 hover:text-amber-200 underline font-medium px-2 py-1"
+            className={`text-xs underline font-bold px-2 py-1 transition-colors cursor-pointer ${
+              isClean
+                ? 'text-[#A4332A] hover:text-[#8B2A22]'
+                : 'text-[#C9A24B] hover:text-amber-200'
+            }`}
           >
             Ver Política de Privacidad
           </button>
           <button
             onClick={handleAccept}
-            className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs shadow transition-colors"
+            className={`px-4 py-1.5 font-bold rounded-xl text-xs shadow-sm transition-colors cursor-pointer ${
+              isClean
+                ? 'bg-[#3B6D11] hover:bg-[#2F570E] text-white'
+                : 'bg-[#3B6D11] hover:bg-[#5B9E22] text-white'
+            }`}
           >
             Aceptar
           </button>

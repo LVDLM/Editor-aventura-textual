@@ -14,6 +14,7 @@ import { AdminReviewPanel } from './components/Portal/AdminReviewPanel';
 import { AuthModal } from './components/Portal/AuthModal';
 import { UserProfilePage } from './components/Portal/UserProfilePage';
 import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
+import { PrivacyBanner } from './components/Portal/PrivacyBanner';
 import { Footer } from './components/Footer';
 import { setSoundEnabled } from './utils/audio';
 import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud } from './lib/firebase';
@@ -547,8 +548,14 @@ export default function App() {
           isLoggedIn={!!currentUser}
           onClose={() => setShowPrivacyModal(false)}
           onOpenDeleteAccount={() => setCurrentView('profile')}
+          webAspect={webAspect}
         />
       )}
+
+      <PrivacyBanner
+        onOpenPrivacyModal={() => setShowPrivacyModal(true)}
+        webAspect={webAspect}
+      />
     </div>
   );
 }
