@@ -1913,21 +1913,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                           </span>
 
                           {/* Desktop view (>= sm): SHOW ONLY MINIATURE THUMBNAIL IMAGE */}
-                          <div className="hidden sm:flex items-center justify-center w-12 h-12 relative">
+                          <div className="hidden sm:flex items-center justify-center w-12 h-12 relative rounded-lg bg-slate-950/80 border border-amber-500/30 overflow-hidden shadow-sm shrink-0">
                             {itemImg ? (
                               <img
                                 src={itemImg}
                                 alt={item.name}
-                                className="w-12 h-12 rounded-lg object-cover border border-amber-500/30 shadow-sm"
+                                className="w-full h-full object-contain p-0.5"
                               />
                             ) : (
-                              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-amber-900/40 via-slate-900 to-amber-950/60 border border-amber-500/30 flex items-center justify-center text-amber-300 font-black text-xs uppercase shadow-sm">
+                              <div className="w-full h-full bg-gradient-to-br from-amber-900/40 via-slate-900 to-amber-950/60 flex items-center justify-center text-amber-300 font-black text-xs uppercase">
                                 {item.name.substring(0, 2)}
                               </div>
                             )}
 
                             {isSelected && (
-                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900 shadow animate-pulse" />
+                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900 shadow animate-pulse z-10" />
                             )}
                           </div>
                         </button>
