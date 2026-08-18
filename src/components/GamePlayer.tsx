@@ -379,18 +379,26 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     setSelectedInventoryItemId(itemId);
 
-    const isItemGameOver = !!targetItem.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(targetItem.description || '');
-    const rawDesc = targetItem.description || 'Sin descripción adicional.';
-    const cleanDesc = rawDesc.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim();
+    // If activeVerb is 'mirar', show the modal popup with item description
+    if (activeVerb === 'mirar') {
+      const isItemGameOver = !!targetItem.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(targetItem.description || '');
+      const rawDesc = targetItem.description || 'Sin descripción adicional.';
+      const cleanDesc = rawDesc.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim();
 
-    setModalFeedback({
-      type: isItemGameOver ? 'gameover' : 'item',
-      title: targetItem.name,
-      verbIconName: isItemGameOver ? 'Skull' : 'Eye',
-      isGameOver: isItemGameOver,
-      itemImageUrl: targetItem.imageFileData || targetItem.imageUrl,
-      message: cleanDesc,
-    });
+      setModalFeedback({
+        type: isItemGameOver ? 'gameover' : 'item',
+        title: targetItem.name,
+        verbIconName: isItemGameOver ? 'Skull' : 'Eye',
+        isGameOver: isItemGameOver,
+        itemImageUrl: targetItem.imageFileData || targetItem.imageUrl,
+        message: cleanDesc,
+      });
+    } else {
+      // If activeVerb is 'usar' or any other verb (or no verb selected):
+      // Set activeVerb to 'usar' so sentence bar reads "Usar [nombre de objeto] con"
+      setActiveVerb('usar');
+      // Do NOT show the modal feedback popup with object information!
+    }
   };
 
   const handleClearCommand = () => {
@@ -446,9 +454,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     const verbObj = ALL_VERBS.find((v) => v.id === verbToUse);
     const verbIconName = verbObj?.iconName || 'Eye';
-    const actionTitle = verbObj
-      ? `${verbObj.label}: ${hotspot.label || hotspot.word}`
-      : (hotspot.label || hotspot.word);
+
+    const selectedItemObj = selectedInventoryItemId
+      ? project.inventoryItems.find((i) => i.id === selectedInventoryItemId)
+      : null;
+
+    const targetWordLabel = hotspot.label || hotspot.word;
+    let actionTitle = '';
+    if (selectedItemObj) {
+      actionTitle = `Usar ${selectedItemObj.name} con ${targetWordLabel}`;
+    } else if (verbObj) {
+      actionTitle = `${verbObj.label}: ${targetWordLabel}`;
+    } else {
+      actionTitle = targetWordLabel;
+    }
 
     // Find all action rules for this verb
     const rulesForVerb = hotspot.actions.filter((a) => a.verb === verbToUse);
@@ -457,8 +476,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     const matchingRules = rulesForVerb.filter((a) => {
       // Check required item
       if (a.requiredItemId) {
-        if (selectedInventoryItemId !== a.requiredItemId && !gameState.inventory.includes(a.requiredItemId)) {
-          return false;
+        if (selectedInventoryItemId) {
+          if (selectedInventoryItemId !== a.requiredItemId) return false;
+        } else {
+          if (!gameState.inventory.includes(a.requiredItemId)) return false;
         }
       }
       // Check required flags & conditions
@@ -733,6 +754,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         failedRule?.failMessage ||
         lookCharDesc ||
         (hotspot.customDefaultResponses && hotspot.customDefaultResponses[verbToUse]) ||
+        (selectedItemObj ? `No parece ocurrir nada al usar ${selectedItemObj.name} con ${hotspot.label || hotspot.word}.` : null) ||
         (project.defaultResponses && project.defaultResponses[verbToUse]) ||
         'Eso no parece surtir efecto.';
 
@@ -1493,16 +1515,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         {/* Sentence Builder Bar (LucasArts Style Command Bar) */}
         <div className={`p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} flex items-center justify-between gap-3 shadow-sm`}>
-          <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide">
+          <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide flex-wrap">
             <span className={`text-xs font-semibold uppercase tracking-wider ${themeConfig.accentClass}`}>Acción:</span>
             <span className={themeConfig.actionBoxTextClass}>
-              {activeVerb ? activeVerb.toUpperCase() : 'SELECCIONAR ACCIÓN...'}
+              {selectedItemObj && activeVerb === 'usar'
+                ? `Usar ${selectedItemObj.name} con`
+                : selectedItemObj && activeVerb === 'mirar'
+                ? `Mirar ${selectedItemObj.name}`
+                : selectedItemObj
+                ? `Usar ${selectedItemObj.name} con`
+                : activeVerb
+                ? ALL_VERBS.find((v) => v.id === activeVerb)?.label.split(' / ')[0].toUpperCase() || activeVerb.toUpperCase()
+                : 'SELECCIONAR ACCIÓN...'}
             </span>
-            {selectedItemObj && (
-              <span className={themeConfig.accentClass}>
-                [{selectedItemObj.name}]
-              </span>
-            )}
             {!activeVerb && !selectedItemObj && (
               <span className={`text-xs font-normal ${themeConfig.textMutedClass} italic hidden sm:inline`}>
                 (Haz clic en un verbo abajo o en una palabra destacada)
@@ -1863,35 +1888,55 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <p className={`text-xs italic ${themeConfig.textMutedClass}`}>No llevas ningún objeto todavía.</p>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-52 overflow-y-auto pr-1">
                   {gameState.inventory.map((itemId) => {
                     const item = project.inventoryItems.find((i) => i.id === itemId);
                     if (!item) return null;
                     const isSelected = selectedInventoryItemId === itemId;
-                    const IconComp = ICON_MAP[item.icon] || Box;
+                    const itemImg = item.imageFileData || item.imageUrl;
 
                     return (
-                      <button
-                        key={itemId}
-                        onClick={() => handleSelectInventoryItem(itemId)}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                          isSelected
-                            ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 font-bold shadow`
-                            : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
-                        }`}
-                        title={item.description}
-                      >
-                        <div className="flex items-center gap-2">
-                          <IconComp className="w-4 h-4 shrink-0" />
-                          <span className="truncate">{item.name}</span>
-                        </div>
-                        {isSelected && <span className={`text-[10px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded ${isSepia ? 'bg-[#3b2d1d] text-[#fbf5e8]' : 'bg-slate-950 text-amber-400'}`}>Usando</span>}
-                        {selectedInventoryItemId && !isSelected && (
-                          <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">
-                            🧩 Combinar
+                      <div key={itemId} className="relative group">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectInventoryItem(itemId)}
+                          className={`w-full flex items-center justify-center p-2 rounded-xl text-xs font-medium border transition-all cursor-pointer relative min-h-[44px] ${
+                            isSelected
+                              ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 font-bold shadow-md scale-[1.03] ring-2 ring-amber-400/50`
+                              : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
+                          }`}
+                          title={item.name}
+                        >
+                          {/* Mobile view (< sm): SHOW ONLY TEXT */}
+                          <span className="sm:hidden truncate text-xs font-semibold px-1 text-center">
+                            {item.name}
                           </span>
-                        )}
-                      </button>
+
+                          {/* Desktop view (>= sm): SHOW ONLY MINIATURE THUMBNAIL IMAGE */}
+                          <div className="hidden sm:flex items-center justify-center w-12 h-12 relative">
+                            {itemImg ? (
+                              <img
+                                src={itemImg}
+                                alt={item.name}
+                                className="w-12 h-12 rounded-lg object-cover border border-amber-500/30 shadow-sm"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-amber-900/40 via-slate-900 to-amber-950/60 border border-amber-500/30 flex items-center justify-center text-amber-300 font-black text-xs uppercase shadow-sm">
+                                {item.name.substring(0, 2)}
+                              </div>
+                            )}
+
+                            {isSelected && (
+                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900 shadow animate-pulse" />
+                            )}
+                          </div>
+                        </button>
+
+                        {/* Hover Tooltip showing item name on desktop */}
+                        <div className="hidden sm:block opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 absolute -top-10 left-1/2 -translate-x-1/2 z-30 bg-slate-950/95 border border-amber-400/60 text-amber-200 text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap backdrop-blur-md">
+                          {item.name}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
