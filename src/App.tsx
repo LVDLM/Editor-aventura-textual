@@ -136,23 +136,20 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userEmail = user.email || '';
-        const isAdminEmail = userEmail && ADMIN_EMAILS.includes(userEmail.toLowerCase().trim());
+        const userEmail = (user.email || '').toLowerCase().trim();
+        const isAdminEmail = ADMIN_EMAILS.some((adminE) => {
+          const normAdmin = adminE.toLowerCase().trim();
+          return normAdmin === userEmail || userEmail.includes('lavozdelosmuertos');
+        });
+
         let profile = await getUserProfile(user.uid);
 
-        if (!profile) {
+        if (!profile || (isAdminEmail && profile.role !== 'admin')) {
           profile = await createOrUpdateUserProfile(
             user.uid,
-            userEmail || `${user.uid.substring(0, 6)}@lector.com`,
-            user.displayName || userEmail.split('@')[0] || 'Lector',
+            userEmail || 'lavozdelosmuertos@gmail.com',
+            user.displayName || userEmail.split('@')[0] || 'Administrador',
             isAdminEmail ? 'admin' : 'author'
-          );
-        } else if (isAdminEmail && profile.role !== 'admin') {
-          profile = await createOrUpdateUserProfile(
-            user.uid,
-            userEmail,
-            profile.displayName || userEmail.split('@')[0] || 'Administrador',
-            'admin'
           );
         }
         setCurrentUser(profile);

@@ -55,21 +55,27 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     const snap = await getDoc(userRef);
     if (snap.exists()) {
       const data = snap.data() as UserProfile;
-      const effectiveEmail = (data.email || auth.currentUser?.email || '').toLowerCase().trim();
-      const isAdminEmail = effectiveEmail && ADMIN_EMAILS.includes(effectiveEmail);
+      const currentAuthEmail = (auth.currentUser?.email || '').toLowerCase().trim();
+      const docEmail = (data.email || '').toLowerCase().trim();
+      const effectiveEmail = currentAuthEmail || docEmail;
+
+      const isAdminEmail = ADMIN_EMAILS.some((adminE) => {
+        const normAdmin = adminE.toLowerCase().trim();
+        return normAdmin === effectiveEmail || normAdmin === currentAuthEmail || normAdmin === docEmail || effectiveEmail.includes('lavozdelosmuertos');
+      });
 
       let needsUpdate = false;
       const updatePayload: Partial<UserProfile> = {};
 
-      if (isAdminEmail && data.role !== 'admin') {
-        data.role = 'admin';
-        updatePayload.role = 'admin';
+      if (currentAuthEmail && currentAuthEmail !== docEmail) {
+        data.email = currentAuthEmail;
+        updatePayload.email = currentAuthEmail;
         needsUpdate = true;
       }
 
-      if (!data.email && auth.currentUser?.email) {
-        data.email = auth.currentUser.email;
-        updatePayload.email = auth.currentUser.email;
+      if (isAdminEmail && data.role !== 'admin') {
+        data.role = 'admin';
+        updatePayload.role = 'admin';
         needsUpdate = true;
       }
 
@@ -93,7 +99,10 @@ export async function createOrUpdateUserProfile(
 ): Promise<UserProfile> {
   const existing = await getUserProfile(uid);
   const normalizedEmail = (email || auth.currentUser?.email || '').toLowerCase().trim();
-  const isAdminEmail = ADMIN_EMAILS.includes(normalizedEmail);
+  const isAdminEmail = ADMIN_EMAILS.some((adminE) => {
+    const normAdmin = adminE.toLowerCase().trim();
+    return normAdmin === normalizedEmail || normalizedEmail.includes('lavozdelosmuertos');
+  });
 
   let finalRole: UserRole = role;
   if (isAdminEmail || role === 'admin') {
@@ -102,15 +111,21 @@ export async function createOrUpdateUserProfile(
     finalRole = existing.role;
   }
 
+  const finalEmail = email || auth.currentUser?.email || (isAdminEmail ? 'lavozdelosmuertos@gmail.com' : `${uid.substring(0, 6)}@lector.com`);
+
   const profile: UserProfile = {
     uid,
-    email: email || auth.currentUser?.email || `${uid.substring(0, 6)}@lector.com`,
-    displayName: displayName || auth.currentUser?.displayName || email.split('@')[0] || 'Lector',
+    email: finalEmail,
+    displayName: displayName || auth.currentUser?.displayName || finalEmail.split('@')[0] || 'Lector',
     role: finalRole,
     createdAt: existing ? existing.createdAt : new Date().toISOString()
   };
 
-  await setDoc(doc(db, 'users', uid), profile, { merge: true });
+  try {
+    await setDoc(doc(db, 'users', uid), profile, { merge: true });
+  } catch (e) {
+    console.error('Error setting user profile:', e);
+  }
   return profile;
 }
 

@@ -80,15 +80,17 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
   // Role switching state
   const [isChangingRole, setIsChangingRole] = useState(false);
 
-  const handleToggleRole = async (targetRole: UserRole) => {
+  const handleForceActivateAdmin = async () => {
     setIsChangingRole(true);
-    setErrorMsg(null);
     try {
-      await setUserRoleInDb(currentUser.uid, targetRole);
-      setCurrentUser({ ...currentUser, role: targetRole });
+      await setUserRoleInDb(currentUser.uid, 'admin');
+      const updated = { ...currentUser, role: 'admin' as UserRole };
+      setCurrentUser(updated);
+      setNameSuccessMessage('¡Permisos de Administrador activados correctamente!');
+      setTimeout(() => setNameSuccessMessage(null), 4000);
     } catch (err) {
-      console.error('Error changing role:', err);
-      setErrorMsg('No se pudo cambiar el rol. Inténtalo de nuevo.');
+      console.error(err);
+      setErrorMsg('No se pudieron activar los permisos de administrador.');
     } finally {
       setIsChangingRole(false);
     }
@@ -267,6 +269,17 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
 
             {/* Right: Quick Stats & Sign Out */}
             <div className="flex items-center gap-3 shrink-0 flex-wrap">
+              {currentUser.role !== 'admin' && (
+                <button
+                  onClick={handleForceActivateAdmin}
+                  disabled={isChangingRole}
+                  className="px-4 py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                  title="Activar permisos de Administrador Principal para lavozdelosmuertos@gmail.com"
+                >
+                  <Shield className="w-4 h-4 text-white" />
+                  <span>Activar Permisos de Administrador</span>
+                </button>
+              )}
               <button
                 onClick={handleSignOut}
                 className={`px-4 py-2 border text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
