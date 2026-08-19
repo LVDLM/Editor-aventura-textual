@@ -349,6 +349,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     const newBlock: SceneTextBlock = {
       id: `block_${Date.now()}`,
       text: '',
+      type: 'normal',
     };
     updateProject((prev) => ({
       ...prev,
@@ -1663,7 +1664,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
                       {/* Block type selector */}
                       <select
-                        value={block.type || (index === 0 ? 'portada' : index === 1 ? 'introduccion' : 'normal')}
+                        value={block.type || 'normal'}
                         onChange={(e) => handleUpdateBlockType(block.id, e.target.value as any)}
                         className="bg-black/60 border border-white/10 text-white text-[11px] rounded-lg px-2 py-0.5 focus:border-amber-500 outline-none cursor-pointer font-medium"
                       >

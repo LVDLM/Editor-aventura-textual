@@ -144,8 +144,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [qteStatus, setQteStatus] = useState<'active' | 'success' | 'failed' | 'idle'>('idle');
   const [qteMistakeMsg, setQteMistakeMsg] = useState<string | null>(null);
 
-  const themeConfig = THEME_CONFIGS[project.theme] || THEME_CONFIGS['classic-retro'];
-  const isSepia = project.theme === 'sepia-parchment';
+  const currentTheme = project?.theme || 'sepia-parchment';
+  const themeConfig = THEME_CONFIGS[currentTheme] || THEME_CONFIGS['sepia-parchment'];
+  const isSepia = currentTheme === 'sepia-parchment';
   const currentScene = project.scenes.find((s) => s.id === gameState.currentSceneId) || project.scenes[0];
 
   const isQTEScene = (currentScene?.type === 'qte' || !!currentScene?.qteConfig) && !!currentScene?.qteConfig?.sequence?.length;
@@ -1124,39 +1125,39 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           switch (tagName) {
             case 'h1':
               return (
-                <h1 key={keyIndex} className="text-2xl sm:text-3xl font-extrabold text-amber-300 my-3 tracking-tight border-b border-amber-500/20 pb-1">
+                <h1 key={keyIndex} className={`text-2xl sm:text-3xl font-extrabold my-3 tracking-tight border-b pb-1 ${isSepia ? 'text-[#822b16] border-[#822b16]/30' : 'text-amber-300 border-amber-500/20'}`}>
                   {children}
                 </h1>
               );
             case 'h2':
               return (
-                <h2 key={keyIndex} className="text-xl sm:text-2xl font-bold text-amber-200 my-2.5">
+                <h2 key={keyIndex} className={`text-xl sm:text-2xl font-bold my-2.5 ${isSepia ? 'text-[#822b16]' : 'text-amber-200'}`}>
                   {children}
                 </h2>
               );
             case 'h3':
               return (
-                <h3 key={keyIndex} className="text-lg font-bold text-amber-100 my-2">
+                <h3 key={keyIndex} className={`text-lg font-bold my-2 ${isSepia ? 'text-[#5a1d0d]' : 'text-amber-100'}`}>
                   {children}
                 </h3>
               );
             case 'b':
             case 'strong':
               return (
-                <strong key={keyIndex} className="font-bold text-amber-100">
+                <strong key={keyIndex} className={`font-bold ${isSepia ? 'text-[#3b2d1d]' : 'text-amber-100'}`}>
                   {children}
                 </strong>
               );
             case 'i':
             case 'em':
               return (
-                <em key={keyIndex} className="italic text-slate-200">
+                <em key={keyIndex} className={`italic ${isSepia ? 'text-[#5a422a]' : 'text-slate-200'}`}>
                   {children}
                 </em>
               );
             case 'u':
               return (
-                <u key={keyIndex} className="underline decoration-amber-500/50 underline-offset-4">
+                <u key={keyIndex} className={`underline underline-offset-4 ${isSepia ? 'decoration-[#822b16]/60 text-[#822b16]' : 'decoration-amber-500/50'}`}>
                   {children}
                 </u>
               );
@@ -1430,7 +1431,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 <div className={`flex items-center gap-1.5 border rounded-xl px-2.5 py-1 text-xs shadow-inner ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
                   <Palette className={`w-3.5 h-3.5 ${themeConfig.accentClass} shrink-0`} />
                   <select
-                    value={project.theme}
+                    value={currentTheme}
                     onChange={(e) => {
                       if (updateProject) {
                         updateProject((prev) => ({ ...prev, theme: e.target.value as any }));

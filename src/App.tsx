@@ -20,18 +20,25 @@ import { setSoundEnabled } from './utils/audio';
 import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
+const sanitizeProjectForPlay = (proj: GameProject): GameProject => {
+  return {
+    ...proj,
+    theme: (!proj.theme || proj.theme === 'classic-retro') ? 'sepia-parchment' : proj.theme,
+  };
+};
+
 export default function App() {
   const [project, setProject] = useState<GameProject>(() => {
     const saved = localStorage.getItem('motordeaventuras_last_edited_project');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.scenes && parsed.id) return parsed;
+        if (parsed && parsed.scenes && parsed.id) return sanitizeProjectForPlay(parsed);
       } catch (e) {
         console.error('Error loading last edited project:', e);
       }
     }
-    return sampleGameProject;
+    return sanitizeProjectForPlay(sampleGameProject);
   });
 
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<string>('');
@@ -60,14 +67,15 @@ export default function App() {
       const gameParam = params.get('juego') || params.get('game');
       if (gameParam) {
         if (gameParam === 'demo' || gameParam === 'sample') {
-          setProject(sampleGameProject);
+          const sanitizedDemo = sanitizeProjectForPlay(sampleGameProject);
+          setProject(sanitizedDemo);
           setCurrentCloudDocId(null);
-          resetGameStateForProject(sampleGameProject);
+          resetGameStateForProject(sanitizedDemo);
           setCurrentView('play');
         } else {
           const docData = await getProjectByIdFromCloud(gameParam);
           if (docData) {
-            const targetProj = docData.publishedData || docData.projectData;
+            const targetProj = sanitizeProjectForPlay(docData.publishedData || docData.projectData);
             setProject(targetProj);
             setCurrentCloudDocId(docData.id);
             resetGameStateForProject(targetProj);
@@ -379,8 +387,9 @@ export default function App() {
             webAspect={webAspect}
             onAspectChange={handleAspectChange}
             onPlayProject={(selectedProj) => {
-              setProject(selectedProj);
-              resetGameStateForProject(selectedProj);
+              const projToPlay = sanitizeProjectForPlay(selectedProj);
+              setProject(projToPlay);
+              resetGameStateForProject(projToPlay);
               setCurrentView('play');
             }}
             onOpenWorkspace={() => {
@@ -412,7 +421,10 @@ export default function App() {
           <GameEditor
             project={project}
             updateProject={handleUpdateProject}
-            onSwitchToPlay={() => setCurrentView('play')}
+            onSwitchToPlay={() => {
+              setProject((prev) => sanitizeProjectForPlay(prev));
+              setCurrentView('play');
+            }}
             onOpenExport={() => setShowExport(true)}
             currentUser={currentUser}
             webAspect={webAspect}
@@ -424,14 +436,16 @@ export default function App() {
             currentUser={currentUser}
             activeProject={project}
             onSelectProject={(selectedProj, docId) => {
-              setProject(selectedProj);
+              const sanitized = sanitizeProjectForPlay(selectedProj);
+              setProject(sanitized);
               setCurrentCloudDocId(docId);
-              resetGameStateForProject(selectedProj);
+              resetGameStateForProject(sanitized);
             }}
             onOpenEditor={() => setCurrentView('edit')}
             onPlayProject={(selectedProj) => {
-              setProject(selectedProj);
-              resetGameStateForProject(selectedProj);
+              const projToPlay = sanitizeProjectForPlay(selectedProj);
+              setProject(projToPlay);
+              resetGameStateForProject(projToPlay);
               setCurrentView('play');
             }}
             onCreateNewProject={handleCreateNewProject}
@@ -444,14 +458,16 @@ export default function App() {
           <AdminReviewPanel
             currentUser={currentUser}
             onSelectProject={(selectedProj, docId) => {
-              setProject(selectedProj);
+              const sanitized = sanitizeProjectForPlay(selectedProj);
+              setProject(sanitized);
               setCurrentCloudDocId(docId);
-              resetGameStateForProject(selectedProj);
+              resetGameStateForProject(sanitized);
             }}
             onOpenEditor={() => setCurrentView('edit')}
             onPlayProject={(selectedProj) => {
-              setProject(selectedProj);
-              resetGameStateForProject(selectedProj);
+              const projToPlay = sanitizeProjectForPlay(selectedProj);
+              setProject(projToPlay);
+              resetGameStateForProject(projToPlay);
               setCurrentView('play');
             }}
             webAspect={webAspect}
