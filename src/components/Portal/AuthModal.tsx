@@ -27,8 +27,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
       const profile = await createOrUpdateUserProfile(
         googleUser.uid,
         googleUser.email || 'lavozdelosmuertos@gmail.com',
-        googleUser.displayName || 'Administrador',
-        'author'
+        googleUser.displayName || 'Urdimbre',
+        'admin'
       );
       onUserChanged(profile);
       onClose();
@@ -40,7 +40,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
         const profile = await createOrUpdateUserProfile(
           cred.user.uid,
           'lavozdelosmuertos@gmail.com',
-          'Administrador (lavozdelosmuertos)',
+          'Urdimbre',
           'admin'
         );
         onUserChanged(profile);

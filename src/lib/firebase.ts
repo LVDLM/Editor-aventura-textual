@@ -79,6 +79,12 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
         needsUpdate = true;
       }
 
+      if (isAdminEmail && (!data.displayName || data.displayName === 'Administrador' || data.displayName.includes('Administrador'))) {
+        data.displayName = 'Urdimbre';
+        updatePayload.displayName = 'Urdimbre';
+        needsUpdate = true;
+      }
+
       if (needsUpdate) {
         await setDoc(userRef, updatePayload, { merge: true });
       }
@@ -113,10 +119,15 @@ export async function createOrUpdateUserProfile(
 
   const finalEmail = email || auth.currentUser?.email || (isAdminEmail ? 'lavozdelosmuertos@gmail.com' : `${uid.substring(0, 6)}@lector.com`);
 
+  let finalDisplayName = displayName || existing?.displayName || auth.currentUser?.displayName || (isAdminEmail ? 'Urdimbre' : finalEmail.split('@')[0]);
+  if (isAdminEmail && (!finalDisplayName || finalDisplayName === 'Administrador' || finalDisplayName.includes('Administrador'))) {
+    finalDisplayName = 'Urdimbre';
+  }
+
   const profile: UserProfile = {
     uid,
     email: finalEmail,
-    displayName: displayName || auth.currentUser?.displayName || finalEmail.split('@')[0] || 'Lector',
+    displayName: finalDisplayName,
     role: finalRole,
     createdAt: existing ? existing.createdAt : new Date().toISOString()
   };
@@ -547,11 +558,23 @@ export async function consolidateAdminProfilesInFirestore(primaryUid?: string): 
     let reassignedProjectsCount = 0;
 
     if (primaryUser) {
-      // Ensure primary user profile has role 'admin' in Firestore
-      if (primaryUser.role !== 'admin') {
-        const userRef = doc(db, 'users', primaryUser.uid);
-        await updateDoc(userRef, { role: 'admin', email: adminEmail });
+      // Ensure primary user profile has role 'admin' and displayName 'Urdimbre'
+      const needsNameFix = !primaryUser.displayName || primaryUser.displayName === 'Administrador' || primaryUser.displayName.includes('Administrador');
+      const needsRoleFix = primaryUser.role !== 'admin';
+
+      if (needsNameFix || needsRoleFix) {
+        primaryUser.displayName = 'Urdimbre';
         primaryUser.role = 'admin';
+        const userRef = doc(db, 'users', primaryUser.uid);
+        await updateDoc(userRef, { displayName: 'Urdimbre', role: 'admin', email: adminEmail });
+        
+        if (auth.currentUser && auth.currentUser.uid === primaryUser.uid) {
+          try {
+            await updateProfile(auth.currentUser, { displayName: 'Urdimbre' });
+          } catch (e) {
+            console.warn('Could not update auth profile display name:', e);
+          }
+        }
         updatedCount++;
       }
 
