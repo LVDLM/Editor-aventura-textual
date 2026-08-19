@@ -363,16 +363,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
 
             {/* Quick Demo Access Bar */}
             <div className="mt-6 pt-4 border-t border-white/10 space-y-2 text-center">
-              <span className="text-[11px] text-slate-400 block font-medium">Acceso Rápido Administrador Principal:</span>
+              <span className="text-[11px] text-amber-300/80 block font-medium">🛡️ Acceso Administrador Principal (Urdimbre / lavozdelosmuertos@gmail.com):</span>
               <button
                 type="button"
-                onClick={() => handleAnonymousDemoLogin()}
+                onClick={() => handleGoogleAuth()}
                 disabled={loading}
                 className="w-full py-2.5 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
-                title="Acceder como Administrador Único (lavozdelosmuertos@gmail.com)"
+                title="Acceder con Google como Administrador Principal Único"
               >
                 <Shield className="w-4 h-4 text-amber-400" />
-                <span>Iniciar Sesión como Administrador (lavozdelosmuertos)</span>
+                <span>Iniciar Sesión como Administrador (Urdimbre)</span>
               </button>
             </div>
           </div>

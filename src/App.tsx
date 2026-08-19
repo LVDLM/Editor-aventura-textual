@@ -17,7 +17,7 @@ import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
 import { PrivacyBanner } from './components/Portal/PrivacyBanner';
 import { Footer } from './components/Footer';
 import { setSoundEnabled } from './utils/audio';
-import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud } from './lib/firebase';
+import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud, consolidateAdminProfilesInFirestore } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const sanitizeProjectForPlay = (proj: GameProject): GameProject => {
@@ -141,6 +141,14 @@ export default function App() {
           const normAdmin = adminE.toLowerCase().trim();
           return normAdmin === userEmail || userEmail.includes('lavozdelosmuertos');
         });
+
+        if (isAdminEmail) {
+          const consolidation = await consolidateAdminProfilesInFirestore(user.uid);
+          if (consolidation.primaryProfile) {
+            setCurrentUser(consolidation.primaryProfile);
+            return;
+          }
+        }
 
         let profile = await getUserProfile(user.uid);
 

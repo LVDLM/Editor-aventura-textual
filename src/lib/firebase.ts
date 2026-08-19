@@ -502,3 +502,82 @@ export async function reassignAllProjectsFromAuthorByAdmin(
 
   return reassignedCount;
 }
+
+/**
+ * Admin: Consolidate duplicate admin profiles in Firestore database.
+ * Upgrades the main user profile for lavozdelosmuertos@gmail.com (e.g., 'Urdimbre') to 'admin'
+ * and reassigns any projects from temporary/anonymous admin profiles to the primary user profile.
+ */
+export async function consolidateAdminProfilesInFirestore(primaryUid?: string): Promise<{
+  updatedCount: number;
+  reassignedProjectsCount: number;
+  primaryProfile: UserProfile | null;
+}> {
+  try {
+    const allUsers = await getAllUsersForAdmin();
+    const adminEmail = 'lavozdelosmuertos@gmail.com';
+    const targetEmailLower = adminEmail.toLowerCase();
+
+    // Find all user documents matching lavozdelosmuertos@gmail.com or admin emails
+    const matchingUsers = allUsers.filter((u) => {
+      const uEmail = (u.email || '').toLowerCase().trim();
+      return uEmail === targetEmailLower || uEmail.includes('lavozdelosmuertos');
+    });
+
+    if (matchingUsers.length === 0) {
+      return { updatedCount: 0, reassignedProjectsCount: 0, primaryProfile: null };
+    }
+
+    // Determine primary user:
+    // 1. If primaryUid is provided and exists among matchingUsers, use it
+    // 2. Otherwise pick non-anonymous / real account (e.g. named "Urdimbre" or customized)
+    // 3. Fallback to the first matching user
+    let primaryUser = matchingUsers.find((u) => u.uid === primaryUid);
+    if (!primaryUser) {
+      primaryUser =
+        matchingUsers.find(
+          (u) =>
+            u.displayName &&
+            u.displayName !== 'Administrador' &&
+            u.displayName !== 'Usuario Lector'
+        ) || matchingUsers[0];
+    }
+
+    let updatedCount = 0;
+    let reassignedProjectsCount = 0;
+
+    if (primaryUser) {
+      // Ensure primary user profile has role 'admin' in Firestore
+      if (primaryUser.role !== 'admin') {
+        const userRef = doc(db, 'users', primaryUser.uid);
+        await updateDoc(userRef, { role: 'admin', email: adminEmail });
+        primaryUser.role = 'admin';
+        updatedCount++;
+      }
+
+      // Reassign stories/projects authored by secondary duplicate profiles to primary user
+      for (const duplicateUser of matchingUsers) {
+        if (duplicateUser.uid !== primaryUser.uid) {
+          const count = await reassignAllProjectsFromAuthorByAdmin(duplicateUser.uid, {
+            uid: primaryUser.uid,
+            displayName: primaryUser.displayName || 'Urdimbre',
+            email: adminEmail,
+          });
+          reassignedProjectsCount += count;
+          // Clean up duplicate user document from Firestore
+          try {
+            await deleteDoc(doc(db, 'users', duplicateUser.uid));
+            updatedCount++;
+          } catch (e) {
+            console.warn(`Could not delete duplicate user doc ${duplicateUser.uid}:`, e);
+          }
+        }
+      }
+    }
+
+    return { updatedCount, reassignedProjectsCount, primaryProfile: primaryUser };
+  } catch (err) {
+    console.error('Error consolidating admin profiles:', err);
+    return { updatedCount: 0, reassignedProjectsCount: 0, primaryProfile: null };
+  }
+}

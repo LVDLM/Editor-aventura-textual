@@ -9,7 +9,8 @@ import {
   sendPasswordResetForUser,
   deleteUserByAdmin,
   reassignProjectAuthorByAdmin,
-  reassignAllProjectsFromAuthorByAdmin
+  reassignAllProjectsFromAuthorByAdmin,
+  consolidateAdminProfilesInFirestore
 } from '../../lib/firebase';
 import { generateStandaloneHTML } from '../../utils/htmlExporter';
 import { exportProjectAsZip } from '../../utils/zipExporter';
@@ -231,6 +232,22 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
     } catch (e) {
       console.error(e);
       setMessage({ type: 'error', text: 'Error al eliminar el usuario.' });
+    }
+  };
+
+  const handleConsolidateAdminProfiles = async () => {
+    setMessage(null);
+    try {
+      const res = await consolidateAdminProfilesInFirestore(currentUser?.uid);
+      await fetchAdminUsers();
+      await fetchAdminProjects();
+      setMessage({
+        type: 'success',
+        text: `¡Unificación completada con éxito! Tu usuario principal (${res.primaryProfile?.displayName || 'Urdimbre'} - lavozdelosmuertos@gmail.com) es ahora el Administrador Único. Se unificaron ${res.updatedCount} registros y se reasignaron ${res.reassignedProjectsCount} historias.`
+      });
+    } catch (e: any) {
+      console.error(e);
+      setMessage({ type: 'error', text: 'Error al unificar perfiles de administrador.' });
     }
   };
 
@@ -724,6 +741,29 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
       {/* TAB 2: USER MANAGEMENT */}
       {mainTab === 'users' && (
         <div className="space-y-6">
+          {/* Action Bar: Consolidation & Cleanup */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+            <div className="flex items-center gap-3 text-xs">
+              <Shield className="w-5 h-5 text-amber-500 shrink-0" />
+              <div>
+                <p className={`font-bold ${isClean ? 'text-amber-950' : 'text-amber-200'}`}>
+                  Consolidación de Cuenta Principal (lavozdelosmuertos@gmail.com)
+                </p>
+                <p className={`text-[11px] ${isClean ? 'text-amber-800' : 'text-amber-300/80'}`}>
+                  Unifica todos los relatos de pruebas bajo tu usuario "Urdimbre" y asegura permisos de Administrador Único.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleConsolidateAdminProfiles}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm shrink-0"
+              title="Unificar cuentas duplicadas y reasignar historias a Urdimbre"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Unificar Cuentas de Admin</span>
+            </button>
+          </div>
+
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div className={`p-4 rounded-2xl border flex items-center justify-between ${
