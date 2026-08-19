@@ -616,13 +616,13 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
             const updatedVis: Record<string, boolean> = {};
             if (b.visibleIfFlags) {
               Object.entries(b.visibleIfFlags).forEach(([k, v]) => {
-                if (validKeys.includes(k)) updatedVis[k] = v;
+                if (validKeys.includes(k)) updatedVis[k] = Boolean(v);
               });
             }
             const updatedHid: Record<string, boolean> = {};
             if (b.hiddenIfFlags) {
               Object.entries(b.hiddenIfFlags).forEach(([k, v]) => {
-                if (validKeys.includes(k)) updatedHid[k] = v;
+                if (validKeys.includes(k)) updatedHid[k] = Boolean(v);
               });
             }
             return {

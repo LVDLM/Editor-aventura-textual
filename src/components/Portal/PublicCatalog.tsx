@@ -60,9 +60,9 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         'sample_misterio_habitacion',
         sampleGameProject,
         {
-          uid: 'system_admin_seed',
-          displayName: 'Editorial Narrativa',
-          email: 'contacto@narrativa.com'
+          uid: currentUser?.uid || 'admin_lavozdelosmuertos',
+          displayName: currentUser?.displayName || 'Editorial Narrativa (lavozdelosmuertos)',
+          email: 'lavozdelosmuertos@gmail.com'
         },
         'published'
       );

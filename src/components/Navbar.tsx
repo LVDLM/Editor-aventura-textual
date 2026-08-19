@@ -223,7 +223,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* Single Admin / Lector View Toggle Button for Administrators */}
+          {/* Admin Navigation Button for Administrators */}
           {currentUser?.role === 'admin' && (
             <button
               onClick={() => {
@@ -240,19 +240,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
               title={
                 currentView === 'admin'
-                  ? 'Ver la web como lector registrado (Lector)'
-                  : 'Ver panel de administración (Admin)'
+                  ? 'Volver a la Biblioteca Pública'
+                  : 'Abrir Panel de Control de Administración'
               }
             >
               {currentView === 'admin' ? (
                 <>
-                  <Shield className="w-3.5 h-3.5 text-white" />
-                  <span>Admin</span>
+                  <BookOpen className="w-3.5 h-3.5 text-white" />
+                  <span>Ver Biblioteca</span>
                 </>
               ) : (
                 <>
-                  <User className="w-3.5 h-3.5 text-[#6B5C46]" />
-                  <span>Lector</span>
+                  <Shield className="w-3.5 h-3.5 text-[#A4332A]" />
+                  <span>Panel Admin</span>
                 </>
               )}
             </button>

@@ -3,6 +3,7 @@ import { UserProfile, CloudProjectDoc, GameProject, SaveSlotData, UserRole } fro
 import {
   updateUserProfileName,
   getUserProjects,
+  getAllProjectsForAdmin,
   deleteProjectFromCloud,
   deleteUserAccountAndData,
   setUserRoleInDb,
@@ -11,6 +12,7 @@ import {
 import { signOut } from 'firebase/auth';
 import {
   User,
+  Users,
   Shield,
   Edit3,
   BookOpen,
@@ -100,8 +102,21 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
   const loadUserPublications = async () => {
     setIsLoadingProjects(true);
     try {
-      const list = await getUserProjects(currentUser.uid);
-      setUserProjects(list);
+      if (currentUser.role === 'admin' || currentUser.email === 'lavozdelosmuertos@gmail.com') {
+        const allProjects = await getAllProjectsForAdmin();
+        const userOrDemo = allProjects.filter((p) => 
+          p.authorId === currentUser.uid || 
+          p.authorEmail === currentUser.email ||
+          p.authorEmail === 'lavozdelosmuertos@gmail.com' ||
+          p.authorId === 'system_admin_seed' ||
+          p.id === 'sample_misterio_habitacion' ||
+          p.id === 'el_misterio_de_la_habitacion'
+        );
+        setUserProjects(userOrDemo);
+      } else {
+        const list = await getUserProjects(currentUser.uid);
+        setUserProjects(list);
+      }
     } catch (e) {
       console.error('Error loading publications:', e);
     } finally {
@@ -329,109 +344,75 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
           </form>
         </div>
 
-        {/* Section 1.5: Selector de Rol y Permisos de Cuenta */}
-        <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
-          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
-        }`}>
-          <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
-            <div className="flex items-center gap-2.5">
-              <Shield className="w-5 h-5 text-[#C9A24B]" />
-              <div>
-                <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Tipo de Perfil de Usuario y Permisos</h2>
-                <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
-                  Selecciona tu rol para alternar entre el modo Autor / Lector y el modo Administrador de la plataforma.
-                </p>
-              </div>
-            </div>
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border font-sans ${
-                currentUser.role === 'admin'
-                  ? 'bg-[#A4332A]/10 text-[#A4332A] border-[#A4332A]/30'
-                  : 'bg-[#E5DCB8]/60 text-[#2A2118] border-[#E5DCB8]'
-              }`}
-            >
-              Rol Actual: {currentUser.role === 'admin' ? '🛡️ Administrador' : '✍️ Autor / Lector'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Card Autor / Lector */}
-            <div
-              className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
-                currentUser.role === 'author'
-                  ? isClean ? 'bg-[#F4EFE3] border-[#A4332A]' : 'bg-[#1F1913] border-[#C9A24B]'
-                  : isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
-              }`}
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className={`font-bold text-sm flex items-center gap-1.5 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
-                    <User className="w-4 h-4 text-[#A4332A]" /> Perfil Autor / Lector
-                  </h3>
-                  {currentUser.role === 'author' && (
-                    <span className="text-[10px] bg-[#3B6D11] text-white font-bold px-2 py-0.5 rounded">
-                      Activo
-                    </span>
-                  )}
+        {/* Section 1.5: Panel de Control de Funciones de Administrador */}
+        {currentUser.role === 'admin' && (
+          <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+            isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+          }`}>
+            <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-5 h-5 text-[#A4332A]" />
+                <div>
+                  <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    Gestión y Funciones de Administrador Principal
+                  </h2>
+                  <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                    Tu cuenta (<strong className="text-[#A4332A]">{currentUser.email}</strong>) posee permisos globales para auditar relatos y gestionar la plataforma.
+                  </p>
                 </div>
-                <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
-                  Ideal para jugar aventuras narrativas, crear tus propias historias en el editor, guardarlas en la nube y solicitar su publicación en el catálogo.
-                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border font-sans bg-[#A4332A]/10 text-[#A4332A] border-[#A4332A]/30">
+                🛡️ Administrador Activo
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
+                isClean ? 'bg-[#F4EFE3]/80 border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+              }`}>
+                <div className="space-y-2">
+                  <h3 className={`font-bold text-sm flex items-center gap-2 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    <BookOpen className="w-4 h-4 text-[#A4332A]" /> Moderación y Aprobación de Relatos
+                  </h3>
+                  <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                    Audita, aprueba, publica o rechaza todas las historias interactivas enviadas por autores de la comunidad.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setCurrentView('admin')}
+                  className="w-full py-2.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Shield className="w-4 h-4 text-white" />
+                  <span>Abrir Panel de Control de Relatos</span>
+                </button>
               </div>
 
-              {currentUser.role !== 'author' && (
+              <div className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
+                isClean ? 'bg-[#F4EFE3]/80 border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+              }`}>
+                <div className="space-y-2">
+                  <h3 className={`font-bold text-sm flex items-center gap-2 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    <Users className="w-4 h-4 text-[#C9A24B]" /> Gestión de Usuarios y Permisos
+                  </h3>
+                  <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                    Consulta el listado completo de usuarios registrados, gestiona sus roles, reasigna relatos o restablece contraseñas.
+                  </p>
+                </div>
                 <button
-                  onClick={() => handleToggleRole('author')}
-                  disabled={isChangingRole}
-                  className={`w-full py-2 border rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                  onClick={() => setCurrentView('admin')}
+                  className={`w-full py-2.5 border rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm ${
                     isClean
-                      ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                      ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
                       : 'bg-[#2C241C] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
                   }`}
                 >
-                  {isChangingRole && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Cambiar a Rol Autor / Lector</span>
+                  <Users className="w-4 h-4 text-[#C9A24B]" />
+                  <span>Gestionar Usuarios y Permisos</span>
                 </button>
-              )}
-            </div>
-
-            {/* Card Administrador */}
-            <div
-              className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
-                currentUser.role === 'admin'
-                  ? isClean ? 'bg-[#F4EFE3] border-[#A4332A]' : 'bg-[#1F1913] border-[#C9A24B]'
-                  : isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
-              }`}
-            >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className={`font-bold text-sm flex items-center gap-1.5 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
-                    <Shield className="w-4 h-4 text-[#A4332A]" /> Perfil Administrador
-                  </h3>
-                  {currentUser.role === 'admin' && (
-                    <span className="text-[10px] bg-[#A4332A] text-white font-bold px-2 py-0.5 rounded">
-                      Activo
-                    </span>
-                  )}
-                </div>
-                <p className={`text-xs leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
-                  Acceso completo al panel de moderación en el menú superior para auditar, revisar, publicar o rechazar relatos enviados por la comunidad.
-                </p>
               </div>
-
-              {currentUser.role !== 'admin' && (
-                <button
-                  onClick={() => handleToggleRole('admin')}
-                  disabled={isChangingRole}
-                  className="w-full py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  {isChangingRole && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Cambiar a Rol Administrador</span>
-                </button>
-              )}
             </div>
           </div>
-        </div>
+        )}
 
         {/* Section 2: Historial de Publicaciones */}
         <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${

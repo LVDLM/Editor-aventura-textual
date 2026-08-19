@@ -94,25 +94,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
     }
   };
 
-  const handleAnonymousDemoLogin = async (roleToUse: UserRole = 'author') => {
+  const handleAnonymousDemoLogin = async () => {
     setError(null);
     setLoading(true);
     try {
       const cred = await signInAnonymously(auth);
-      const isA = roleToUse === 'admin';
-      const name = isA ? 'Administrador Principal (lavozdelosmuertos)' : 'Autor de Historias';
-      const fakeEmail = isA ? 'lavozdelosmuertos@gmail.com' : 'autor@plataforma.com';
       const profile = await createOrUpdateUserProfile(
         cred.user.uid,
-        fakeEmail,
-        name,
-        roleToUse
+        'lavozdelosmuertos@gmail.com',
+        'lavozdelosmuertos (Administrador)',
+        'admin'
       );
       onUserChanged(profile);
       onClose();
     } catch (err: any) {
       console.error(err);
-      setError('Error al iniciar sesión de prueba.');
+      setError('Error al iniciar sesión como Administrador.');
     } finally {
       setLoading(false);
     }
@@ -366,27 +363,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
 
             {/* Quick Demo Access Bar */}
             <div className="mt-6 pt-4 border-t border-white/10 space-y-2 text-center">
-              <span className="text-[11px] text-slate-400 block font-medium">Acceso Rápido de Prueba (Sin contraseña):</span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleAnonymousDemoLogin('author')}
-                  disabled={loading}
-                  className="py-2 px-3 bg-sky-950/60 hover:bg-sky-900/60 text-sky-300 border border-sky-500/30 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                  title="Inicia sesión como un Autor estándar para probar crear y solicitar publicación"
-                >
-                  <User className="w-3.5 h-3.5 text-sky-400" /> Entrar como Autor
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAnonymousDemoLogin('admin')}
-                  disabled={loading}
-                  className="py-2 px-3 bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                  title="Inicia sesión como Administrador (lavozdelosmuertos@gmail.com)"
-                >
-                  <Shield className="w-3.5 h-3.5 text-rose-400" /> Entrar como Admin
-                </button>
-              </div>
+              <span className="text-[11px] text-slate-400 block font-medium">Acceso Rápido Administrador Principal:</span>
+              <button
+                type="button"
+                onClick={() => handleAnonymousDemoLogin()}
+                disabled={loading}
+                className="w-full py-2.5 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+                title="Acceder como Administrador Único (lavozdelosmuertos@gmail.com)"
+              >
+                <Shield className="w-4 h-4 text-amber-400" />
+                <span>Iniciar Sesión como Administrador (lavozdelosmuertos)</span>
+              </button>
             </div>
           </div>
         )}
