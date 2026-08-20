@@ -418,6 +418,16 @@ ${jsonProject}
     function playSound(type) {
       if (!type || type === 'none') return;
       try {
+        // Check if there is a custom sound in project with URL
+        const custom = (PROJECT.customSounds || []).find(s => s.id === type);
+        const urlToPlay = custom ? (custom.url || custom.audioUrl) : null;
+        if (custom && custom.sourceType === 'url' && urlToPlay) {
+          const audio = new Audio(urlToPlay);
+          audio.volume = (custom.synthConfig && custom.synthConfig.volume !== undefined ? custom.synthConfig.volume : (custom.volume !== undefined ? custom.volume / 100 : 0.8));
+          audio.play().catch(function() {});
+          return;
+        }
+
         if (!audioCtx) {
           const AC = window.AudioContext || window.webkitAudioContext;
           if (AC) audioCtx = new AC();
@@ -426,12 +436,77 @@ ${jsonProject}
         if (!audioCtx) return;
         const now = audioCtx.currentTime;
 
-        if (type === 'click') {
+        // Check if custom sound has synthesizer configuration
+        if (custom && custom.synthConfig) {
+          const sc = custom.synthConfig;
+          const dur = Math.max(0.04, sc.duration || 0.2);
+          const vol = Math.max(0, Math.min(1, sc.volume !== undefined ? sc.volume : 0.25));
+          const startF = Math.max(20, sc.startFreq || 440);
+
+          if (sc.instrument === 'piano') {
+            [1, 2, 3, 4].forEach((m, idx) => {
+              const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+              o.type = 'triangle'; o.frequency.setValueAtTime(startF * m, now);
+              g.gain.setValueAtTime(0, now);
+              g.gain.linearRampToValueAtTime(vol * (0.6 / (idx + 1)), now + 0.005);
+              g.gain.exponentialRampToValueAtTime(0.001, now + dur * (1 / (idx * 0.5 + 1)));
+              o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + dur + 0.02);
+            });
+            return;
+          } else if (sc.instrument === 'bell') {
+            [1.0, 2.76, 5.4, 8.93].forEach((r, idx) => {
+              const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+              o.type = 'sine'; o.frequency.setValueAtTime(startF * r, now);
+              g.gain.setValueAtTime(0, now);
+              g.gain.linearRampToValueAtTime(vol * (0.5 / (idx + 1)), now + 0.003);
+              g.gain.exponentialRampToValueAtTime(0.001, now + dur * (1 / (idx * 0.6 + 1)));
+              o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + dur + 0.02);
+            });
+            return;
+          } else if (sc.instrument === 'organ') {
+            [0.5, 1.0, 2.0, 3.0].forEach((m) => {
+              const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+              o.type = 'sine'; o.frequency.setValueAtTime(startF * m, now);
+              g.gain.setValueAtTime(0, now);
+              g.gain.linearRampToValueAtTime(vol * 0.3, now + 0.03);
+              g.gain.setValueAtTime(vol * 0.3, now + dur - 0.05);
+              g.gain.linearRampToValueAtTime(0.001, now + dur);
+              o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + dur + 0.02);
+            });
+            return;
+          } else if (sc.oscType === 'arpeggio' && sc.arpeggioNotes && sc.arpeggioNotes.length) {
+            const step = sc.arpeggioSpeed || 0.08;
+            sc.arpeggioNotes.forEach((f, i) => {
+              const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+              o.type = 'triangle'; o.frequency.setValueAtTime(f, now + i * step);
+              g.gain.setValueAtTime(0, now + i * step);
+              g.gain.linearRampToValueAtTime(vol, now + i * step + 0.015);
+              g.gain.exponentialRampToValueAtTime(0.001, now + i * step + Math.min(dur, step * 1.5));
+              o.connect(g); g.connect(audioCtx.destination); o.start(now + i * step); o.stop(now + i * step + dur + 0.02);
+            });
+            return;
+          }
+
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = (sc.oscType === 'sine' || sc.oscType === 'triangle' || sc.oscType === 'square' || sc.oscType === 'sawtooth') ? sc.oscType : 'sine';
+          o.frequency.setValueAtTime(startF, now);
+          if (sc.endFreq) {
+            if (sc.rampType === 'linear') o.frequency.linearRampToValueAtTime(sc.endFreq, now + dur);
+            else o.frequency.exponentialRampToValueAtTime(Math.max(20, sc.endFreq), now + dur);
+          }
+          g.gain.setValueAtTime(0, now);
+          g.gain.linearRampToValueAtTime(vol, now + Math.min(0.03, dur * 0.15));
+          g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+          o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + dur + 0.05);
+          return;
+        }
+
+        if (type === 'click' || type === 'paper_turn' || type === 'writing') {
           const o = audioCtx.createOscillator(), g = audioCtx.createGain();
           o.type = 'sine'; o.frequency.setValueAtTime(400, now); o.frequency.exponentialRampToValueAtTime(200, now + 0.05);
           g.gain.setValueAtTime(0.15, now); g.gain.linearRampToValueAtTime(0.01, now + 0.05);
           o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.05);
-        } else if (type === 'fanfare') {
+        } else if (type === 'fanfare' || type === 'success_chime' || type === 'victory_trumpet') {
           [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
             const o = audioCtx.createOscillator(), g = audioCtx.createGain();
             o.type = 'triangle'; o.frequency.setValueAtTime(f, now + i * 0.09);
@@ -439,29 +514,43 @@ ${jsonProject}
             g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.3);
             o.connect(g); g.connect(audioCtx.destination); o.start(now + i * 0.09); o.stop(now + i * 0.09 + 0.32);
           });
-        } else if (type === 'door' || type === 'door_squeak') {
+        } else if (type === 'door' || type === 'door_squeak' || type === 'chest_creak' || type === 'heavy_stone') {
           const o = audioCtx.createOscillator(), g = audioCtx.createGain(), flt = audioCtx.createBiquadFilter();
           o.type = 'sawtooth'; o.frequency.setValueAtTime(420, now); o.frequency.linearRampToValueAtTime(750, now + 0.18); o.frequency.linearRampToValueAtTime(310, now + 0.38); o.frequency.linearRampToValueAtTime(550, now + 0.5);
           flt.type = 'bandpass'; flt.frequency.setValueAtTime(650, now); flt.Q.setValueAtTime(2.5, now);
           g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.18, now + 0.04); g.gain.exponentialRampToValueAtTime(0.001, now + 0.52);
           o.connect(flt); flt.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.54);
-        } else if (type === 'damage') {
+        } else if (type === 'damage' || type === 'monster_roar' || type === 'death_toll') {
           const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-          o.type = 'square'; o.frequency.setValueAtTime(170, now); o.frequency.exponentialRampToValueAtTime(30, now + 0.25);
-          g.gain.setValueAtTime(0.3, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
-          o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.3);
-        } else if (type === 'gunshot') {
-          const dur = 0.35, bufferSize = audioCtx.sampleRate * dur, buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), data = buffer.getChannelData(0);
+          o.type = 'sawtooth'; o.frequency.setValueAtTime(160, now); o.frequency.exponentialRampToValueAtTime(30, now + 0.45);
+          g.gain.setValueAtTime(0.35, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+          o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.5);
+        } else if (type === 'gunshot' || type === 'explosion' || type === 'thunder') {
+          const dur = 0.45, bufferSize = Math.floor(audioCtx.sampleRate * dur), buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), data = buffer.getChannelData(0);
           for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
           const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
-          const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(3200, now); filter.frequency.exponentialRampToValueAtTime(180, now + dur);
+          const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(3200, now); filter.frequency.exponentialRampToValueAtTime(120, now + dur);
           const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.45, now); gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
           noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination); noise.start(now);
-        } else if (type === 'pickup') {
+        } else if (type === 'pickup' || type === 'key_jingle' || type === 'coin_clink') {
           const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-          o.type = 'sine'; o.frequency.setValueAtTime(440, now); o.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+          o.type = 'sine'; o.frequency.setValueAtTime(587.33, now); o.frequency.exponentialRampToValueAtTime(1174.66, now + 0.12);
           g.gain.setValueAtTime(0.2, now); g.gain.linearRampToValueAtTime(0.01, now + 0.12);
           o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.12);
+        } else if (type === 'magic_sparkle' || type === 'spell_cast') {
+          [880, 1108.73, 1318.51, 1760].forEach((f, i) => {
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = 'sine'; o.frequency.setValueAtTime(f, now + i * 0.06);
+            g.gain.setValueAtTime(0, now + i * 0.06); g.gain.linearRampToValueAtTime(0.18, now + i * 0.06 + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.25);
+            o.connect(g); g.connect(audioCtx.destination); o.start(now + i * 0.06); o.stop(now + i * 0.06 + 0.28);
+          });
+        } else {
+          // Default subtle feedback
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = 'sine'; o.frequency.setValueAtTime(440, now);
+          g.gain.setValueAtTime(0.1, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + 0.16);
         }
       } catch (e) {}
     }

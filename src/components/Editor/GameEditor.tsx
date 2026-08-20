@@ -5,7 +5,8 @@ import { SceneEditor } from './SceneEditor';
 import { InventoryManager } from './InventoryManager';
 import { FlagsManager } from './FlagsManager';
 import { CharacterManager } from './CharacterManager';
-import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal, CheckCircle, Save, User } from 'lucide-react';
+import { SoundManager } from './SoundManager';
+import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal, CheckCircle, Save, User, Volume2 } from 'lucide-react';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 
 interface GameEditorProps {
@@ -27,7 +28,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
   webAspect = 'clean',
   lastAutoSaveTime,
 }) => {
-  const [activeTab, setActiveTab] = useState<'scenes' | 'inventory' | 'characters' | 'flags' | 'settings'>('scenes');
+  const [activeTab, setActiveTab] = useState<'scenes' | 'inventory' | 'characters' | 'flags' | 'sounds' | 'settings'>('scenes');
   const [editorWidth, setEditorWidth] = useState<'standard' | 'wide' | 'full'>(() => {
     return (localStorage.getItem('editor_width_preference') as any) || 'wide';
   });
@@ -229,6 +230,25 @@ export const GameEditor: React.FC<GameEditorProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('sounds')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'sounds'
+                ? 'bg-[#A4332A] text-white shadow-sm'
+                : isClean
+                ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
+                : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
+            }`}
+          >
+            <Volume2 className="w-4 h-4 text-amber-400" />
+            <span>5. Sonidos y Audio</span>
+            {project.customSounds && project.customSounds.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-mono">
+                {project.customSounds.length}
+              </span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'settings'
@@ -239,7 +259,7 @@ export const GameEditor: React.FC<GameEditorProps> = ({
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>5. Configuración y Fallbacks</span>
+            <span>6. Configuración y Fallbacks</span>
           </button>
         </div>
 
@@ -255,6 +275,9 @@ export const GameEditor: React.FC<GameEditorProps> = ({
         )}
         {activeTab === 'flags' && (
           <FlagsManager project={project} updateProject={updateProject} />
+        )}
+        {activeTab === 'sounds' && (
+          <SoundManager project={project} updateProject={updateProject} currentUser={currentUser} webAspect={webAspect} />
         )}
         {activeTab === 'settings' && (
           <GeneralSettings project={project} updateProject={updateProject} currentUser={currentUser} webAspect={webAspect} />

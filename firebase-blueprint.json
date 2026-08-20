@@ -31,6 +31,16 @@
         "reviewFeedback": { "type": "string" }
       },
       "required": ["title", "authorId", "status", "projectData"]
+    },
+    "global_settings": {
+      "title": "Global System Settings & Sound Library",
+      "description": "Global application configuration and shared official sound presets",
+      "type": "object",
+      "properties": {
+        "sounds": { "type": "array" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      }
     }
   }
 }

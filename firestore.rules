@@ -41,5 +41,13 @@ service cloud.firestore {
       // Authors can delete their own drafts/projects, Admins can delete any
       allow delete: if isOwner(resource.data.authorId) || isAdmin();
     }
+
+    // Global settings & shared sound library collection
+    match /global_settings/{settingId} {
+      // Anyone can read official platform sound presets
+      allow read: if true;
+      // Only Administrators can update or expand the official sound library
+      allow write: if isAdmin();
+    }
   }
 }

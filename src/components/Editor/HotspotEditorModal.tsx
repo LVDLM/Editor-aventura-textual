@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Hotspot, ActionRule, GameProject, VerbType, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
-import { playSound } from '../../utils/audio';
+import { playSound, getAllMergedSounds } from '../../utils/audio';
 import { DialogueEditor } from './DialogueEditor';
 import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare } from 'lucide-react';
 
@@ -704,16 +704,30 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                         onChange={(e) => setSoundEffect(e.target.value as SoundEffectType)}
                         className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-200 outline-none focus:border-amber-500 font-semibold"
                       >
-                        {SOUND_EFFECT_OPTIONS.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
-                          </option>
-                        ))}
+                        <option value="none">Sin Sonido</option>
+                        {project.customSounds && project.customSounds.length > 0 && (
+                          <optgroup label="Sonidos del Proyecto">
+                            {project.customSounds.map((cs) => (
+                              <option key={cs.id} value={cs.id}>
+                                {cs.name} ({cs.id})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <optgroup label="Biblioteca Oficial">
+                          {getAllMergedSounds(project)
+                            .filter((s) => s.isGlobal || !project.customSounds?.some((cs) => cs.id === s.id))
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.id})
+                              </option>
+                            ))}
+                        </optgroup>
                       </select>
                       {soundEffect !== 'none' && (
                         <button
                           type="button"
-                          onClick={() => playSound(soundEffect)}
+                          onClick={() => playSound(soundEffect, project.customSounds)}
                           className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
                         >
                           <span>Probar</span>
@@ -890,16 +904,30 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                         onChange={(e) => setFailSoundEffect(e.target.value as SoundEffectType)}
                         className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-rose-200 outline-none focus:border-rose-500 font-semibold"
                       >
-                        {SOUND_EFFECT_OPTIONS.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
-                          </option>
-                        ))}
+                        <option value="none">Sin Sonido</option>
+                        {project.customSounds && project.customSounds.length > 0 && (
+                          <optgroup label="Sonidos del Proyecto">
+                            {project.customSounds.map((cs) => (
+                              <option key={cs.id} value={cs.id}>
+                                {cs.name} ({cs.id})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <optgroup label="Biblioteca Oficial">
+                          {getAllMergedSounds(project)
+                            .filter((s) => s.isGlobal || !project.customSounds?.some((cs) => cs.id === s.id))
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.id})
+                              </option>
+                            ))}
+                        </optgroup>
                       </select>
                       {failSoundEffect !== 'none' && (
                         <button
                           type="button"
-                          onClick={() => playSound(failSoundEffect)}
+                          onClick={() => playSound(failSoundEffect, project.customSounds)}
                           className="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
                         >
                           <span>Probar</span>

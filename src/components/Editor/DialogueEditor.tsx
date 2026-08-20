@@ -7,6 +7,7 @@ import {
   SoundEffectType,
   SOUND_EFFECT_OPTIONS,
 } from '../../types';
+import { getAllMergedSounds } from '../../utils/audio';
 import {
   MessageSquare,
   Plus,
@@ -663,11 +664,25 @@ export const DialogueEditor: React.FC<DialogueEditorProps> = ({
                               }
                               className="w-full px-2.5 py-1 rounded-md text-xs border border-slate-700 bg-slate-900 text-slate-100"
                             >
-                              {SOUND_EFFECT_OPTIONS.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.label}
-                                </option>
-                              ))}
+                              <option value="none">Sin Sonido</option>
+                              {project.customSounds && project.customSounds.length > 0 && (
+                                <optgroup label="📁 Sonidos del Proyecto">
+                                  {project.customSounds.map((cs) => (
+                                    <option key={cs.id} value={cs.id}>
+                                      ⭐ {cs.name} ({cs.id})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="🛡️ Biblioteca Oficial">
+                                {getAllMergedSounds(project)
+                                  .filter((s) => s.isGlobal || !project.customSounds?.some((cs) => cs.id === s.id))
+                                  .map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.name} ({s.id})
+                                    </option>
+                                  ))}
+                              </optgroup>
                             </select>
                           </div>
 

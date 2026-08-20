@@ -29,7 +29,8 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { UserProfile, CloudProjectDoc, GameProject, UserRole } from '../types';
+import { UserProfile, CloudProjectDoc, GameProject, UserRole, SoundDefinition } from '../types';
+import { DEFAULT_SOUND_LIBRARY, setGlobalSoundLibrary } from '../utils/audio';
 
 // Designated Admin Emails
 export const ADMIN_EMAILS = ['lavozdelosmuertos@gmail.com', 'admin@plataforma.com'];
@@ -604,3 +605,52 @@ export async function consolidateAdminProfilesInFirestore(primaryUid?: string): 
     return { updatedCount: 0, reassignedProjectsCount: 0, primaryProfile: null };
   }
 }
+
+/**
+ * Global Sound Library management in Firestore.
+ * Allows administrators to save, edit, and expand the platform's official sound library,
+ * and allows authors to listen and load these sounds in real-time.
+ */
+
+export async function fetchGlobalSoundLibraryFromFirestore(): Promise<SoundDefinition[]> {
+  try {
+    const docRef = doc(db, 'global_settings', 'sound_library');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data && Array.isArray(data.sounds) && data.sounds.length > 0) {
+        setGlobalSoundLibrary(data.sounds);
+        return data.sounds;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch global sound library from Firestore, using defaults:', e);
+  }
+  // Fallback to built-in presets
+  setGlobalSoundLibrary(DEFAULT_SOUND_LIBRARY);
+  return DEFAULT_SOUND_LIBRARY;
+}
+
+export async function saveGlobalSoundLibraryToFirestore(
+  sounds: SoundDefinition[],
+  adminEmail: string
+): Promise<boolean> {
+  try {
+    const docRef = doc(db, 'global_settings', 'sound_library');
+    await setDoc(docRef, {
+      sounds,
+      updatedAt: new Date().toISOString(),
+      updatedBy: adminEmail || 'admin',
+    }, { merge: true });
+    setGlobalSoundLibrary(sounds);
+    return true;
+  } catch (err) {
+    console.error('Error saving global sound library to Firestore:', err);
+    throw err;
+  }
+}
+
+export async function resetGlobalSoundLibraryInFirestore(adminEmail: string): Promise<boolean> {
+  return saveGlobalSoundLibraryToFirestore(DEFAULT_SOUND_LIBRARY, adminEmail);
+}
+

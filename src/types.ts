@@ -23,39 +23,90 @@ export interface InventoryItem {
   combinations?: ActionRule[]; // Combinations / interactions with other inventory items
 }
 
-export type SoundEffectType =
-  | 'none'
-  | 'fanfare'
-  | 'door_squeak'
-  | 'damage'
-  | 'gunshot'
-  | 'pickup'
-  | 'unlock'
-  | 'secret'
-  | 'thunder'
-  | 'page_turn'
-  | 'footsteps'
-  | 'monster'
-  | 'game_over'
-  | 'click'
-  | 'error';
+export type SoundSourceType = 'synth' | 'url';
 
-export const SOUND_EFFECT_OPTIONS: { id: SoundEffectType; label: string }[] = [
-  { id: 'none', label: 'Sin Sonido' },
-  { id: 'fanfare', label: '🎺 Fanfarria breve (Coger objeto / Triunfo)' },
-  { id: 'door_squeak', label: '🚪 Chirrido de puerta / Mueble' },
-  { id: 'damage', label: '💥 Recibir daño / Impacto' },
-  { id: 'gunshot', label: '🔫 Disparo de arma de fuego' },
-  { id: 'pickup', label: '📦 Coger objeto (Tono rápido)' },
-  { id: 'unlock', label: '🗝️ Abrir cerrojo / Llave' },
-  { id: 'secret', label: '✨ Secreto / Magia / Arpegio' },
-  { id: 'thunder', label: '🌩️ Trueno / Estruendo' },
-  { id: 'page_turn', label: '📜 Pasar página / Hoja' },
-  { id: 'footsteps', label: '👣 Pasos / Caminar' },
-  { id: 'monster', label: '👾 Rugido de monstruo' },
-  { id: 'game_over', label: '💀 Fin de partida / Muerte' },
-  { id: 'click', label: '🔘 Clic de interfaz' },
-  { id: 'error', label: '❌ Error / Impasable' },
+export type SoundCategory =
+  | 'ui'
+  | 'action'
+  | 'movement'
+  | 'environment'
+  | 'magic'
+  | 'horror'
+  | 'music'
+  | 'custom';
+
+export type InstrumentType =
+  | 'custom'
+  | 'piano'
+  | 'organ'
+  | 'flute'
+  | 'strings'
+  | 'bell'
+  | 'synth_bass'
+  | 'xylophone'
+  | 'chiptune'
+  | 'brass'
+  | 'harp'
+  | 'music_box'
+  | 'drum';
+
+export interface SynthSoundConfig {
+  oscType: 'sine' | 'triangle' | 'square' | 'sawtooth' | 'noise' | 'fm_synth' | 'arpeggio' | 'laser';
+  instrument?: InstrumentType;
+  startFreq: number; // Hz (20 to 5000)
+  endFreq?: number; // Hz ramp target
+  rampType?: 'linear' | 'exponential' | 'instant';
+  duration: number; // Seconds (0.04 to 5.0)
+  volume: number; // 0.0 to 1.0
+  filterType?: 'none' | 'lowpass' | 'highpass' | 'bandpass' | 'notch';
+  filterFreq?: number; // Hz (50 to 12000)
+  filterQ?: number; // Q factor (0.1 to 25)
+  lfoFreq?: number; // Hz (0.1 to 40)
+  lfoGain?: number; // Depth (0 to 300)
+  noiseMix?: number; // 0.0 to 1.0
+  arpeggioNotes?: number[]; // list of frequencies in Hz
+  arpeggioSpeed?: number; // interval in seconds between notes
+}
+
+export interface SoundDefinition {
+  id: string; // Unique ID (e.g. 'fanfare', 'custom_sword_clash')
+  name: string; // User-friendly name
+  description?: string;
+  category: SoundCategory;
+  sourceType: SoundSourceType;
+  url?: string; // External or uploaded audio file (mp3, wav, ogg)
+  synthConfig?: SynthSoundConfig;
+  isGlobal?: boolean; // True if official platform sound
+  isDefault?: boolean; // True if default built-in preset
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type SoundEffectType = string;
+
+export const SOUND_EFFECT_OPTIONS: { id: SoundEffectType; label: string; category?: string }[] = [
+  { id: 'none', label: 'Sin Sonido', category: 'ui' },
+  { id: 'fanfare', label: 'Fanfarria breve (Triunfo / Descubrimiento)', category: 'music' },
+  { id: 'door_squeak', label: 'Chirrido de puerta / Mueble', category: 'environment' },
+  { id: 'damage', label: 'Recibir daño / Impacto', category: 'action' },
+  { id: 'gunshot', label: 'Disparo de arma de fuego', category: 'action' },
+  { id: 'pickup', label: 'Coger objeto (Tono rápido)', category: 'action' },
+  { id: 'unlock', label: 'Abrir cerrojo / Llave', category: 'action' },
+  { id: 'secret', label: 'Secreto / Magia / Arpegio', category: 'magic' },
+  { id: 'thunder', label: 'Trueno / Estruendo', category: 'environment' },
+  { id: 'page_turn', label: 'Pasar página / Hoja', category: 'environment' },
+  { id: 'footsteps', label: 'Pasos / Caminar', category: 'movement' },
+  { id: 'monster', label: 'Rugido de monstruo', category: 'horror' },
+  { id: 'game_over', label: 'Fin de partida / Muerte', category: 'horror' },
+  { id: 'click', label: 'Clic de interfaz', category: 'ui' },
+  { id: 'error', label: 'Error / Impasable', category: 'ui' },
+  { id: 'bell_toll', label: 'Campanada solemne', category: 'environment' },
+  { id: 'magic_spell', label: 'Hechizo / Destello místico', category: 'magic' },
+  { id: 'water_splash', label: 'Gota / Salpicadura de agua', category: 'environment' },
+  { id: 'sword_clash', label: 'Choque de espadas metálico', category: 'action' },
+  { id: 'coin_drop', label: 'Tintineo de monedas de oro', category: 'action' },
+  { id: 'laser_retro', label: 'Rayo láser arcade sintetizado', category: 'action' },
+  { id: 'creepy_ambient', label: 'Tensión y misterio ambiental', category: 'horror' },
 ];
 
 export interface StateChange {
@@ -235,6 +286,7 @@ export interface GameProject {
   globalFlags: Record<string, boolean>; // Initial default flags
   inventoryItems: InventoryItem[];
   characters?: GameCharacter[];
+  customSounds?: SoundDefinition[]; // Custom sounds added to this project (URL or Web Audio synth)
   scenes: Scene[];
 }
 
