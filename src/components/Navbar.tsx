@@ -82,7 +82,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           ) : (
             <div className={`flex items-center gap-2 text-xs font-semibold ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
-              <span className="w-2 h-2 rounded-full bg-[#C9A24B]"></span>
+              <img
+                src="https://i.ibb.co/20ZgFKbH/favicon-32x32.png"
+                alt="Urdimbre"
+                className="w-4 h-4 rounded-xs shrink-0 object-contain"
+              />
               <span className="truncate max-w-[180px] sm:max-w-xs font-serif">{gameTitle || 'Urdimbre'}</span>
             </div>
           )}
@@ -126,15 +130,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => setCurrentView('catalog')}
-            className="w-8 h-8 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-lg flex items-center justify-center font-serif font-black shadow-sm transition-all shrink-0 cursor-pointer"
+            className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-xs transition-transform hover:scale-105 active:scale-95 shrink-0 cursor-pointer border border-[#E5DCB8]/50"
             title="Ir a la Biblioteca Principal"
           >
-            U
+            <img
+              src="https://i.ibb.co/BKyHfVXw/favicon-96x96.png"
+              alt="Urdimbre"
+              className="w-full h-full object-contain"
+            />
           </button>
           <div>
             <h1 className="text-sm sm:text-base font-serif font-bold tracking-tight flex items-center gap-2">
               <span className={`cursor-pointer transition-colors ${isClean ? 'text-[#2A2118] hover:text-[#A4332A]' : 'text-[#F4EFE3] hover:text-[#C9A24B]'}`} onClick={() => setCurrentView('catalog')}>
-                Urdimbre: Aventuras textuales.
+                Urdimbre: Aventuras textuales
               </span>
             </h1>
             <p className={`text-[11px] truncate max-w-[160px] sm:max-w-xs ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`} title={gameTitle}>
