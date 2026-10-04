@@ -89,6 +89,27 @@ export const Footer: React.FC<FooterProps> = ({ variant = 'web', onOpenPrivacyMo
           )}
         </div>
 
+        {/* Favicon Attribution */}
+        <div className={`flex items-center justify-center gap-1.5 text-[11px] ${
+          isClean ? 'text-slate-500' : 'text-slate-400'
+        }`}>
+          <img
+            src="https://i.ibb.co/BHqzTkfN/favicon-16x16.png"
+            alt=""
+            className="w-3.5 h-3.5 inline-block shrink-0 rounded-xs"
+          />
+          <a
+            href="https://www.magnific.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`hover:underline font-medium ${
+              isClean ? 'text-amber-700 hover:text-amber-800' : 'text-amber-400 hover:text-amber-300'
+            }`}
+          >
+            designed by catalyststuff - Magnific.com
+          </a>
+        </div>
+
         {/* Privacy Policy Link - NO ICON */}
         {onOpenPrivacyModal && (
           <button
