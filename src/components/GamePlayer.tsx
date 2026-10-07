@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameProject, Hotspot, VerbType, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter } from '../types';
+import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter } from '../types';
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS } from '../utils/verbs';
@@ -490,16 +490,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     });
 
     // Sort passing rules so rules with specific required flags/items take precedence over unconditional fallback rules
-    matchingRules.sort((r1, r2) => {
-      const score1 = (r1.requiredFlags ? Object.keys(r1.requiredFlags).length : 0) + (r1.requiredItemId ? 1 : 0);
-      const score2 = (r2.requiredFlags ? Object.keys(r2.requiredFlags).length : 0) + (r2.requiredItemId ? 1 : 0);
-      return score2 - score1;
-    });
+    const getRuleScore = (r: ActionRule) =>
+      (r.requiredFlags ? Object.keys(r.requiredFlags).length : 0) + (r.requiredItemId ? 1 : 0);
 
-    const useKey = `${hotspot.id}_${verbToUse}`;
+    matchingRules.sort((r1, r2) => getRuleScore(r2) - getRuleScore(r1));
+
+    // Priority filter: rules with higher specificity/conditions must ALWAYS take precedence over fallback rules!
+    const maxScore = matchingRules.length > 0 ? getRuleScore(matchingRules[0]) : 0;
+    const topRules = matchingRules.filter((r) => getRuleScore(r) === maxScore);
+
+    const useKey = `${hotspot.id}_${verbToUse}_${maxScore}`;
     const currentUseCount = gameState.verbUseCounts?.[useKey] || 0;
-    const ruleIndex = matchingRules.length > 0 ? Math.min(currentUseCount, matchingRules.length - 1) : -1;
-    const rule = ruleIndex >= 0 ? matchingRules[ruleIndex] : null;
+    const ruleIndex = topRules.length > 0 ? Math.min(currentUseCount, topRules.length - 1) : -1;
+    const rule = ruleIndex >= 0 ? topRules[ruleIndex] : null;
 
     // Check if interaction triggers a Pop-up Dialogue Modal
     const currentSceneObj = project.scenes.find((s) => s.id === gameState.currentSceneId);

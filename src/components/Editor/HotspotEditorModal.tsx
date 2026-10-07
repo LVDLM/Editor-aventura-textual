@@ -144,7 +144,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setFailAppendStoryText(action.failStateChange?.appendStoryText || '');
   };
 
-  const handleSaveAction = (forceMode?: 'replace' | 'subaction') => {
+  const handleSaveAction = (forceMode?: 'replace' | 'subaction' | 'update') => {
     let msg = responseMessage.trim();
     if (verb === 'hablar' && !msg) {
       msg = dialogue?.greeting || 'Iniciando conversación...';
@@ -212,8 +212,31 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       failSoundEffect: failSoundEffect !== 'none' ? failSoundEffect : undefined,
     };
 
+    // Mode 1: If editing an action and saving changes in place
+    if (editingActionId && forceMode !== 'subaction') {
+      const updatedActions = currentHotspot.actions.map((a) => (a.id === editingActionId ? newRule : a));
+      const updated = { ...currentHotspot, actions: updatedActions };
+      setCurrentHotspot(updated);
+      onSave(updated);
+      setDuplicateConflict(null);
+      resetForm();
+      return;
+    }
+
+    // Mode 2: If explicitly saving as a new subaction (duplicate or conflict addition)
+    if (forceMode === 'subaction') {
+      const updatedActions = [...currentHotspot.actions, newRule];
+      const updated = { ...currentHotspot, actions: updatedActions };
+      setCurrentHotspot(updated);
+      onSave(updated);
+      setDuplicateConflict(null);
+      resetForm();
+      return;
+    }
+
+    // Mode 3: Brand new action (editingActionId === null)
     const existingRule = currentHotspot.actions.find(
-      (a) => a.verb === verb && a.id !== newRule.id && a.id !== editingActionId
+      (a) => a.verb === verb && a.id !== newRule.id
     );
 
     if (existingRule && !forceMode) {
@@ -230,8 +253,6 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     if (forceMode === 'replace' && existingRule) {
       updatedActions = updatedActions.map((a) => (a.id === existingRule.id ? newRule : a));
-    } else if (editingActionId && forceMode !== 'subaction') {
-      updatedActions = updatedActions.map((a) => (a.id === editingActionId ? newRule : a));
     } else {
       updatedActions.push(newRule);
     }
@@ -544,7 +565,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                     <span>Combinación de Banderas / Variables Requeridas para esta Acción:</span>
                   </label>
                   <p className="text-[11px] text-slate-400">
-                    Haz clic en cada bandera para alternar su condición: <span className="text-emerald-400 font-semibold">✅ SÍ (debe estar activada)</span> ➔ <span className="text-rose-400 font-semibold">❌ NO (debe estar desactivada)</span> ➔ <span className="text-slate-400">— Sin requisito</span>.
+                    Haz clic en cada bandera para alternar su estado requerido: <span className="text-emerald-400 font-semibold">🟢 ACTIVADA (debe valer TRUE)</span> ➔ <span className="text-rose-400 font-semibold">🔴 DESACTIVADA (debe valer FALSE)</span> ➔ <span className="text-slate-400">⚪ Sin requisito (indiferente)</span>.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
                     {allReqFlagKeys.map((fk) => {
@@ -572,7 +593,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                           <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
                             isTrue ? 'bg-emerald-500/30 text-emerald-300' : isFalse ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-500'
                           }`}>
-                            {isTrue ? '✅ SÍ' : isFalse ? '❌ NO' : '—'}
+                            {isTrue ? '🟢 ACTIVADA' : isFalse ? '🔴 DESACTIVADA' : '⚪ SIN REQ'}
                           </span>
                         </button>
                       );
@@ -823,8 +844,8 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                               }}
                               className="bg-slate-900 border border-slate-800 rounded-lg px-1 py-1.5 text-xs font-bold text-amber-300"
                             >
-                              <option value="true font-bold">TRUE</option>
-                              <option value="false font-bold">FALSE</option>
+                              <option value="true">ACTIVAR (TRUE)</option>
+                              <option value="false">DESACTIVAR (FALSE)</option>
                             </select>
                           )}
                         </div>
@@ -1023,8 +1044,8 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                               }}
                               className="bg-slate-900 border border-slate-800 rounded-lg px-1 py-1.5 text-xs font-bold text-amber-300"
                             >
-                              <option value="true">TRUE</option>
-                              <option value="false">FALSE</option>
+                              <option value="true">ACTIVAR (TRUE)</option>
+                              <option value="false">DESACTIVAR (FALSE)</option>
                             </select>
                           )}
                         </div>
@@ -1048,20 +1069,34 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
               </>
             )}
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 pt-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => handleSaveAction()}
+                onClick={() => handleSaveAction(editingActionId ? 'update' : undefined)}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow cursor-pointer"
+                title={editingActionId ? 'Guarda las modificaciones en esta misma acción' : 'Guardar nueva acción'}
               >
                 <Check className="w-4 h-4" />
-                <span>{editingActionId ? 'Actualizar Acción' : 'Guardar Acción'}</span>
+                <span>{editingActionId ? 'Actualizar Acción (Guardar Cambios)' : 'Guardar Acción'}</span>
               </button>
+
+              {editingActionId && (
+                <button
+                  type="button"
+                  onClick={() => handleSaveAction('subaction')}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow cursor-pointer"
+                  title="Crea una nueva regla/subacción independiente con estos datos, sin sobreescribir la original"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Guardar como Nueva Subacción</span>
+                </button>
+              )}
+
               {editingActionId && (
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="px-3 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs hover:bg-slate-700 cursor-pointer"
+                  className="px-3 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs hover:bg-slate-700 cursor-pointer transition-colors"
                 >
                   Cancelar Edición
                 </button>
@@ -1101,12 +1136,15 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                     const displayVerbName = verbObj?.label || act.verb;
 
                     const reqFlagsList = act.requiredFlags ? Object.keys(act.requiredFlags) : [];
+                    const isCurrentlyEditing = editingActionId === act.id;
 
                     return (
                       <div
                         key={act.id}
-                        className={`bg-slate-950 border rounded-xl p-3.5 flex items-start justify-between gap-3 shadow-inner ${
-                          verbIndex > 0 ? 'border-indigo-500/40 ml-4' : 'border-slate-800'
+                        className={`bg-slate-950 border rounded-xl p-3.5 flex items-start justify-between gap-3 shadow-inner transition-all ${
+                          isCurrentlyEditing
+                            ? 'border-amber-400 ring-2 ring-amber-400/40 bg-amber-950/20'
+                            : verbIndex > 0 ? 'border-indigo-500/40 ml-4' : 'border-slate-800'
                         }`}
                       >
                         <div className="space-y-1.5 flex-1">
@@ -1123,6 +1161,12 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                                 : `↳ ${displayVerbName} ${verbIndex + 1} (Subacción)`}
                             </span>
 
+                            {isCurrentlyEditing && (
+                              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-2 py-0.5 rounded font-bold">
+                                ✏️ En edición
+                              </span>
+                            )}
+
                             {act.isGameOver && (
                               <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-bold">
                                 💀 Fin de Partida
@@ -1137,7 +1181,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
                             {reqFlagsList.length > 0 && (
                               <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono">
-                                🚩 Requiere: {reqFlagsList.map((fk) => `${fk}=${act.requiredFlags![fk] ? 'SÍ' : 'NO'}`).join(', ')}
+                                🚩 Requiere: {reqFlagsList.map((fk) => `${fk}=${act.requiredFlags![fk] ? 'ACTIVADA' : 'DESACTIVADA'}`).join(', ')}
                               </span>
                             )}
                           </div>

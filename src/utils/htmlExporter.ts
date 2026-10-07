@@ -1055,16 +1055,23 @@ ${jsonProject}
         return true;
       });
 
-      matchingRules.sort(function(r1, r2) {
-        var score1 = (r1.requiredFlags ? Object.keys(r1.requiredFlags).length : 0) + (r1.requiredItemId ? 1 : 0);
-        var score2 = (r2.requiredFlags ? Object.keys(r2.requiredFlags).length : 0) + (r2.requiredItemId ? 1 : 0);
-        return score2 - score1;
+      function getRuleScore(r: any) {
+        return (r.requiredFlags ? Object.keys(r.requiredFlags).length : 0) + (r.requiredItemId ? 1 : 0);
+      }
+
+      matchingRules.sort(function(r1: any, r2: any) {
+        return getRuleScore(r2) - getRuleScore(r1);
       });
 
-      const useKey = hs.id + '_' + verbToUse;
+      const maxScore = matchingRules.length > 0 ? getRuleScore(matchingRules[0]) : 0;
+      const topRules = matchingRules.filter(function(r: any) {
+        return getRuleScore(r) === maxScore;
+      });
+
+      const useKey = hs.id + '_' + verbToUse + '_' + maxScore;
       const currentUseCount = gameState.verbUseCounts[useKey] || 0;
-      const ruleIndex = matchingRules.length > 0 ? Math.min(currentUseCount, matchingRules.length - 1) : -1;
-      const rule = ruleIndex >= 0 ? matchingRules[ruleIndex] : null;
+      const ruleIndex = topRules.length > 0 ? Math.min(currentUseCount, topRules.length - 1) : -1;
+      const rule = ruleIndex >= 0 ? topRules[ruleIndex] : null;
 
       gameState.verbUseCounts[useKey] = (gameState.verbUseCounts[useKey] || 0) + 1;
 
