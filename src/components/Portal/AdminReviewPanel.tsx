@@ -77,7 +77,10 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
   const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'author' | 'admin' | 'suspended'>('all');
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editDisplayNameInput, setEditDisplayNameInput] = useState('');
+  const [editEmailInput, setEditEmailInput] = useState('');
+  const [editPhotoURLInput, setEditPhotoURLInput] = useState('');
   const [editUserRoleInput, setEditUserRoleInput] = useState<UserRole>('author');
+  const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
 
   // Global Admin Message Banner
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -211,6 +214,8 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
       await updateUserProfileByAdmin(editingUser.uid, {
         displayName: editDisplayNameInput.trim() || editingUser.displayName,
         role: editUserRoleInput,
+        email: editEmailInput.trim() || editingUser.email,
+        photoURL: editPhotoURLInput.trim() || undefined,
       });
       setMessage({ type: 'success', text: `Perfil de "${editingUser.displayName}" actualizado correctamente.` });
       setEditingUser(null);
@@ -899,7 +904,7 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                   >
                     {/* User Profile Info */}
                     <div className="flex items-start gap-3">
-                      <div className={`w-11 h-11 rounded-2xl font-bold flex items-center justify-center text-base shrink-0 shadow-sm ${
+                      <div className={`w-11 h-11 rounded-2xl font-bold flex items-center justify-center text-base shrink-0 shadow-sm overflow-hidden ${
                         isUserAdmin
                           ? 'bg-amber-500 text-slate-950'
                           : user.isSuspended
@@ -908,7 +913,11 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                           ? 'bg-slate-800 text-white'
                           : 'bg-slate-800 text-amber-300'
                       }`}>
-                        {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+                        {user.photoURL ? (
+                          <img src={user.photoURL} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'
+                        )}
                       </div>
 
                       <div className="space-y-1">
@@ -995,6 +1004,8 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                         onClick={() => {
                           setEditingUser(user);
                           setEditDisplayNameInput(user.displayName || '');
+                          setEditEmailInput(user.email || '');
+                          setEditPhotoURLInput(user.photoURL || '');
                           setEditUserRoleInput(user.role || 'author');
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border ${
@@ -1002,7 +1013,7 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                             ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
                             : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/10'
                         }`}
-                        title="Editar nombre público o cambiar rol del usuario"
+                        title="Editar nombre público, correo, foto o cambiar rol del usuario"
                       >
                         <Edit3 className="w-3.5 h-3.5 text-sky-400" />
                         <span>Editar</span>
@@ -1067,12 +1078,15 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
 
             <div className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold mb-1 text-slate-500">Correo Electrónico (No editable)</label>
+                <label className="block font-bold mb-1">Correo Electrónico</label>
                 <input
-                  type="text"
-                  disabled
-                  value={editingUser.email}
-                  className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl p-2.5 text-slate-500 font-mono"
+                  type="email"
+                  value={editEmailInput}
+                  onChange={(e) => setEditEmailInput(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border outline-none font-medium font-mono ${
+                    isClean ? 'bg-slate-50 border-slate-300 focus:border-rose-500' : 'bg-slate-950 border-slate-800 focus:border-rose-500'
+                  }`}
+                  placeholder="usuario@ejemplo.com"
                 />
               </div>
 
@@ -1090,6 +1104,26 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
               </div>
 
               <div>
+                <label className="block font-bold mb-1">Foto de Perfil (URL o Imagen Externa)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={editPhotoURLInput}
+                    onChange={(e) => setEditPhotoURLInput(e.target.value)}
+                    className={`flex-1 p-2.5 rounded-xl border outline-none font-medium text-xs ${
+                      isClean ? 'bg-slate-50 border-slate-300 focus:border-rose-500' : 'bg-slate-950 border-slate-800 focus:border-rose-500'
+                    }`}
+                    placeholder="https://i.ibb.co/... o enlace de imagen"
+                  />
+                  {editPhotoURLInput && (
+                    <div className="w-9 h-9 rounded-xl border overflow-hidden shrink-0">
+                      <img src={editPhotoURLInput} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
                 <label className="block font-bold mb-1">Rol de Usuario</label>
                 <select
                   value={editUserRoleInput}
@@ -1101,6 +1135,38 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                   <option value="author">Autor / Creador de historias</option>
                   <option value="admin">Administrador de la Plataforma</option>
                 </select>
+              </div>
+
+              {/* Password Action */}
+              <div className={`p-3 rounded-xl border space-y-2 ${isClean ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/50 border-white/5'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold flex items-center gap-1.5 text-amber-500">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Contraseña del Usuario</span>
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Por seguridad RGPD, las contraseñas están cifradas en Firebase Auth. Puedes enviar un correo oficial para que el usuario restablezca su clave.
+                </p>
+                <button
+                  type="button"
+                  disabled={isSendingResetEmail || !editEmailInput.trim()}
+                  onClick={async () => {
+                    setIsSendingResetEmail(true);
+                    try {
+                      await sendPasswordResetForUser(editEmailInput.trim());
+                      setMessage({ type: 'success', text: `Enlace de restablecimiento enviado a ${editEmailInput.trim()}` });
+                    } catch (e: any) {
+                      setMessage({ type: 'error', text: e?.message || 'Error al enviar correo de restablecimiento.' });
+                    } finally {
+                      setIsSendingResetEmail(false);
+                    }
+                  }}
+                  className="w-full py-2 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>{isSendingResetEmail ? 'Enviando correo...' : 'Enviar correo para restablecer contraseña'}</span>
+                </button>
               </div>
             </div>
 

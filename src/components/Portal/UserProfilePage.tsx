@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, CloudProjectDoc, GameProject, SaveSlotData, UserRole } from '../../types';
 import {
   updateUserProfileName,
+  updateUserEmail,
+  updateUserPassword,
+  updateUserProfilePhoto,
+  sendPasswordResetForUser,
   getUserProjects,
   getAllProjectsForAdmin,
   deleteProjectFromCloud,
@@ -30,6 +34,14 @@ import {
   MapPin,
   RefreshCw,
   Info,
+  Mail,
+  KeyRound,
+  Camera,
+  Upload,
+  Link,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface UserProfilePageProps {
@@ -61,6 +73,27 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
   const [displayNameInput, setDisplayNameInput] = useState(currentUser.displayName || '');
   const [isSavingName, setIsSavingName] = useState(false);
   const [nameSuccessMessage, setNameSuccessMessage] = useState<string | null>(null);
+
+  // Email editing state
+  const [emailInput, setEmailInput] = useState(currentUser.email || '');
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+  const [emailSuccessMessage, setEmailSuccessMessage] = useState<string | null>(null);
+
+  // Password editing state
+  const [passwordInput, setPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState<string | null>(null);
+  const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
+
+  // Photo editing state
+  const [photoInputMode, setPhotoInputMode] = useState<'upload' | 'url'>('upload');
+  const [photoUrlInput, setPhotoUrlInput] = useState(currentUser.photoURL || '');
+  const [photoPreview, setPhotoPreview] = useState<string | null>(currentUser.photoURL || null);
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+  const [photoSuccessMessage, setPhotoSuccessMessage] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // User projects state (Historial de publicaciones)
   const [userProjects, setUserProjects] = useState<CloudProjectDoc[]>([]);
@@ -178,6 +211,145 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
     }
   };
 
+  // Handle Email update
+  const handleSaveEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = emailInput.trim().toLowerCase();
+    if (!trimmed || trimmed === (currentUser.email || '').toLowerCase()) return;
+
+    setIsSavingEmail(true);
+    setEmailSuccessMessage(null);
+    setErrorMsg(null);
+
+    try {
+      const updated = await updateUserEmail(currentUser.uid, trimmed);
+      setCurrentUser(updated);
+      setEmailSuccessMessage('¡Correo electrónico actualizado correctamente!');
+      setTimeout(() => setEmailSuccessMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error updating email:', err);
+      if (err?.code === 'auth/requires-recent-login') {
+        setErrorMsg('Por motivos de seguridad de Firebase, actualizar el correo requiere haber iniciado sesión recientemente. Por favor, cierra sesión e inicia sesión de nuevo antes de cambiar el correo.');
+      } else {
+        setErrorMsg(err?.message || 'No se pudo actualizar el correo electrónico.');
+      }
+    } finally {
+      setIsSavingEmail(false);
+    }
+  };
+
+  // Handle Password update
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordInput) return;
+    if (passwordInput.length < 6) {
+      setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (passwordInput !== confirmPasswordInput) {
+      setErrorMsg('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setIsSavingPassword(true);
+    setPasswordSuccessMessage(null);
+    setErrorMsg(null);
+
+    try {
+      await updateUserPassword(passwordInput);
+      setPasswordSuccessMessage('¡Contraseña actualizada con éxito!');
+      setPasswordInput('');
+      setConfirmPasswordInput('');
+      setTimeout(() => setPasswordSuccessMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error updating password:', err);
+      if (err?.code === 'auth/requires-recent-login') {
+        setErrorMsg('Por motivos de seguridad, cambiar la contraseña requiere haber iniciado sesión recientemente. Cierra sesión e inicia sesión de nuevo antes de cambiarla.');
+      } else {
+        setErrorMsg(err?.message || 'No se pudo actualizar la contraseña.');
+      }
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  // Handle send password reset email
+  const handleSendPasswordReset = async () => {
+    if (!currentUser.email) return;
+    setIsSendingResetEmail(true);
+    setErrorMsg(null);
+    try {
+      await sendPasswordResetForUser(currentUser.email);
+      setPasswordSuccessMessage(`Enviado correo de restablecimiento a ${currentUser.email}. Revisa tu bandeja de entrada.`);
+      setTimeout(() => setPasswordSuccessMessage(null), 5000);
+    } catch (err: any) {
+      console.error('Error sending reset email:', err);
+      setErrorMsg('No se pudo enviar el correo de restablecimiento.');
+    } finally {
+      setIsSendingResetEmail(false);
+    }
+  };
+
+  // Handle File Upload from computer
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2.5 * 1024 * 1024) {
+      setErrorMsg('La imagen seleccionada supera los 2.5MB. Por favor, elige una imagen más ligera o comprimida.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setPhotoPreview(dataUrl);
+      setPhotoUrlInput(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Save Photo
+  const handleSavePhoto = async () => {
+    const target = (photoUrlInput || photoPreview || '').trim();
+    setIsSavingPhoto(true);
+    setPhotoSuccessMessage(null);
+    setErrorMsg(null);
+
+    try {
+      const updated = await updateUserProfilePhoto(currentUser.uid, target);
+      setCurrentUser(updated);
+      setPhotoPreview(target || null);
+      setPhotoSuccessMessage(target ? '¡Foto de perfil actualizada correctamente!' : 'Foto de perfil eliminada.');
+      setTimeout(() => setPhotoSuccessMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error updating photo:', err);
+      setErrorMsg('No se pudo guardar la foto de perfil.');
+    } finally {
+      setIsSavingPhoto(false);
+    }
+  };
+
+  // Handle Remove Photo
+  const handleRemovePhoto = async () => {
+    setIsSavingPhoto(true);
+    setPhotoSuccessMessage(null);
+    setErrorMsg(null);
+
+    try {
+      const updated = await updateUserProfilePhoto(currentUser.uid, '');
+      setCurrentUser(updated);
+      setPhotoPreview(null);
+      setPhotoUrlInput('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setPhotoSuccessMessage('Foto de perfil eliminada.');
+      setTimeout(() => setPhotoSuccessMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error removing photo:', err);
+      setErrorMsg('No se pudo eliminar la foto de perfil.');
+    } finally {
+      setIsSavingPhoto(false);
+    }
+  };
+
   // Handle story deletion
   const handleDeleteProject = async () => {
     if (!projectToDelete) return;
@@ -241,8 +413,16 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
             
             {/* Left: User Avatar & Information */}
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#A4332A] flex items-center justify-center text-white font-serif font-bold text-2xl sm:text-3xl shadow-sm shrink-0 border-2 border-[#8B2A22]">
-                {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'L'}
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#A4332A] flex items-center justify-center text-white font-serif font-bold text-2xl sm:text-3xl shadow-sm shrink-0 border-2 border-[#8B2A22] overflow-hidden">
+                {currentUser.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt={currentUser.displayName || 'Avatar'}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}</span>
+                )}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -302,59 +482,389 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
           </div>
         )}
 
-        {/* Section 1: Editar Nombre / Nick */}
-        <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+        {/* Section 1: Panel de Control de Usuario y Datos Personales */}
+        <div className={`border rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 ${
           isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
         }`}>
-          <div className={`flex items-center gap-2.5 border-b pb-3 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
-            <User className="w-5 h-5 text-[#A4332A]" />
-            <div>
-              <h2 className={`font-serif font-bold text-base ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>Nick de Usuario y Nombre Público</h2>
-              <p className={`text-[11px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
-                Este es el nombre o alias que se mostrará por defecto al crear o firmar tus historias interactivas.
-              </p>
+          <div className={`flex items-center justify-between border-b pb-4 flex-wrap gap-2 ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
+            <div className="flex items-center gap-2.5">
+              <User className="w-6 h-6 text-[#A4332A]" />
+              <div>
+                <h2 className={`font-serif font-bold text-lg ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                  Panel de Control de Usuario y Datos Personales
+                </h2>
+                <p className={`text-xs ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                  Personaliza tu foto de perfil, tu nick público y tus credenciales de inicio de sesión (correo y contraseña).
+                </p>
+              </div>
             </div>
           </div>
 
-          <form onSubmit={handleSaveDisplayName} className="space-y-3 max-w-xl">
-            {nameSuccessMessage && (
-              <div className="bg-[#3B6D11]/20 border border-[#3B6D11]/40 text-[#3B6D11] dark:text-emerald-300 px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2">
-                <Check className="w-4 h-4 text-[#3B6D11]" />
-                <span>{nameSuccessMessage}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* SUB-SECTION 1: Foto de Perfil */}
+            <div className={`p-5 rounded-2xl border space-y-4 ${
+              isClean ? 'bg-[#F4EFE3]/60 border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+            }`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`font-serif font-bold text-sm flex items-center gap-2 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                  <Camera className="w-4 h-4 text-[#A4332A]" />
+                  <span>Foto de Perfil</span>
+                </h3>
+                {currentUser.photoURL && (
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                    Foto Activa
+                  </span>
+                )}
               </div>
-            )}
 
-            <div>
-              <label className={`block text-xs font-semibold mb-1.5 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
-                Editar Nombre de Usuario / Nick
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  value={displayNameInput}
-                  onChange={(e) => setDisplayNameInput(e.target.value)}
-                  placeholder="Ej: Laura Martínez"
-                  className={`flex-1 border rounded-xl px-4 py-2.5 text-sm outline-none transition-colors ${
-                    isClean
-                      ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
-                      : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-[#C9A24B]'
-                  }`}
-                />
+              {photoSuccessMessage && (
+                <div className="bg-[#3B6D11]/20 border border-[#3B6D11]/40 text-[#3B6D11] dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <Check className="w-4 h-4 text-[#3B6D11] shrink-0" />
+                  <span>{photoSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* Preview and Upload / URL controls */}
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="w-20 h-20 rounded-2xl bg-[#A4332A] border-2 border-[#8B2A22] shadow-sm flex items-center justify-center text-white font-serif font-bold text-2xl shrink-0 overflow-hidden relative">
+                  {photoPreview ? (
+                    <img
+                      src={photoPreview}
+                      alt="Vista previa de perfil"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}</span>
+                  )}
+                </div>
+
+                <div className="flex-1 w-full space-y-3 text-xs">
+                  {/* Selector de modo: Subir desde ordenador vs Enlace externo */}
+                  <div className={`p-1 rounded-xl flex items-center gap-1 border ${
+                    isClean ? 'bg-white border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => setPhotoInputMode('upload')}
+                      className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        photoInputMode === 'upload'
+                          ? 'bg-[#A4332A] text-white shadow-xs'
+                          : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Subir Imagen</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPhotoInputMode('url')}
+                      className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        photoInputMode === 'url'
+                          ? 'bg-[#A4332A] text-white shadow-xs'
+                          : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
+                      }`}
+                    >
+                      <Link className="w-3.5 h-3.5" />
+                      <span>Enlace Web Externo</span>
+                    </button>
+                  </div>
+
+                  {photoInputMode === 'upload' ? (
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/png, image/jpeg, image/webp, image/gif"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`w-full py-2.5 px-3 border border-dashed rounded-xl font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          isClean
+                            ? 'bg-white hover:bg-[#F4EFE3] text-[#2A2118] border-[#E5DCB8]'
+                            : 'bg-[#2C241C] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+                        }`}
+                      >
+                        <Upload className="w-4 h-4 text-[#A4332A]" />
+                        <span>Seleccionar archivo desde tu ordenador</span>
+                      </button>
+                      <p className={`text-[10px] text-center ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                        Formatos JPG, PNG, WEBP o GIF (hasta 2.5 MB).
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <Link className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                        <input
+                          type="url"
+                          value={photoUrlInput}
+                          onChange={(e) => {
+                            setPhotoUrlInput(e.target.value);
+                            setPhotoPreview(e.target.value.trim() || null);
+                          }}
+                          placeholder="https://i.ibb.co/... o enlace externo"
+                          className={`w-full pl-9 pr-3 py-2 rounded-xl border outline-none font-medium text-xs ${
+                            isClean
+                              ? 'bg-white border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                              : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-[#C9A24B]'
+                          }`}
+                        />
+                      </div>
+                      <p className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                        Pega una URL directa a tu imagen alojada en ImgBB, Postimages u otro servidor.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Actions for Photo */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSavePhoto}
+                      disabled={isSavingPhoto || (!photoPreview && !photoUrlInput)}
+                      className="flex-1 py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                    >
+                      {isSavingPhoto ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Guardar Foto</span>
+                    </button>
+                    {(currentUser.photoURL || photoPreview) && (
+                      <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        disabled={isSavingPhoto}
+                        className={`py-2 px-3 border rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          isClean
+                            ? 'bg-white hover:bg-rose-50 text-rose-600 border-rose-200'
+                            : 'bg-[#2C241C] hover:bg-rose-950/40 text-rose-400 border-rose-500/30'
+                        }`}
+                        title="Eliminar foto de perfil y volver a la inicial"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SUB-SECTION 2: Nick y Nombre Público */}
+            <div className={`p-5 rounded-2xl border space-y-4 ${
+              isClean ? 'bg-[#F4EFE3]/60 border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+            }`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`font-serif font-bold text-sm flex items-center gap-2 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                  <User className="w-4 h-4 text-[#A4332A]" />
+                  <span>Nombre Público / Nick</span>
+                </h3>
+              </div>
+
+              {nameSuccessMessage && (
+                <div className="bg-[#3B6D11]/20 border border-[#3B6D11]/40 text-[#3B6D11] dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <Check className="w-4 h-4 text-[#3B6D11] shrink-0" />
+                  <span>{nameSuccessMessage}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveDisplayName} className="space-y-3 text-xs">
+                <div>
+                  <label className={`block font-semibold mb-1 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    Tu Nick o Alias
+                  </label>
+                  <input
+                    type="text"
+                    value={displayNameInput}
+                    onChange={(e) => setDisplayNameInput(e.target.value)}
+                    placeholder="Ej: Laura Martínez"
+                    className={`w-full border rounded-xl px-3.5 py-2.5 text-xs outline-none font-medium transition-colors ${
+                      isClean
+                        ? 'bg-white border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                        : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-[#C9A24B]'
+                    }`}
+                  />
+                  <p className={`text-[10px] mt-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                    Este alias se mostrará al publicar relatos o comentar en la comunidad.
+                  </p>
+                </div>
+
                 <button
                   type="submit"
                   disabled={isSavingName || !displayNameInput.trim()}
-                  className="px-5 py-2.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm shrink-0 flex items-center gap-1.5"
+                  className="w-full py-2.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
                 >
                   {isSavingName ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <Edit3 className="w-4 h-4" />
+                    <Edit3 className="w-3.5 h-3.5" />
                   )}
-                  <span>Guardar Nick</span>
+                  <span>Guardar Nombre / Nick</span>
                 </button>
-              </div>
+              </form>
             </div>
-          </form>
+
+            {/* SUB-SECTION 3: Correo Electrónico */}
+            <div className={`p-5 rounded-2xl border space-y-4 ${
+              isClean ? 'bg-[#F4EFE3]/60 border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+            }`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`font-serif font-bold text-sm flex items-center gap-2 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                  <Mail className="w-4 h-4 text-[#A4332A]" />
+                  <span>Correo Electrónico</span>
+                </h3>
+              </div>
+
+              {emailSuccessMessage && (
+                <div className="bg-[#3B6D11]/20 border border-[#3B6D11]/40 text-[#3B6D11] dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <Check className="w-4 h-4 text-[#3B6D11] shrink-0" />
+                  <span>{emailSuccessMessage}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveEmail} className="space-y-3 text-xs">
+                <div>
+                  <label className={`block font-semibold mb-1 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    Dirección de Correo Electrónico
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="email"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="usuario@ejemplo.com"
+                      className={`w-full pl-9 pr-3.5 py-2.5 border rounded-xl text-xs outline-none font-mono transition-colors ${
+                        isClean
+                          ? 'bg-white border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                          : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-[#C9A24B]'
+                      }`}
+                    />
+                  </div>
+                  <p className={`text-[10px] mt-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
+                    Se utilizará para iniciar sesión y para recuperar tu cuenta.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingEmail || !emailInput.trim() || emailInput.trim().toLowerCase() === (currentUser.email || '').toLowerCase()}
+                  className="w-full py-2.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  {isSavingEmail ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Mail className="w-3.5 h-3.5" />
+                  )}
+                  <span>Actualizar Correo Electrónico</span>
+                </button>
+              </form>
+            </div>
+
+            {/* SUB-SECTION 4: Contraseña de Acceso */}
+            <div className={`p-5 rounded-2xl border space-y-4 ${
+              isClean ? 'bg-[#F4EFE3]/60 border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+            }`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`font-serif font-bold text-sm flex items-center gap-2 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                  <KeyRound className="w-4 h-4 text-[#A4332A]" />
+                  <span>Contraseña de Acceso</span>
+                </h3>
+              </div>
+
+              {passwordSuccessMessage && (
+                <div className="bg-[#3B6D11]/20 border border-[#3B6D11]/40 text-[#3B6D11] dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <Check className="w-4 h-4 text-[#3B6D11] shrink-0" />
+                  <span>{passwordSuccessMessage}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSavePassword} className="space-y-3 text-xs">
+                <div>
+                  <label className={`block font-semibold mb-1 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    Nueva Contraseña
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      placeholder="Mínimo 6 caracteres"
+                      className={`w-full pr-9 pl-3 py-2.5 border rounded-xl text-xs outline-none font-mono transition-colors ${
+                        isClean
+                          ? 'bg-white border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                          : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-[#C9A24B]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block font-semibold mb-1 ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
+                    Confirmar Nueva Contraseña
+                  </label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={confirmPasswordInput}
+                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                    placeholder="Repite la nueva contraseña"
+                    className={`w-full px-3 py-2.5 border rounded-xl text-xs outline-none font-mono transition-colors ${
+                      isClean
+                        ? 'bg-white border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                        : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-[#C9A24B]'
+                    }`}
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={isSavingPassword || !passwordInput || passwordInput.length < 6 || passwordInput !== confirmPasswordInput}
+                    className="flex-1 py-2.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    {isSavingPassword ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <KeyRound className="w-3.5 h-3.5" />
+                    )}
+                    <span>Actualizar Contraseña</span>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={handleSendPasswordReset}
+                    disabled={isSendingResetEmail || !currentUser.email}
+                    className={`py-2 px-3 border rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                      isClean
+                        ? 'bg-white hover:bg-[#F4EFE3] text-[#6B5C46] border-[#E5DCB8]'
+                        : 'bg-[#2C241C] hover:bg-[#382E25] text-[#D1C7B7] border-[#42362B]'
+                    }`}
+                    title="Enviar enlace oficial de restablecimiento a tu dirección de correo"
+                  >
+                    {isSendingResetEmail ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Mail className="w-3.5 h-3.5" />
+                    )}
+                    <span>Enviar enlace por correo</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+          </div>
         </div>
 
         {/* Section 1.5: Panel de Control de Funciones de Administrador */}

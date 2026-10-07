@@ -35,7 +35,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setIsSavingCloud(true);
     setCloudMessage(null);
     try {
-      await saveProjectToCloud(
+      const savedDocId = await saveProjectToCloud(
         project.id,
         project,
         {
@@ -45,6 +45,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         },
         'draft'
       );
+      if (savedDocId && savedDocId !== project.id) {
+        onImportProject({ ...project, id: savedDocId });
+      }
       setCloudMessage({
         type: 'success',
         text: `¡Proyecto "${project.title}" guardado exitosamente en la nube!`,

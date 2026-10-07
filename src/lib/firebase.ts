@@ -7,6 +7,8 @@ import {
   onAuthStateChanged,
   signInAnonymously,
   updateProfile,
+  updateEmail,
+  updatePassword,
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
@@ -86,6 +88,15 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
         needsUpdate = true;
       }
 
+      if (data.photoURL || auth.currentUser?.photoURL) {
+        const photo = data.photoURL || auth.currentUser?.photoURL || undefined;
+        if (photo && photo !== data.photoURL) {
+          data.photoURL = photo;
+          updatePayload.photoURL = photo;
+          needsUpdate = true;
+        }
+      }
+
       if (needsUpdate) {
         await setDoc(userRef, updatePayload, { merge: true });
       }
@@ -125,12 +136,15 @@ export async function createOrUpdateUserProfile(
     finalDisplayName = 'Urdimbre';
   }
 
+  const finalPhotoURL = existing?.photoURL || auth.currentUser?.photoURL || undefined;
+
   const profile: UserProfile = {
     uid,
     email: finalEmail,
     displayName: finalDisplayName,
     role: finalRole,
-    createdAt: existing ? existing.createdAt : new Date().toISOString()
+    createdAt: existing ? existing.createdAt : new Date().toISOString(),
+    ...(finalPhotoURL ? { photoURL: finalPhotoURL } : {})
   };
 
   try {
@@ -222,6 +236,78 @@ export async function updateUserProfileName(uid: string, newDisplayName: string)
     email: auth.currentUser?.email || '',
     displayName: trimmed,
     role: 'author',
+    createdAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Update user email address in Firebase Auth and Firestore
+ */
+export async function updateUserEmail(uid: string, newEmail: string): Promise<UserProfile> {
+  const trimmedEmail = newEmail.trim().toLowerCase();
+  if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    throw new Error('Por favor, introduce un correo electrónico válido.');
+  }
+
+  // 1. Update Firebase Auth if current user is logged in
+  if (auth.currentUser && auth.currentUser.uid === uid) {
+    await updateEmail(auth.currentUser, trimmedEmail);
+  }
+
+  // 2. Update Firestore user document
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { email: trimmedEmail });
+
+  const updated = await getUserProfile(uid);
+  if (updated) return updated;
+
+  return {
+    uid,
+    email: trimmedEmail,
+    displayName: auth.currentUser?.displayName || 'Lector',
+    role: 'author',
+    createdAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Update user password in Firebase Auth
+ */
+export async function updateUserPassword(newPassword: string): Promise<void> {
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('La contraseña debe tener un mínimo de 6 caracteres.');
+  }
+  if (!auth.currentUser) {
+    throw new Error('No hay una sesión de usuario activa.');
+  }
+  await updatePassword(auth.currentUser, newPassword);
+}
+
+/**
+ * Update user profile photo (photoURL) in Firebase Auth and Firestore
+ */
+export async function updateUserProfilePhoto(uid: string, photoURL: string): Promise<UserProfile> {
+  const trimmed = photoURL.trim();
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { photoURL: trimmed });
+
+  if (auth.currentUser && auth.currentUser.uid === uid) {
+    try {
+      await updateProfile(auth.currentUser, { photoURL: trimmed });
+    } catch (e) {
+      console.warn('Error updating auth photo URL:', e);
+    }
+  }
+
+  const updated = await getUserProfile(uid);
+  if (updated) return updated;
+
+  return {
+    uid,
+    email: auth.currentUser?.email || '',
+    displayName: auth.currentUser?.displayName || 'Lector',
+    role: 'author',
+    photoURL: trimmed,
     createdAt: new Date().toISOString()
   };
 }
@@ -354,11 +440,34 @@ export async function saveProjectToCloud(
   reviewFeedback: string = ''
 ): Promise<string> {
   const now = new Date().toISOString();
-  const idToUse = docId || projectData.id || `proj_${Date.now()}`;
-  const ref = doc(db, 'projects', idToUse);
+  let idToUse = docId || projectData.id || `proj_${Date.now()}`;
+  let ref = doc(db, 'projects', idToUse);
   
-  const existingSnap = await getDoc(ref);
-  const existingData = existingSnap.exists() ? (existingSnap.data() as CloudProjectDoc) : null;
+  let existingData: CloudProjectDoc | null = null;
+  try {
+    const existingSnap = await getDoc(ref);
+    if (existingSnap.exists()) {
+      existingData = existingSnap.data() as CloudProjectDoc;
+    }
+  } catch (err) {
+    console.warn('Checking project doc existence (may be a new project or draft):', err);
+  }
+
+  // If the target doc is the default sample game ('el_misterio_de_la_habitacion')
+  // or exists but belongs to a different author (and current user isn't admin),
+  // assign a fresh project ID so the author saves their own copy safely.
+  const isAdminUser = author.email === 'lavozdelosmuertos@gmail.com' || (author as any).role === 'admin';
+  if (
+    idToUse === 'el_misterio_de_la_habitacion' ||
+    (existingData && existingData.authorId && existingData.authorId !== author.uid && !isAdminUser)
+  ) {
+    idToUse = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    ref = doc(db, 'projects', idToUse);
+    existingData = null;
+  }
+
+  // Update working projectData with current ID
+  projectData.id = idToUse;
 
   const currentPubVersion = existingData?.publishedVersion || 0;
   let publishedData = existingData?.publishedData || null;
@@ -541,10 +650,22 @@ export async function consolidateAdminProfilesInFirestore(primaryUid?: string): 
     }
 
     // Determine primary user:
-    // 1. If primaryUid is provided and exists among matchingUsers, use it
+    // 1. If primaryUid is provided (active authenticated session), MUST use it as the definitive primary profile!
     // 2. Otherwise pick non-anonymous / real account (e.g. named "Urdimbre" or customized)
     // 3. Fallback to the first matching user
-    let primaryUser = matchingUsers.find((u) => u.uid === primaryUid);
+    let primaryUser: UserProfile | undefined;
+    if (primaryUid) {
+      primaryUser = matchingUsers.find((u) => u.uid === primaryUid);
+      if (!primaryUser) {
+        primaryUser = await createOrUpdateUserProfile(
+          primaryUid,
+          adminEmail,
+          'Urdimbre',
+          'admin'
+        );
+      }
+    }
+
     if (!primaryUser) {
       primaryUser =
         matchingUsers.find(

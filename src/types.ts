@@ -316,6 +316,7 @@ export interface UserProfile {
   displayName: string;
   role: UserRole;
   createdAt: string;
+  photoURL?: string;
   isSuspended?: boolean;
   suspendedReason?: string;
 }

@@ -142,23 +142,30 @@ export default function App() {
           return normAdmin === userEmail || userEmail.includes('lavozdelosmuertos');
         });
 
+        let profile: UserProfile | null = null;
         if (isAdminEmail) {
           const consolidation = await consolidateAdminProfilesInFirestore(user.uid);
           if (consolidation.primaryProfile) {
-            setCurrentUser(consolidation.primaryProfile);
-            return;
+            profile = { ...consolidation.primaryProfile, uid: user.uid };
           }
         }
 
-        let profile = await getUserProfile(user.uid);
+        if (!profile) {
+          profile = await getUserProfile(user.uid);
+        }
 
         if (!profile || (isAdminEmail && profile.role !== 'admin')) {
           profile = await createOrUpdateUserProfile(
             user.uid,
             userEmail || 'lavozdelosmuertos@gmail.com',
-            user.displayName || userEmail.split('@')[0] || 'Administrador',
+            user.displayName || (isAdminEmail ? 'Urdimbre' : userEmail.split('@')[0]) || 'Usuario',
             isAdminEmail ? 'admin' : 'author'
           );
+        }
+
+        // Guarantee currentUser.uid ALWAYS matches user.uid from Firebase Auth
+        if (profile) {
+          profile.uid = user.uid;
         }
         setCurrentUser(profile);
       } else {

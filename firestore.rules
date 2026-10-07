@@ -4,9 +4,11 @@ service cloud.firestore {
     
     // Helper function: check if user is admin
     function isAdmin() {
-      return request.auth != null && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null && (
+        request.auth.token.email == 'lavozdelosmuertos@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     // Helper function: check if user is owner of document
@@ -24,12 +26,17 @@ service cloud.firestore {
     // Projects collection
     match /projects/{projectId} {
       // Anyone (even unauthenticated visitors) can read published games
+      // Allow read when resource is null (when checking non-existent document with getDoc before creation)
       // Authors can read their own games
       // Admins can read all games
-      allow read: if resource.data.status == 'published' || isOwner(resource.data.authorId) || isAdmin();
+      allow read: if resource == null || 
+                     resource.data.status == 'published' || 
+                     (request.auth != null && (isOwner(resource.data.authorId) || isAdmin()));
 
       // Authenticated users can create projects owned by themselves
-      allow create: if request.auth != null && request.resource.data.authorId == request.auth.uid;
+      allow create: if request.auth != null && (
+        request.resource.data.authorId == request.auth.uid || isAdmin()
+      );
 
       // Authors can update their own projects (as long as they don't self-publish unless they are admin)
       // Admins can update any project (including publishing and reviewing)
@@ -39,7 +46,7 @@ service cloud.firestore {
       );
 
       // Authors can delete their own drafts/projects, Admins can delete any
-      allow delete: if isOwner(resource.data.authorId) || isAdmin();
+      allow delete: if (resource != null && isOwner(resource.data.authorId)) || isAdmin();
     }
 
     // Global settings & shared sound library collection

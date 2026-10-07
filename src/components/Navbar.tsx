@@ -220,7 +220,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             {currentUser ? (
               <>
-                {currentUser.role === 'admin' ? <Shield className="w-3.5 h-3.5 text-[#A4332A]" /> : <User className="w-3.5 h-3.5 text-[#C9A24B]" />}
+                {currentUser.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt=""
+                    className="w-4 h-4 rounded-full object-cover shrink-0 ring-1 ring-amber-500/40"
+                  />
+                ) : currentUser.role === 'admin' ? (
+                  <Shield className="w-3.5 h-3.5 text-[#A4332A]" />
+                ) : (
+                  <User className="w-3.5 h-3.5 text-[#C9A24B]" />
+                )}
                 <span className="truncate max-w-[100px]">{currentUser.displayName}</span>
               </>
             ) : (

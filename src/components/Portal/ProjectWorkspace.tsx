@@ -128,6 +128,9 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
         },
         'draft'
       );
+      if (docId && docId !== activeProject.id) {
+        onSelectProject({ ...activeProject, id: docId }, docId);
+      }
       setMessage({ type: 'success', text: `¡Proyecto "${activeProject.title}" guardado en la nube correctamente!` });
       await fetchProjects();
     } catch (e: any) {
