@@ -290,6 +290,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     if (!targetItem) return;
 
     if (selectedInventoryItemId === itemId) {
+      // If clicking the same item while 'usar' is active or it has a direct effect, use it!
+      if (activeVerb === 'usar' && targetItem.useEffectAction) {
+        handleUseInventoryItemDirectly(targetItem);
+        return;
+      }
       setSelectedInventoryItemId(null);
       return;
     }
@@ -378,6 +383,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       return;
     }
 
+    // If activeVerb is 'usar' and this item has a direct use effect: execute it immediately!
+    if (activeVerb === 'usar' && targetItem.useEffectAction) {
+      handleUseInventoryItemDirectly(targetItem);
+      return;
+    }
+
     setSelectedInventoryItemId(itemId);
 
     // If activeVerb is 'mirar', show the modal popup with item description
@@ -400,6 +411,95 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       setActiveVerb('usar');
       // Do NOT show the modal feedback popup with object information!
     }
+  };
+
+  const handleUseInventoryItemDirectly = (targetItem: InventoryItem) => {
+    playSound('select');
+    const rule = targetItem.useEffectAction;
+
+    if (!rule) {
+      setModalFeedback({
+        type: 'item',
+        title: targetItem.name,
+        verbIconName: 'Info',
+        itemImageUrl: targetItem.imageFileData || targetItem.imageUrl,
+        message: `No parece que puedas usar ${targetItem.name} por sí solo. Prueba a usarlo con alguna palabra interactiva de la escena o a combinarlo con otro objeto.`,
+      });
+      return;
+    }
+
+    let flagsMatch = true;
+    if (rule.requiredFlags) {
+      flagsMatch = Object.entries(rule.requiredFlags).every(([flagKey, expectedVal]) => {
+        return !!gameState.flags[flagKey] === expectedVal;
+      });
+    }
+
+    if (!flagsMatch) {
+      playSound('error');
+      setModalFeedback({
+        type: 'item',
+        title: targetItem.name,
+        verbIconName: 'Info',
+        itemImageUrl: targetItem.imageFileData || targetItem.imageUrl,
+        message: rule.failMessage || 'No se cumplen las condiciones para usar este objeto en este momento.',
+      });
+      return;
+    }
+
+    // Effect conditions met!
+    const sc = rule.stateChange;
+    const soundToPlay = rule.soundEffect || 'pickup';
+    playSound(soundToPlay);
+
+    setGameState((prev: any) => {
+      const newFlags = { ...prev.flags, ...(sc?.setFlags || {}) };
+      let newInventory = [...prev.inventory];
+      let nextSceneId = prev.currentSceneId;
+
+      if (sc?.addItemId && !newInventory.includes(sc.addItemId)) {
+        newInventory.push(sc.addItemId);
+      }
+      if (sc?.removeItemId) {
+        newInventory = newInventory.filter((id: string) => id !== sc.removeItemId);
+      }
+      if (sc?.goToSceneId) {
+        nextSceneId = sc.goToSceneId;
+      }
+
+      let newAppendedStoryTexts = { ...prev.appendedStoryTexts };
+      if (sc?.appendStoryText && nextSceneId) {
+        const currentList = newAppendedStoryTexts[nextSceneId] || [];
+        if (!currentList.some((t: any) => (typeof t === 'string' ? t : t.text) === sc.appendStoryText)) {
+          newAppendedStoryTexts = {
+            ...newAppendedStoryTexts,
+            [nextSceneId]: [...currentList, { text: sc.appendStoryText }],
+          };
+        }
+      }
+
+      return {
+        ...prev,
+        flags: newFlags,
+        inventory: newInventory,
+        currentSceneId: nextSceneId,
+        appendedStoryTexts: newAppendedStoryTexts,
+      };
+    });
+
+    setSelectedInventoryItemId(null);
+    setActiveVerb(null);
+
+    const isGameOverUse = !!rule.isGameOver || !!sc?.isGameOver;
+
+    setModalFeedback({
+      type: isGameOverUse ? 'gameover' : 'item',
+      title: `✨ ${targetItem.name}`,
+      verbIconName: isGameOverUse ? 'Skull' : 'Sparkles',
+      isGameOver: isGameOverUse,
+      itemImageUrl: targetItem.imageFileData || targetItem.imageUrl,
+      message: rule.responseMessage || `Has usado ${targetItem.name}.`,
+    });
   };
 
   const handleClearCommand = () => {
@@ -1958,9 +2058,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
 
             {selectedItemObj && (
-              <div className={`mt-3 p-2.5 rounded-lg border text-xs ${themeConfig.actionBoxBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}>
-                <p className={`font-semibold mb-0.5 ${themeConfig.accentClass}`}>{selectedItemObj.name}</p>
-                <p className={`text-[11px] leading-tight ${themeConfig.textMutedClass}`}>{selectedItemObj.description}</p>
+              <div className={`mt-3 p-3 rounded-xl border text-xs ${themeConfig.actionBoxBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass} space-y-2`}>
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-bold text-sm ${themeConfig.accentClass}`}>{selectedItemObj.name}</p>
+                    <p className={`text-[11px] leading-relaxed mt-0.5 ${themeConfig.textMutedClass}`}>{selectedItemObj.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleUseInventoryItemDirectly(selectedItemObj)}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer shrink-0"
+                    title={`Usar ${selectedItemObj.name}`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Usar</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>

@@ -888,6 +888,11 @@ ${jsonProject}
 
     function selectInventoryItem(id) {
       if (selectedInventoryItem === id) {
+        var itemToUse = PROJECT.inventoryItems.find(function(i) { return i.id === id; });
+        if (itemToUse && (activeVerb === 'usar' || itemToUse.useEffectAction)) {
+          useInventoryItemDirectly(id);
+          return;
+        }
         selectedInventoryItem = null;
         renderInventory();
         updateSentenceBar();
@@ -967,6 +972,14 @@ ${jsonProject}
         return;
       }
 
+      if (activeVerb === 'usar') {
+        var itemToUse = PROJECT.inventoryItems.find(function(i) { return i.id === id; });
+        if (itemToUse && itemToUse.useEffectAction) {
+          useInventoryItemDirectly(id);
+          return;
+        }
+      }
+
       selectedInventoryItem = id;
       renderInventory();
       updateSentenceBar();
@@ -975,7 +988,80 @@ ${jsonProject}
       if (item) {
         const cleanDesc = stripGameOverTag(item.description || '');
         const itemImg = getImageSrc(item);
-        showPopupModal(escapeHTML(item.name), escapeHTML(cleanDesc || 'Sin descripción.'), itemImg, '📦');
+        let modalContent = '<div>' + escapeHTML(cleanDesc || 'Sin descripción.') + '</div>';
+        modalContent += '<div style="margin-top: 1rem; display: flex; justify-content: flex-end;">' +
+          '<button class="action-btn" style="background: #f59e0b; color: #020617; font-weight: bold; padding: 0.45rem 1rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.4rem;" onclick="useInventoryItemDirectly(\\\'' + item.id + '\\\')">' +
+          '✨ Usar ' + escapeHTML(item.name) +
+          '</button></div>';
+        showPopupModal(escapeHTML(item.name), modalContent, itemImg, '📦');
+      }
+    }
+
+    function useInventoryItemDirectly(id) {
+      closePopupModal();
+      var item = PROJECT.inventoryItems.find(function(i) { return i.id === id; });
+      if (!item) return;
+
+      var rule = item.useEffectAction;
+      if (!rule) {
+        showPopupModal(escapeHTML(item.name), 'No parece que puedas usar ' + escapeHTML(item.name) + ' por sí solo. Prueba a usarlo con alguna palabra clave del escenario o a combinarlo con otro objeto.', getImageSrc(item), 'ℹ️');
+        return;
+      }
+
+      var flagsMatch = true;
+      if (rule.requiredFlags) {
+        for (var flagKey in rule.requiredFlags) {
+          if (!!gameState.flags[flagKey] !== !!rule.requiredFlags[flagKey]) {
+            flagsMatch = false;
+            break;
+          }
+        }
+      }
+
+      if (!flagsMatch) {
+        if (typeof playSound === 'function') playSound('error');
+        showPopupModal(escapeHTML(item.name), escapeHTML(rule.failMessage || 'No se cumplen las condiciones para usar este objeto en este momento.'), getImageSrc(item), 'ℹ️');
+        return;
+      }
+
+      var sc = rule.stateChange || {};
+      if (sc.setFlags) {
+        for (var k in sc.setFlags) {
+          gameState.flags[k] = sc.setFlags[k];
+        }
+      }
+      if (sc.addItemId && gameState.inventory.indexOf(sc.addItemId) === -1) {
+        gameState.inventory.push(sc.addItemId);
+      }
+      if (sc.removeItemId) {
+        gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItemId; });
+      }
+      if (sc.goToSceneId) {
+        gameState.currentSceneId = sc.goToSceneId;
+        renderScene(sc.goToSceneId);
+      }
+
+      if (rule.soundEffect && typeof playSound === 'function') {
+        playSound(rule.soundEffect);
+      }
+
+      selectedInventoryItem = null;
+      activeVerb = null;
+      renderInventory();
+      updateSentenceBar();
+
+      var isGameOverUse = !!rule.isGameOver || !!sc.isGameOver;
+      var respMsg = rule.responseMessage || ('Has usado ' + item.name + '.');
+      showPopupModal('✨ ' + escapeHTML(item.name), escapeHTML(respMsg), getImageSrc(item), isGameOverUse ? '💀' : '✨');
+
+      if (isGameOverUse) {
+        gameState.isGameOver = true;
+        if (typeof showGameOverScreen === 'function') {
+          showGameOverScreen(escapeHTML(respMsg));
+        }
+      }
+      if (typeof saveGameState === 'function') {
+        saveGameState();
       }
     }
 
@@ -991,7 +1077,8 @@ ${jsonProject}
         if (!item) return '';
         const isSel = selectedInventoryItem === itemId ? 'selected' : '';
         const isComboTarget = selectedInventoryItem && selectedInventoryItem !== itemId ? '<span style="font-size: 0.65rem; color: #fbbf24; background: rgba(245, 158, 11, 0.15); padding: 2px 5px; border-radius: 4px; float: right;">🧩 Combinar</span>' : '';
-        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\\'' + itemId + '\\\')">📦 ' + escapeHTML(item.name) + ' ' + isComboTarget + '</div>';
+        const useBadge = item.useEffectAction ? '<span style="font-size: 0.65rem; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 2px 5px; border-radius: 4px; float: right; margin-right: 4px;">✨ Usar</span>' : '';
+        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\\'' + itemId + '\\\')">📦 ' + escapeHTML(item.name) + ' ' + isComboTarget + useBadge + '</div>';
       }).join('');
     }
 

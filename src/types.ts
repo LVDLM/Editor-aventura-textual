@@ -20,6 +20,7 @@ export interface InventoryItem {
   imageFileData?: string; // Uploaded Base64 file data
   imageFileName?: string; // Filename for ZIP export (e.g. img/item_llave.png)
   isGameOver?: boolean; // Triggers end of game when inspected/used
+  useEffectAction?: ActionRule; // Direct effect when used on itself / directly from inventory
   combinations?: ActionRule[]; // Combinations / interactions with other inventory items
 }
 
