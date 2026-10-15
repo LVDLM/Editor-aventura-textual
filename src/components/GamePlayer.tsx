@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter } from '../types';
+import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter, Scene } from '../types';
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS } from '../utils/verbs';
@@ -59,6 +59,7 @@ interface GamePlayerProps {
   setIsHeaderCollapsed?: (collapsed: boolean) => void;
   soundEnabled?: boolean;
   toggleSound?: () => void;
+  isSceneTesting?: boolean;
 }
 
 const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
@@ -67,6 +68,109 @@ const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
   Flashlight: ({ className }) => <Flashlight className={className} />,
   Box: ({ className }) => <Box className={className} />,
   Skull: ({ className }) => <Skull className={className} />,
+};
+
+// Determines if an inventory item is needed in the specified scene
+const isItemNeededInScene = (item: InventoryItem, scene?: Scene): boolean => {
+  if (!scene) return false;
+
+  // 1. Explicitly required by any hotspot action
+  const requiredByAction = (scene.hotspots || []).some((hs) =>
+    (hs.actions || []).some((act) => act.requiredItemId === item.id)
+  );
+  if (requiredByAction) return true;
+
+  // 2. Action removes or changes this item
+  const touchesItemState = (scene.hotspots || []).some((hs) =>
+    (hs.actions || []).some(
+      (act) =>
+        act.stateChange?.removeItemId === item.id ||
+        act.stateChange?.removeItem2Id === item.id
+    )
+  );
+  if (touchesItemState) return true;
+
+  // 3. Flags: scene hotspots require flags that this item provides
+  const neededFlagsInScene = new Set<string>();
+  (scene.hotspots || []).forEach((hs) => {
+    if (hs.visibleIfFlags) Object.keys(hs.visibleIfFlags).forEach((f) => neededFlagsInScene.add(f));
+    if (hs.hiddenIfFlags) Object.keys(hs.hiddenIfFlags).forEach((f) => neededFlagsInScene.add(f));
+    (hs.actions || []).forEach((act) => {
+      if (act.requiredFlags) Object.keys(act.requiredFlags).forEach((f) => neededFlagsInScene.add(f));
+    });
+  });
+
+  if (item.useEffectAction?.stateChange?.setFlags) {
+    for (const flagKey of Object.keys(item.useEffectAction.stateChange.setFlags)) {
+      if (neededFlagsInScene.has(flagKey)) return true;
+    }
+  }
+
+  if (item.combinations) {
+    for (const combo of item.combinations) {
+      if (combo.stateChange?.setFlags) {
+        for (const flagKey of Object.keys(combo.stateChange.setFlags)) {
+          if (neededFlagsInScene.has(flagKey)) return true;
+        }
+      }
+    }
+  }
+
+  // 4. Mentioned by name in scene text or hotspots
+  const itemNameLower = item.name.toLowerCase().trim();
+  if (itemNameLower.length >= 2) {
+    const inText = (scene.textBlocks || []).some((b) =>
+      b.text.toLowerCase().includes(itemNameLower)
+    );
+    if (inText) return true;
+
+    const inHotspot = (scene.hotspots || []).some(
+      (hs) =>
+        hs.word.toLowerCase().includes(itemNameLower) ||
+        (hs.label && hs.label.toLowerCase().includes(itemNameLower)) ||
+        (hs.actions || []).some((act) => act.responseMessage?.toLowerCase().includes(itemNameLower))
+    );
+    if (inHotspot) return true;
+  }
+
+  // 5. QTE step target
+  if (scene.qteConfig?.sequence) {
+    const isQteTarget = scene.qteConfig.sequence.some(
+      (step) =>
+        step.label.toLowerCase().includes(itemNameLower) ||
+        (step.word && step.word.toLowerCase().includes(itemNameLower))
+    );
+    if (isQteTarget) return true;
+  }
+
+  return false;
+};
+
+// Filter progressive text for QTE scenes: [1] appears after action 1, [2] after action 2, etc.
+const filterQTEProgressiveText = (rawText: string, stepIndex: number, isFinished: boolean): string => {
+  if (!/\[\d+\]/.test(rawText)) {
+    return rawText;
+  }
+
+  const parts = rawText.split(/(?=\[\d+\])/g);
+  const result: string[] = [];
+
+  for (const part of parts) {
+    const match = part.match(/^\s*\[(\d+)\]\s*([\s\S]*)$/);
+    if (!match) {
+      // Initial text before any [N] tag
+      result.push(part.trim());
+    } else {
+      const targetStep = parseInt(match[1], 10);
+      const textAfterTag = match[2];
+      // Revealed when stepIndex >= targetStep (e.g. [1] unlocked after step 0 is completed)
+      if (isFinished || stepIndex >= targetStep) {
+        result.push(textAfterTag.trim());
+      }
+    }
+  }
+
+  return result.filter(Boolean).join('\n\n');
 };
 
 export const GamePlayer: React.FC<GamePlayerProps> = ({
@@ -80,6 +184,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   setIsHeaderCollapsed: propSetIsHeaderCollapsed,
   soundEnabled = true,
   toggleSound,
+  isSceneTesting = false,
 }) => {
   const [activeVerb, setActiveVerb] = useState<VerbType | null>(null);
   const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null);
@@ -189,6 +294,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     const config = currentScene?.qteConfig;
     const failMsg = reasonMsg || config?.onFailMessage || '¡No lograste reaccionar a tiempo!';
 
+    if (config?.onFailFlag) {
+      setGameState((prev: any) => ({
+        ...prev,
+        flags: {
+          ...prev.flags,
+          [config.onFailFlag!]: true,
+        },
+      }));
+    }
+
     if (config?.isFailGameOver) {
       setGameState((prev: any) => ({ ...prev, isGameOver: true }));
       setModalFeedback({
@@ -203,7 +318,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         type: 'action',
         title: '⚡ ¡TIEMPO AGOTADO!',
         verbIconName: 'Zap',
-        message: `${failMsg}\n\n(Avanzando a la siguiente escena...)`,
+        message: failMsg,
       });
       setTimeout(() => {
         setGameState((prev: any) => ({
@@ -227,12 +342,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     const config = currentScene?.qteConfig;
     const successMsg = config?.onSuccessMessage || '¡Sucesión completada a tiempo con éxito!';
 
+    if (config?.onSuccessFlag) {
+      setGameState((prev: any) => ({
+        ...prev,
+        flags: {
+          ...prev.flags,
+          [config.onSuccessFlag!]: true,
+        },
+      }));
+    }
+
     if (config?.onSuccessSceneId) {
       setModalFeedback({
         type: 'action',
         title: '⚡ ¡EVENTO COMPLETADO CON ÉXITO!',
         verbIconName: 'Zap',
-        message: `${successMsg}\n\n(Avanzando a la siguiente escena...)`,
+        message: successMsg,
       });
       setTimeout(() => {
         setGameState((prev: any) => ({
@@ -529,6 +654,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           } else {
             setQteStepIndex(nextStep);
             playSound('pickup');
+            // Reset timer if per-action mode is active
+            if (currentScene.qteConfig.timerMode === 'per_action') {
+              setQteTimeLeft(currentScene.qteConfig.timeLimitSeconds || 10);
+            }
           }
         } else {
           // Wrong action in QTE sequence -> Penalize time & show inline HUD feedback
@@ -960,6 +1089,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const handleWordClick = (hotspot: Hotspot, e: React.MouseEvent) => {
     e.stopPropagation();
     if (isSceneGameOver || gameState.isGameOver || modalFeedback?.isGameOver) return;
+
+    // Fast QTE action: If QTE is active and current step accepts any verb (no expectedVerb specified),
+    // clicking the action word directly triggers the action without needing to pick a verb first!
+    if (isQTEScene && qteStatus === 'active') {
+      const expectedStep = currentScene?.qteConfig?.sequence?.[qteStepIndex];
+      if (!expectedStep?.expectedVerb) {
+        handleExecuteAction(hotspot, undefined);
+        return;
+      }
+    }
+
     if (activeVerb) {
       // Direct action execution
       handleExecuteAction(hotspot, activeVerb);
@@ -1301,9 +1441,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const renderTextWithTags = (rawText: string, isBlockGameOver?: boolean, isBlockFinal?: boolean) => {
     if (!rawText) return null;
 
+    let processedText = rawText;
+    if (isQTEScene) {
+      const isFinished = qteStatus === 'success';
+      processedText = filterQTEProgressiveText(rawText, qteStepIndex, isFinished);
+    } else {
+      // In non-QTE scenes, strip [N] tags so they never appear to players
+      processedText = rawText.replace(/\[\d+\]\s*/g, '');
+    }
+
+    if (!processedText.trim()) return null;
+
     const tagRegex = /(\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\])/gi;
-    const parts = rawText.split(tagRegex);
-    const hasTag = /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(rawText);
+    const parts = processedText.split(tagRegex);
+    const hasTag = /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(processedText);
 
     const renderedContent = parts.map((part, index) => {
       const matchTag = part.match(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i);
@@ -1629,7 +1780,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 : selectedItemObj
                 ? `Usar ${selectedItemObj.name} con`
                 : activeVerb
-                ? ALL_VERBS.find((v) => v.id === activeVerb)?.label.split(' / ')[0].toUpperCase() || activeVerb.toUpperCase()
+                ? ALL_VERBS.find((v) => v.id === activeVerb)?.label.toUpperCase() || activeVerb.toUpperCase()
                 : 'SELECCIONAR ACCIÓN...'}
             </span>
             {!activeVerb && !selectedItemObj && (
@@ -1677,6 +1828,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 }`}>
                   <span>⏱️</span>
                   <span>{qteTimeLeft.toFixed(1)}s</span>
+                  {currentScene.qteConfig.timerMode === 'per_action' && (
+                    <span className="text-[10px] text-amber-300/80 font-sans font-bold bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30 ml-1">
+                      / acción
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1699,12 +1855,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 </div>
               )}
 
-              {/* Step indicator */}
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-t border-amber-500/20 pt-2">
+              {/* Step indicator - Centered instruction */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 text-xs border-t border-amber-500/20 pt-2.5 text-center">
                 <span className="text-amber-200/80 font-medium">
-                  Paso <strong className="text-amber-300 text-sm font-black">{qteStepIndex + 1}</strong> de {currentScene.qteConfig.sequence.length}:
+                  Paso <strong className="text-amber-300 text-sm font-black">{qteStepIndex + 1}</strong> de {currentScene.qteConfig.sequence.length}
                 </span>
-                <span className="bg-amber-500/20 text-amber-200 border border-amber-500/50 px-3 py-1 rounded-full font-bold shadow-sm">
+                <span className="hidden sm:inline text-amber-500/50">•</span>
+                <span className="bg-amber-500/25 text-amber-200 border border-amber-500/50 px-4 py-1.5 rounded-full font-bold shadow-sm text-xs sm:text-sm text-center inline-block">
                   {currentScene.qteConfig.sequence[qteStepIndex]?.label || '¡Realiza la acción requerida!'}
                 </span>
               </div>
@@ -1973,14 +2130,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <button
                     key={v.id}
                     onClick={() => handleSelectVerb(v.id)}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 border cursor-pointer ${
+                    className={`flex items-center gap-2 px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 border cursor-pointer ${
                       isActive
                         ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 shadow-md scale-[1.02]`
                         : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
                     }`}
                   >
                     {getVerbIcon(v.iconName)}
-                    <span>{v.label.split(' / ')[0]}</span>
+                    <span>{v.label}</span>
                   </button>
                 );
               })}
@@ -1990,71 +2147,128 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           {/* Inventory Panel (1 column) */}
           <div className={`p-5 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-lg flex flex-col justify-between`}>
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className={`text-xs font-bold uppercase tracking-wider ${themeConfig.textMutedClass}`}>
-                  Inventario ({gameState.inventory.length})
+                  Inventario {isSceneTesting ? `(Modo Prueba: ${project.inventoryItems.length} objetos)` : `(${gameState.inventory.length})`}
                 </h3>
               </div>
 
-              {gameState.inventory.length === 0 ? (
-                <div className={`text-center py-6 border border-dashed rounded-xl ${themeConfig.cardBorderClass}`}>
-                  <Box className={`w-7 h-7 mx-auto mb-2 ${themeConfig.textMutedClass}`} />
-                  <p className={`text-xs italic ${themeConfig.textMutedClass}`}>No llevas ningún objeto todavía.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-52 overflow-y-auto pr-1">
-                  {gameState.inventory.map((itemId) => {
-                    const item = project.inventoryItems.find((i) => i.id === itemId);
-                    if (!item) return null;
-                    const isSelected = selectedInventoryItemId === itemId;
-                    const itemImg = item.imageFileData || item.imageUrl;
-
-                    return (
-                      <div key={itemId} className="relative group">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectInventoryItem(itemId)}
-                          className={`w-full flex items-center justify-center p-2 rounded-xl text-xs font-medium border transition-all cursor-pointer relative min-h-[44px] ${
-                            isSelected
-                              ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 font-bold shadow-md scale-[1.03] ring-2 ring-amber-400/50`
-                              : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
-                          }`}
-                          title={item.name}
-                        >
-                          {/* Mobile view (< sm): SHOW ONLY TEXT */}
-                          <span className="sm:hidden truncate text-xs font-semibold px-1 text-center">
-                            {item.name}
-                          </span>
-
-                          {/* Desktop view (>= sm): SHOW ONLY MINIATURE THUMBNAIL IMAGE */}
-                          <div className="hidden sm:flex items-center justify-center w-12 h-12 relative rounded-lg bg-slate-950/80 border border-amber-500/30 overflow-hidden shadow-sm shrink-0">
-                            {itemImg ? (
-                              <img
-                                src={itemImg}
-                                alt={item.name}
-                                className="w-full h-full object-contain p-0.5"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-amber-900/40 via-slate-900 to-amber-950/60 flex items-center justify-center text-amber-300 font-black text-xs uppercase">
-                                {item.name.substring(0, 2)}
-                              </div>
-                            )}
-
-                            {isSelected && (
-                              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900 shadow animate-pulse z-10" />
-                            )}
-                          </div>
-                        </button>
-
-                        {/* Hover Tooltip showing item name on desktop */}
-                        <div className="hidden sm:block opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 absolute -top-10 left-1/2 -translate-x-1/2 z-30 bg-slate-950/95 border border-amber-400/60 text-amber-200 text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap backdrop-blur-md">
-                          {item.name}
-                        </div>
-                      </div>
-                    );
-                  })}
+              {isSceneTesting && (
+                <div className="flex flex-wrap items-center gap-2 mb-3 text-[10px] bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/10">
+                  <span className="font-bold text-white/70">Prueba:</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></span>
+                    Obtenido
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-blue-400 font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></span>
+                    Necesario en escena
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-rose-400 font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></span>
+                    No obtenido
+                  </span>
                 </div>
               )}
+
+              {(() => {
+                const itemsToDisplay: InventoryItem[] = isSceneTesting
+                  ? project.inventoryItems
+                  : (gameState.inventory
+                      .map((itemId: string) => project.inventoryItems.find((i) => i.id === itemId))
+                      .filter(Boolean) as InventoryItem[]);
+
+                if (itemsToDisplay.length === 0) {
+                  return (
+                    <div className={`text-center py-6 border border-dashed rounded-xl ${themeConfig.cardBorderClass}`}>
+                      <Box className={`w-7 h-7 mx-auto mb-2 ${themeConfig.textMutedClass}`} />
+                      <p className={`text-xs italic ${themeConfig.textMutedClass}`}>No hay ningún objeto disponible.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-52 overflow-y-auto pr-1">
+                    {itemsToDisplay.map((item) => {
+                      const isSelected = selectedInventoryItemId === item.id;
+                      const itemImg = item.imageFileData || item.imageUrl;
+                      const isObtained = gameState.inventory.includes(item.id);
+                      const isNeeded = isItemNeededInScene(item, currentScene);
+
+                      let slotBorderClass = `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`;
+
+                      if (isSelected) {
+                        slotBorderClass = `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 font-bold shadow-md scale-[1.03] ring-2 ring-amber-400/50`;
+                      } else if (isSceneTesting) {
+                        if (isObtained) {
+                          slotBorderClass = 'bg-emerald-950/30 border-2 border-emerald-500 ring-1 ring-emerald-500/40 text-emerald-200 shadow-sm';
+                        } else if (isNeeded) {
+                          slotBorderClass = 'bg-blue-950/30 border-2 border-blue-500 ring-1 ring-blue-500/40 text-blue-200 shadow-sm';
+                        } else {
+                          slotBorderClass = 'bg-rose-950/20 border-2 border-rose-500/80 ring-1 ring-rose-500/30 text-rose-300/70 opacity-75 shadow-sm';
+                        }
+                      }
+
+                      return (
+                        <div key={item.id} className="relative group">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectInventoryItem(item.id)}
+                            className={`w-full flex items-center justify-center p-2 rounded-xl text-xs font-medium border transition-all cursor-pointer relative min-h-[44px] ${slotBorderClass}`}
+                            title={item.name}
+                          >
+                            {/* Mobile view (< sm): SHOW ONLY TEXT */}
+                            <span className="sm:hidden truncate text-xs font-semibold px-1 text-center">
+                              {item.name}
+                            </span>
+
+                            {/* Desktop view (>= sm): SHOW ONLY MINIATURE THUMBNAIL IMAGE */}
+                            <div className="hidden sm:flex items-center justify-center w-12 h-12 relative rounded-lg bg-slate-950/80 border border-amber-500/30 overflow-hidden shadow-sm shrink-0">
+                              {itemImg ? (
+                                <img
+                                  src={itemImg}
+                                  alt={item.name}
+                                  className="w-full h-full object-contain p-0.5"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-amber-900/40 via-slate-900 to-amber-950/60 flex items-center justify-center text-amber-300 font-black text-xs uppercase">
+                                  {item.name.substring(0, 2)}
+                                </div>
+                              )}
+
+                              {isSelected && (
+                                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900 shadow animate-pulse z-10" />
+                              )}
+                            </div>
+
+                            {/* Status indicator badge in testing mode */}
+                            {isSceneTesting && (
+                              <span
+                                className={`absolute -top-1 -left-1 w-3 h-3 rounded-full border border-slate-950 shadow-sm z-20 ${
+                                  isObtained ? 'bg-emerald-500' : isNeeded ? 'bg-blue-500' : 'bg-rose-500'
+                                }`}
+                                title={isObtained ? 'Obtenido' : isNeeded ? 'Necesario en esta escena' : 'No obtenido'}
+                              />
+                            )}
+                          </button>
+
+                          {/* Hover Tooltip showing item name and testing status on desktop */}
+                          <div className="hidden sm:block opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 absolute -top-10 left-1/2 -translate-x-1/2 z-30 bg-slate-950/95 border border-amber-400/60 text-amber-200 text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap backdrop-blur-md">
+                            <span>{item.name}</span>
+                            {isSceneTesting && (
+                              <span className={`ml-1.5 text-[10px] ${
+                                isObtained ? 'text-emerald-400' : isNeeded ? 'text-blue-400' : 'text-rose-400'
+                              }`}>
+                                • {isObtained ? '🟢 Obtenido' : isNeeded ? '🔵 Necesario en escena' : '🔴 No obtenido'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
             {selectedItemObj && (
@@ -2074,6 +2288,45 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     <span>Usar</span>
                   </button>
                 </div>
+
+                {isSceneTesting && (
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Estado:{' '}
+                      <strong className={
+                        gameState.inventory.includes(selectedItemObj.id)
+                          ? 'text-emerald-400'
+                          : isItemNeededInScene(selectedItemObj, currentScene)
+                          ? 'text-blue-400'
+                          : 'text-rose-400'
+                      }>
+                        {gameState.inventory.includes(selectedItemObj.id)
+                          ? '🟢 Obtenido'
+                          : isItemNeededInScene(selectedItemObj, currentScene)
+                          ? '🔵 Necesario en escena'
+                          : '🔴 No obtenido'}
+                      </strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGameState((prev: any) => ({
+                          ...prev,
+                          inventory: prev.inventory.includes(selectedItemObj.id)
+                            ? prev.inventory.filter((id: string) => id !== selectedItemObj.id)
+                            : [...prev.inventory, selectedItemObj.id],
+                        }));
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                        gameState.inventory.includes(selectedItemObj.id)
+                          ? 'bg-rose-950/70 border-rose-500/40 text-rose-300 hover:bg-rose-900'
+                          : 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300 hover:bg-emerald-900'
+                      }`}
+                    >
+                      {gameState.inventory.includes(selectedItemObj.id) ? '✕ Quitar de inventario' : '+ Añadir a inventario'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2116,7 +2369,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                   >
                     {getVerbIcon(v.iconName)}
-                    <span>{v.label.split(' / ')[0]}</span>
+                    <span>{v.label}</span>
                   </button>
                 );
               })}

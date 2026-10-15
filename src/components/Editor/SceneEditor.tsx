@@ -47,6 +47,7 @@ import {
   Play,
   RotateCcw,
   MessageSquare,
+  GripVertical,
 } from 'lucide-react';
 
 interface SceneEditorProps {
@@ -286,10 +287,23 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
       } : undefined,
     };
 
-    updateProject((prev) => ({
-      ...prev,
-      scenes: [...prev.scenes, newScene],
-    }));
+    updateProject((prev) => {
+      const selectedIndex = prev.scenes.findIndex((s) => s.id === selectedSceneId);
+      let newScenes: Scene[];
+      if (selectedIndex !== -1) {
+        newScenes = [
+          ...prev.scenes.slice(0, selectedIndex + 1),
+          newScene,
+          ...prev.scenes.slice(selectedIndex + 1),
+        ];
+      } else {
+        newScenes = [...prev.scenes, newScene];
+      }
+      return {
+        ...prev,
+        scenes: newScenes,
+      };
+    });
 
     setNewSceneName('');
     setNewSceneType('normal');
@@ -322,6 +336,43 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
       ...prev,
       scenes: newScenes,
     }));
+  };
+
+  // Drag and drop state for scenes list
+  const [draggedSceneIndex, setDraggedSceneIndex] = useState<number | null>(null);
+  const [dragOverSceneIndex, setDragOverSceneIndex] = useState<number | null>(null);
+
+  const handleDragStartScene = (e: React.DragEvent, index: number) => {
+    setDraggedSceneIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOverScene = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverSceneIndex !== index) {
+      setDragOverSceneIndex(index);
+    }
+  };
+
+  const handleDropScene = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const sourceIndex = draggedSceneIndex;
+    setDraggedSceneIndex(null);
+    setDragOverSceneIndex(null);
+
+    if (sourceIndex === null || sourceIndex === targetIndex) return;
+
+    updateProject((prev) => {
+      const newScenes = [...prev.scenes];
+      const [moved] = newScenes.splice(sourceIndex, 1);
+      newScenes.splice(targetIndex, 0, moved);
+      return {
+        ...prev,
+        scenes: newScenes,
+      };
+    });
   };
 
   const handleUpdateBlockText = (blockId: string, text: string) => {
@@ -867,16 +918,36 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               return (
                 <div
                   key={scene.id}
+                  draggable
+                  onDragStart={(e) => handleDragStartScene(e, index)}
+                  onDragOver={(e) => handleDragOverScene(e, index)}
+                  onDrop={(e) => handleDropScene(e, index)}
+                  onDragEnd={() => {
+                    setDraggedSceneIndex(null);
+                    setDragOverSceneIndex(null);
+                  }}
                   onClick={() => setSelectedSceneId(scene.id)}
                   className={`w-full text-left p-2.5 rounded-r-lg border-y border-r transition-all cursor-pointer flex items-center justify-between group ${
+                    dragOverSceneIndex === index && draggedSceneIndex !== index
+                      ? 'border-t-2 border-t-amber-400 bg-amber-500/10'
+                      : ''
+                  } ${
                     isSelected
                       ? 'bg-white/5 border-l-2 border-amber-500 border-white/10 text-white font-medium'
                       : 'bg-black/30 border-white/5 border-l-transparent text-white/40 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs truncate max-w-[110px]">{scene.name}</span>
+                  <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                    <span
+                      className="cursor-grab active:cursor-grabbing text-white/30 hover:text-amber-400 pt-0.5 rounded transition-colors shrink-0 group-hover:opacity-100 opacity-60"
+                      title="Pinchar y arrastrar para recolocar escena"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </span>
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs truncate max-w-[110px]">{scene.name}</span>
                       {scene.type === 'portada' && (
                         <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold px-1 py-0.2 rounded">
                           PORTADA
@@ -929,8 +1000,9 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       {scene.hotspots.length} palabras clave
                     </span>
                   </div>
+                </div>
 
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1035,6 +1107,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                   gameState={testSceneGameState}
                   setGameState={setTestSceneGameState}
                   onReset={startTestingActiveScene}
+                  isSceneTesting={true}
                 />
               </div>
             )}
@@ -1278,15 +1351,16 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Timer & Sequence Mode settings */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-black/40 p-3.5 rounded-xl border border-white/10">
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-amber-300 mb-1">
                     ⏱️ Tiempo Límite (Segundos)
                   </label>
                   <input
                     type="number"
-                    min={3}
-                    max={60}
+                    min={2}
+                    max={120}
                     value={activeScene?.qteConfig?.timeLimitSeconds || 10}
                     onChange={(e) => {
                       const secs = Math.max(1, parseInt(e.target.value) || 10);
@@ -1307,131 +1381,269 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 </div>
 
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-emerald-400 mb-1">
-                    ✅ Escena Destino en Éxito
+                  <label className="block text-[10px] uppercase font-bold text-amber-300 mb-1">
+                    ⌛ Modo del Temporizador
                   </label>
                   <select
-                    value={activeScene?.qteConfig?.onSuccessSceneId || ''}
+                    value={activeScene?.qteConfig?.timerMode || 'sequence'}
                     onChange={(e) => {
-                      const scId = e.target.value;
+                      const mode = e.target.value as 'sequence' | 'per_action';
                       updateProject((prev) => ({
                         ...prev,
                         scenes: prev.scenes.map((s) => {
                           if (s.id !== activeScene.id) return s;
                           const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
-                          return { ...s, qteConfig: { ...prevConfig, onSuccessSceneId: scId } };
+                          return {
+                            ...s,
+                            qteConfig: { ...prevConfig, timerMode: mode },
+                          };
                         }),
                       }));
                     }}
-                    className="w-full bg-black/60 border border-emerald-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                    className="w-full bg-black/60 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
                   >
-                    <option value="">(Permanecer en esta escena)</option>
-                    {project.scenes.map((sc) => (
-                      <option key={sc.id} value={sc.id}>
-                        {sc.name} ({sc.id})
-                      </option>
-                    ))}
+                    <option value="sequence">Toda la secuencia (tiempo total acumulado)</option>
+                    <option value="per_action">Por cada acción (se reinicia en cada paso)</option>
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-rose-400 mb-1">
-                    ❌ Escena Destino en Fallo
+                <div className="flex flex-col justify-center">
+                  <label className="block text-[10px] uppercase font-bold text-amber-300 mb-1">
+                    📖 Párrafos Progresivos
                   </label>
-                  <select
-                    value={activeScene?.qteConfig?.onFailSceneId || ''}
-                    onChange={(e) => {
-                      const scId = e.target.value;
-                      updateProject((prev) => ({
-                        ...prev,
-                        scenes: prev.scenes.map((s) => {
-                          if (s.id !== activeScene.id) return s;
-                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
-                          return { ...s, qteConfig: { ...prevConfig, onFailSceneId: scId } };
-                        }),
-                      }));
-                    }}
-                    className="w-full bg-black/60 border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
-                  >
-                    <option value="">(Ninguna escena / Ver mensaje)</option>
-                    {project.scenes.map((sc) => (
-                      <option key={sc.id} value={sc.id}>
-                        {sc.name} ({sc.id})
-                      </option>
-                    ))}
-                  </select>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-amber-200 bg-black/40 border border-white/10 rounded-xl px-3 py-2 hover:bg-black/60 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={!!activeScene?.qteConfig?.incrementalParagraphs}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        updateProject((prev) => ({
+                          ...prev,
+                          scenes: prev.scenes.map((s) => {
+                            if (s.id !== activeScene.id) return s;
+                            const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                            return {
+                              ...s,
+                              qteConfig: { ...prevConfig, incrementalParagraphs: checked },
+                            };
+                          }),
+                        }));
+                      }}
+                      className="accent-amber-500 w-4 h-4 rounded cursor-pointer"
+                    />
+                    <span className="truncate">Insertar párrafo por acción ([1], [2]...)</span>
+                  </label>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-emerald-300/80 mb-1">
-                    Mensaje al Completar con Éxito
-                  </label>
-                  <input
-                    type="text"
-                    value={activeScene?.qteConfig?.onSuccessMessage || ''}
-                    placeholder="¡Reaccionaste a tiempo y lograste esquivar el peligro!"
-                    onChange={(e) => {
-                      const msg = e.target.value;
-                      updateProject((prev) => ({
-                        ...prev,
-                        scenes: prev.scenes.map((s) => {
-                          if (s.id !== activeScene.id) return s;
-                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
-                          return { ...s, qteConfig: { ...prevConfig, onSuccessMessage: msg } };
-                        }),
-                      }));
-                    }}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  />
+              {activeScene?.qteConfig?.incrementalParagraphs && (
+                <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200/90 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                    <span>💡 Instrucciones de párrafos progresivos en QTE:</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-200/80">
+                    Escribe <strong className="text-white font-mono bg-black/60 px-1 rounded">[1]</strong> al inicio del párrafo que se mostrará tras completar la 1ª acción, <strong className="text-white font-mono bg-black/60 px-1 rounded">[2]</strong> tras la 2ª, etc. El texto antes de [1] será el visible al cargar la escena. La clave [número] será invisible para el jugador.
+                  </p>
+                </div>
+              )}
+
+              {/* Side by side: Al terminar con éxito vs Al fallar o agotarse el tiempo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-black/40 p-4 rounded-xl border border-white/10">
+                {/* Column 1: Al terminar con éxito */}
+                <div className="space-y-3 border-b md:border-b-0 md:border-r border-white/10 pb-4 md:pb-0 md:pr-4">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider border-b border-emerald-500/20 pb-2">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>Al terminar con éxito</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-emerald-300/80 mb-1">
+                      Mensaje
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={activeScene?.qteConfig?.onSuccessMessage || ''}
+                      placeholder="¡Reaccionaste a tiempo y lograste esquivar el peligro!"
+                      onChange={(e) => {
+                        const msg = e.target.value;
+                        updateProject((prev) => ({
+                          ...prev,
+                          scenes: prev.scenes.map((s) => {
+                            if (s.id !== activeScene.id) return s;
+                            const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                            return { ...s, qteConfig: { ...prevConfig, onSuccessMessage: msg } };
+                          }),
+                        }));
+                      }}
+                      className="w-full bg-black/50 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-emerald-300/80 mb-1">
+                      Bandera (Se activará en true)
+                    </label>
+                    <input
+                      type="text"
+                      list="qte-flags-list"
+                      value={activeScene?.qteConfig?.onSuccessFlag || ''}
+                      placeholder="ej. peligro_esquivado (opcional)"
+                      onChange={(e) => {
+                        const flag = e.target.value.trim().toLowerCase().replace(/\s+/g, '_');
+                        updateProject((prev) => ({
+                          ...prev,
+                          scenes: prev.scenes.map((s) => {
+                            if (s.id !== activeScene.id) return s;
+                            const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                            return { ...s, qteConfig: { ...prevConfig, onSuccessFlag: flag } };
+                          }),
+                        }));
+                      }}
+                      className="w-full bg-black/50 border border-emerald-500/30 rounded-xl px-3 py-1.5 text-xs text-emerald-200 font-mono outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-emerald-300/80 mb-1">
+                      Escena Destino (Opcional)
+                    </label>
+                    <select
+                      value={activeScene?.qteConfig?.onSuccessSceneId || ''}
+                      onChange={(e) => {
+                        const scId = e.target.value;
+                        updateProject((prev) => ({
+                          ...prev,
+                          scenes: prev.scenes.map((s) => {
+                            if (s.id !== activeScene.id) return s;
+                            const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                            return { ...s, qteConfig: { ...prevConfig, onSuccessSceneId: scId } };
+                          }),
+                        }));
+                      }}
+                      className="w-full bg-black/50 border border-emerald-500/30 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-emerald-500"
+                    >
+                      <option value="">(Permanecer en esta escena)</option>
+                      {project.scenes.map((sc) => (
+                        <option key={sc.id} value={sc.id}>
+                          {sc.name} ({sc.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-rose-300/80 mb-1">
-                    Mensaje al Fallar o Agotarse el Tiempo
-                  </label>
-                  <input
-                    type="text"
-                    value={activeScene?.qteConfig?.onFailMessage || ''}
-                    placeholder="No fuiste lo suficientemente rápido..."
-                    onChange={(e) => {
-                      const msg = e.target.value;
-                      updateProject((prev) => ({
-                        ...prev,
-                        scenes: prev.scenes.map((s) => {
-                          if (s.id !== activeScene.id) return s;
-                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
-                          return { ...s, qteConfig: { ...prevConfig, onFailMessage: msg } };
-                        }),
-                      }));
-                    }}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  />
+                {/* Column 2: Al fallar o agotarse el tiempo */}
+                <div className="space-y-3 md:pl-2">
+                  <div className="flex items-center gap-2 text-rose-400 font-bold text-xs uppercase tracking-wider border-b border-rose-500/20 pb-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>Al fallar o agotarse el tiempo</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-rose-300/80 mb-1">
+                      Mensaje
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={activeScene?.qteConfig?.onFailMessage || ''}
+                      placeholder="No fuiste lo suficientemente rápido..."
+                      onChange={(e) => {
+                        const msg = e.target.value;
+                        updateProject((prev) => ({
+                          ...prev,
+                          scenes: prev.scenes.map((s) => {
+                            if (s.id !== activeScene.id) return s;
+                            const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                            return { ...s, qteConfig: { ...prevConfig, onFailMessage: msg } };
+                          }),
+                        }));
+                      }}
+                      className="w-full bg-black/50 border border-rose-500/30 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-rose-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-rose-300/80 mb-1">
+                      Bandera (Se activará en true)
+                    </label>
+                    <input
+                      type="text"
+                      list="qte-flags-list"
+                      value={activeScene?.qteConfig?.onFailFlag || ''}
+                      placeholder="ej. herido_en_trampa (opcional)"
+                      onChange={(e) => {
+                        const flag = e.target.value.trim().toLowerCase().replace(/\s+/g, '_');
+                        updateProject((prev) => ({
+                          ...prev,
+                          scenes: prev.scenes.map((s) => {
+                            if (s.id !== activeScene.id) return s;
+                            const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                            return { ...s, qteConfig: { ...prevConfig, onFailFlag: flag } };
+                          }),
+                        }));
+                      }}
+                      className="w-full bg-black/50 border border-rose-500/30 rounded-xl px-3 py-1.5 text-xs text-rose-200 font-mono outline-none focus:border-rose-500 transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-rose-300/80 mb-1">
+                      Escena Destino en Fallo
+                    </label>
+                    <select
+                      value={activeScene?.qteConfig?.onFailSceneId || ''}
+                      onChange={(e) => {
+                        const scId = e.target.value;
+                        updateProject((prev) => ({
+                          ...prev,
+                          scenes: prev.scenes.map((s) => {
+                            if (s.id !== activeScene.id) return s;
+                            const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                            return { ...s, qteConfig: { ...prevConfig, onFailSceneId: scId } };
+                          }),
+                        }));
+                      }}
+                      className="w-full bg-black/50 border border-rose-500/30 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-rose-500"
+                    >
+                      <option value="">(Ninguna escena / Ver mensaje)</option>
+                      {project.scenes.map((sc) => (
+                        <option key={sc.id} value={sc.id}>
+                          {sc.name} ({sc.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-rose-300 font-bold">
+                      <input
+                        type="checkbox"
+                        checked={!!activeScene?.qteConfig?.isFailGameOver}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          updateProject((prev) => ({
+                            ...prev,
+                            scenes: prev.scenes.map((s) => {
+                              if (s.id !== activeScene.id) return s;
+                              const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                              return { ...s, qteConfig: { ...prevConfig, isFailGameOver: checked } };
+                            }),
+                          }));
+                        }}
+                        className="accent-rose-500 w-4 h-4 rounded cursor-pointer"
+                      />
+                      <span>💀 Activar Pantalla de Fin de Partida al Fallar</span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-rose-300 font-bold">
-                  <input
-                    type="checkbox"
-                    checked={!!activeScene?.qteConfig?.isFailGameOver}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      updateProject((prev) => ({
-                        ...prev,
-                        scenes: prev.scenes.map((s) => {
-                          if (s.id !== activeScene.id) return s;
-                          const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
-                          return { ...s, qteConfig: { ...prevConfig, isFailGameOver: checked } };
-                        }),
-                      }));
-                    }}
-                    className="accent-rose-500 w-4 h-4 rounded cursor-pointer"
-                  />
-                  <span>💀 Activar Pantalla de Fin de Partida al Fallar</span>
-                </label>
-              </div>
+              {/* Shared Flags Datalist for easy selection */}
+              <datalist id="qte-flags-list">
+                {flagKeys.map((fKey) => (
+                  <option key={fKey} value={fKey} />
+                ))}
+              </datalist>
 
               <div className="space-y-3 pt-2 border-t border-white/10">
                 <div className="flex items-center justify-between">
@@ -1888,6 +2100,24 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                           <Underline className="w-3.5 h-3.5" />
                         </button>
                       </div>
+
+                      {/* QTE Progressive Paragraph Button */}
+                      {(activeScene?.type === 'qte' || activeScene?.qteConfig) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const matches = Array.from((block.text || '').matchAll(/\[(\d+)\]/g));
+                            const nextNum = matches.length > 0 ? Math.max(...matches.map((m) => parseInt(m[1], 10))) + 1 : 1;
+                            const tagToInsert = `\n\n[${nextNum}] `;
+                            handleUpdateBlockText(block.id, (block.text || '') + tagToInsert);
+                          }}
+                          className="px-2 py-0.5 rounded text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-mono font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Insertar nuevo párrafo progresivo QTE [1], [2], [3]..."
+                        >
+                          <Zap className="w-3 h-3 text-amber-400" />
+                          <span>+ Párrafo [QTE]</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Insert Image Button */}

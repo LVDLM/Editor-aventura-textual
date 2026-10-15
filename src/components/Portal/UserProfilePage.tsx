@@ -143,6 +143,8 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
           p.authorId === currentUser.uid || 
           p.authorEmail === currentUser.email ||
           p.authorEmail === 'lavozdelosmuertos@gmail.com' ||
+          (p.authorName && (p.authorName.toLowerCase() === 'urdimbre' || p.authorName.toLowerCase().includes('lavozdelosmuertos'))) ||
+          (p.projectData?.author && p.projectData.author.toLowerCase() === 'urdimbre') ||
           p.authorId === 'system_admin_seed' ||
           p.id === 'sample_misterio_habitacion' ||
           p.id === 'el_misterio_de_la_habitacion'

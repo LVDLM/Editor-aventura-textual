@@ -356,11 +356,11 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
         <div class="verbs-title">Acciones (Verbos)</div>
         <div class="verb-buttons">
           <button class="verb-btn" id="verb-mirar" onclick="selectVerb('mirar')">👁️ Mirar</button>
-          <button class="verb-btn" id="verb-usar" onclick="selectVerb('usar')">⚡ Usar</button>
+          <button class="verb-btn" id="verb-usar" onclick="selectVerb('usar')">⚡ Usar / Activar</button>
           <button class="verb-btn" id="verb-abrir" onclick="selectVerb('abrir')">🚪 Abrir</button>
-          <button class="verb-btn" id="verb-coger" onclick="selectVerb('coger')">✋ Coger</button>
+          <button class="verb-btn" id="verb-coger" onclick="selectVerb('coger')">✋ Coger / Tirar</button>
           <button class="verb-btn" id="verb-hablar" onclick="selectVerb('hablar')">💬 Hablar</button>
-          <button class="verb-btn" id="verb-empujar" onclick="selectVerb('empujar')">💪 Empujar</button>
+          <button class="verb-btn" id="verb-empujar" onclick="selectVerb('empujar')">💪 Empujar / Atacar</button>
           <button class="verb-btn" id="verb-ir_a" onclick="selectVerb('ir_a')">🐾 Ir a</button>
         </div>
       </div>
@@ -676,6 +676,7 @@ ${jsonProject}
     }
 
     function renderTextBlock(text, scene, block) {
+      text = (text || '').replace(/\[\d+\]\s*/g, '');
       if (checkGameOverTag(text)) {
         const parts = text.split(GAME_OVER_TAG_GLOBAL);
         let html = '';
@@ -982,19 +983,22 @@ ${jsonProject}
 
       selectedInventoryItem = id;
       renderInventory();
-      updateSentenceBar();
 
-      const item = PROJECT.inventoryItems.find(function(i) { return i.id === selectedInventoryItem; });
-      if (item) {
-        const cleanDesc = stripGameOverTag(item.description || '');
-        const itemImg = getImageSrc(item);
-        let modalContent = '<div>' + escapeHTML(cleanDesc || 'Sin descripción.') + '</div>';
-        modalContent += '<div style="margin-top: 1rem; display: flex; justify-content: flex-end;">' +
-          '<button class="action-btn" style="background: #f59e0b; color: #020617; font-weight: bold; padding: 0.45rem 1rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.4rem;" onclick="useInventoryItemDirectly(\\\'' + item.id + '\\\')">' +
-          '✨ Usar ' + escapeHTML(item.name) +
-          '</button></div>';
-        showPopupModal(escapeHTML(item.name), modalContent, itemImg, '📦');
+      if (activeVerb === 'mirar') {
+        const item = PROJECT.inventoryItems.find(function(i) { return i.id === selectedInventoryItem; });
+        if (item) {
+          const cleanDesc = stripGameOverTag(item.description || '');
+          const itemImg = getImageSrc(item);
+          let modalContent = '<div>' + escapeHTML(cleanDesc || 'Sin descripción.') + '</div>';
+          showPopupModal(escapeHTML(item.name), modalContent, itemImg, '👁️');
+        }
+      } else {
+        activeVerb = 'usar';
+        document.querySelectorAll('.verb-btn').forEach(function(b) { b.classList.remove('active'); });
+        const btn = document.getElementById('verb-usar');
+        if (btn) btn.classList.add('active');
       }
+      updateSentenceBar();
     }
 
     function useInventoryItemDirectly(id) {
@@ -1086,7 +1090,16 @@ ${jsonProject}
       const bar = document.getElementById('sentence-bar').querySelector('span');
       let text = '';
       if (activeVerb) {
-        text += activeVerb.toUpperCase() + ' ';
+        var verbLabels = {
+          'mirar': 'MIRAR',
+          'usar': 'USAR / ACTIVAR',
+          'abrir': 'ABRIR',
+          'coger': 'COGER / TIRAR',
+          'hablar': 'HABLAR',
+          'empujar': 'EMPUJAR / ATACAR',
+          'ir_a': 'IR A'
+        };
+        text += (verbLabels[activeVerb] || activeVerb.toUpperCase()) + ' ';
       }
       if (selectedInventoryItem) {
         const item = PROJECT.inventoryItems.find(i => i.id === selectedInventoryItem);

@@ -142,30 +142,23 @@ export default function App() {
           return normAdmin === userEmail || userEmail.includes('lavozdelosmuertos');
         });
 
-        let profile: UserProfile | null = null;
-        if (isAdminEmail) {
-          const consolidation = await consolidateAdminProfilesInFirestore(user.uid);
-          if (consolidation.primaryProfile) {
-            profile = { ...consolidation.primaryProfile, uid: user.uid };
-          }
-        }
+        let profile: UserProfile | null = await getUserProfile(user.uid);
 
-        if (!profile) {
-          profile = await getUserProfile(user.uid);
-        }
-
-        if (!profile || (isAdminEmail && profile.role !== 'admin')) {
+        if (!profile || (isAdminEmail && (profile.role !== 'admin' || !profile.displayName || ['usuario', 'administrador', 'lector'].includes(profile.displayName.toLowerCase().trim())))) {
           profile = await createOrUpdateUserProfile(
             user.uid,
             userEmail || 'lavozdelosmuertos@gmail.com',
-            user.displayName || (isAdminEmail ? 'Urdimbre' : userEmail.split('@')[0]) || 'Usuario',
+            isAdminEmail ? 'Urdimbre' : (user.displayName || userEmail.split('@')[0] || 'Usuario'),
             isAdminEmail ? 'admin' : 'author'
           );
         }
 
-        // Guarantee currentUser.uid ALWAYS matches user.uid from Firebase Auth
+        // Guarantee currentUser.uid ALWAYS matches user.uid from Firebase Auth, and admin name is Urdimbre
         if (profile) {
           profile.uid = user.uid;
+          if (isAdminEmail && (!profile.displayName || ['usuario', 'administrador', 'lector'].includes(profile.displayName.toLowerCase().trim()))) {
+            profile.displayName = 'Urdimbre';
+          }
         }
         setCurrentUser(profile);
       } else {

@@ -82,19 +82,23 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
         needsUpdate = true;
       }
 
-      if (isAdminEmail && (!data.displayName || data.displayName === 'Administrador' || data.displayName.includes('Administrador'))) {
+      const isGenericName = !data.displayName || 
+        ['administrador', 'usuario', 'lector', 'lavozdelosmuertos', 'urdimbre (administrador)', 'lavozdelosmuertos (administrador)'].includes(data.displayName.toLowerCase().trim()) ||
+        data.displayName.toLowerCase().includes('administrador') ||
+        data.displayName.toLowerCase().includes('usuario');
+
+      if (isAdminEmail && isGenericName) {
         data.displayName = 'Urdimbre';
         updatePayload.displayName = 'Urdimbre';
         needsUpdate = true;
       }
 
-      if (data.photoURL || auth.currentUser?.photoURL) {
-        const photo = data.photoURL || auth.currentUser?.photoURL || undefined;
-        if (photo && photo !== data.photoURL) {
-          data.photoURL = photo;
-          updatePayload.photoURL = photo;
-          needsUpdate = true;
-        }
+      // Preserve custom profile picture: Only set photoURL from auth.currentUser if data.photoURL is empty.
+      // If data.photoURL is already set by the user (custom upload or link), NEVER overwrite with Google's avatar!
+      if (!data.photoURL && auth.currentUser?.photoURL) {
+        data.photoURL = auth.currentUser.photoURL;
+        updatePayload.photoURL = auth.currentUser.photoURL;
+        needsUpdate = true;
       }
 
       if (needsUpdate) {
@@ -132,10 +136,16 @@ export async function createOrUpdateUserProfile(
   const finalEmail = email || auth.currentUser?.email || (isAdminEmail ? 'lavozdelosmuertos@gmail.com' : `${uid.substring(0, 6)}@lector.com`);
 
   let finalDisplayName = displayName || existing?.displayName || auth.currentUser?.displayName || (isAdminEmail ? 'Urdimbre' : finalEmail.split('@')[0]);
-  if (isAdminEmail && (!finalDisplayName || finalDisplayName === 'Administrador' || finalDisplayName.includes('Administrador'))) {
+  const isGeneric = !finalDisplayName ||
+    ['administrador', 'usuario', 'lector', 'lavozdelosmuertos', 'urdimbre (administrador)', 'lavozdelosmuertos (administrador)'].includes(finalDisplayName.toLowerCase().trim()) ||
+    finalDisplayName.toLowerCase().includes('administrador') ||
+    finalDisplayName.toLowerCase().includes('usuario');
+
+  if (isAdminEmail && (isGeneric || !existing?.displayName)) {
     finalDisplayName = 'Urdimbre';
   }
 
+  // Preserve custom photo: If existing profile already has a photoURL, keep it; do NOT let Google overwrite it!
   const finalPhotoURL = existing?.photoURL || auth.currentUser?.photoURL || undefined;
 
   const profile: UserProfile = {
@@ -574,11 +584,12 @@ export async function reassignProjectAuthorByAdmin(
   if (!snap.exists()) return;
 
   const data = snap.data() as CloudProjectDoc;
-  const authorName = newAuthor.displayName || newAuthor.email.split('@')[0] || 'Autor';
+  const fallbackAuthorName = newAuthor.displayName || newAuthor.email.split('@')[0] || 'Autor';
+  const effectiveAuthorName = data.authorName || data.projectData?.author || fallbackAuthorName;
 
   const updatePayload: Record<string, any> = {
     authorId: newAuthor.uid,
-    authorName: authorName,
+    authorName: effectiveAuthorName,
     authorEmail: newAuthor.email,
     updatedAt: new Date().toISOString()
   };
@@ -586,13 +597,13 @@ export async function reassignProjectAuthorByAdmin(
   if (data.projectData) {
     updatePayload.projectData = {
       ...data.projectData,
-      author: authorName
+      author: data.projectData.author || effectiveAuthorName
     };
   }
   if (data.publishedData) {
     updatePayload.publishedData = {
       ...data.publishedData,
-      author: authorName
+      author: data.publishedData.author || effectiveAuthorName
     };
   }
 
@@ -681,8 +692,25 @@ export async function consolidateAdminProfilesInFirestore(primaryUid?: string): 
 
     if (primaryUser) {
       // Ensure primary user profile has role 'admin' and displayName 'Urdimbre'
-      const needsNameFix = !primaryUser.displayName || primaryUser.displayName === 'Administrador' || primaryUser.displayName.includes('Administrador');
+      const isGenericName = !primaryUser.displayName || 
+        ['administrador', 'usuario', 'lector', 'lavozdelosmuertos', 'urdimbre (administrador)', 'lavozdelosmuertos (administrador)'].includes(primaryUser.displayName.toLowerCase().trim()) ||
+        primaryUser.displayName.toLowerCase().includes('administrador') ||
+        primaryUser.displayName.toLowerCase().includes('usuario');
+      const needsNameFix = isGenericName;
       const needsRoleFix = primaryUser.role !== 'admin';
+
+      // Check if any matching duplicate has a custom uploaded avatar (e.g. data:image/ or not from google)
+      // while primaryUser has either no photo or has the google avatar
+      if (!primaryUser.photoURL || primaryUser.photoURL.includes('googleusercontent.com')) {
+        const customAvatarDoc = matchingUsers.find(
+          (u) => u.photoURL && !u.photoURL.includes('googleusercontent.com')
+        );
+        if (customAvatarDoc?.photoURL) {
+          primaryUser.photoURL = customAvatarDoc.photoURL;
+          await updateDoc(doc(db, 'users', primaryUser.uid), { photoURL: customAvatarDoc.photoURL });
+          updatedCount++;
+        }
+      }
 
       if (needsNameFix || needsRoleFix) {
         primaryUser.displayName = 'Urdimbre';
@@ -700,7 +728,7 @@ export async function consolidateAdminProfilesInFirestore(primaryUid?: string): 
         updatedCount++;
       }
 
-      // Reassign stories/projects authored by secondary duplicate profiles to primary user
+      // Reassign stories/projects authored by secondary duplicate profiles to primary user without mutating author pen names
       for (const duplicateUser of matchingUsers) {
         if (duplicateUser.uid !== primaryUser.uid) {
           const count = await reassignAllProjectsFromAuthorByAdmin(duplicateUser.uid, {
@@ -709,12 +737,16 @@ export async function consolidateAdminProfilesInFirestore(primaryUid?: string): 
             email: adminEmail,
           });
           reassignedProjectsCount += count;
-          // Clean up duplicate user document from Firestore
+          // Keep duplicate user document intact with role 'author' or synced email rather than deleting it,
+          // to prevent session disconnection if user has another open browser session with that UID
           try {
-            await deleteDoc(doc(db, 'users', duplicateUser.uid));
+            await updateDoc(doc(db, 'users', duplicateUser.uid), {
+              consolidatedTo: primaryUser.uid,
+              role: 'admin'
+            });
             updatedCount++;
           } catch (e) {
-            console.warn(`Could not delete duplicate user doc ${duplicateUser.uid}:`, e);
+            console.warn(`Could not update duplicate user doc ${duplicateUser.uid}:`, e);
           }
         }
       }

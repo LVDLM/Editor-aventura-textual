@@ -230,12 +230,16 @@ export interface QTEStep {
 
 export interface QTEConfig {
   timeLimitSeconds: number; // Duration of the event in seconds (e.g. 10)
+  timerMode?: 'sequence' | 'per_action'; // 'sequence' for total event duration, 'per_action' resets timer on each step
   sequence: QTEStep[]; // Ordered list of required actions
   onSuccessSceneId?: string; // Target scene on success
   onSuccessMessage?: string; // Custom narrative message on success
+  onSuccessFlag?: string; // Global flag key to set to true on success
   onFailSceneId?: string; // Target scene on fail/timeout
   onFailMessage?: string; // Custom message on fail/timeout
+  onFailFlag?: string; // Global flag key to set to true on fail
   isFailGameOver?: boolean; // Triggers Game Over on fail
+  incrementalParagraphs?: boolean; // Progressive paragraph reveals using [1], [2]...
 }
 
 export interface Scene {

@@ -24,11 +24,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
     setLoading(true);
     try {
       const googleUser = await signInWithGoogle();
+      const gEmail = (googleUser.email || '').toLowerCase().trim();
+      const isAdminEmail = ADMIN_EMAILS.some((adminE) => adminE.toLowerCase().trim() === gEmail) || gEmail.includes('lavozdelosmuertos');
+
       const profile = await createOrUpdateUserProfile(
         googleUser.uid,
         googleUser.email || 'lavozdelosmuertos@gmail.com',
-        googleUser.displayName || 'Urdimbre',
-        'admin'
+        isAdminEmail ? 'Urdimbre' : (googleUser.displayName || 'Autor'),
+        isAdminEmail ? 'admin' : 'author'
       );
       onUserChanged(profile);
       onClose();
@@ -60,6 +63,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
     setLoading(true);
 
     try {
+      const normEmail = (email || '').toLowerCase().trim();
+      const isAdminEmail = ADMIN_EMAILS.some((adminE) => adminE.toLowerCase().trim() === normEmail) || normEmail.includes('lavozdelosmuertos');
+
       if (isRegistering) {
         if (!email || !password) {
           throw new Error('Por favor completa todos los campos requeridos.');
@@ -68,8 +74,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
         const profile = await createOrUpdateUserProfile(
           userCred.user.uid,
           userCred.user.email || email,
-          displayName || email.split('@')[0],
-          selectedRole
+          isAdminEmail ? 'Urdimbre' : (displayName || email.split('@')[0]),
+          isAdminEmail ? 'admin' : selectedRole
         );
         onUserChanged(profile);
       } else {
@@ -80,8 +86,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
         const profile = await createOrUpdateUserProfile(
           userCred.user.uid,
           userCred.user.email || email,
-          userCred.user.displayName || email.split('@')[0],
-          'author'
+          isAdminEmail ? 'Urdimbre' : (userCred.user.displayName || email.split('@')[0]),
+          isAdminEmail ? 'admin' : 'author'
         );
         onUserChanged(profile);
       }
@@ -102,7 +108,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
       const profile = await createOrUpdateUserProfile(
         cred.user.uid,
         'lavozdelosmuertos@gmail.com',
-        'lavozdelosmuertos (Administrador)',
+        'Urdimbre',
         'admin'
       );
       onUserChanged(profile);
