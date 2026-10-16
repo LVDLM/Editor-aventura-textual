@@ -11,9 +11,11 @@ import {
   deleteProjectFromCloud,
   deleteUserAccountAndData,
   setUserRoleInDb,
+  toggleProjectVisibilityInGallery,
   auth,
 } from '../../lib/firebase';
 import { signOut } from 'firebase/auth';
+import { EditStoryModal } from './EditStoryModal';
 import {
   User,
   Users,
@@ -112,6 +114,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
 
   // Role switching state
   const [isChangingRole, setIsChangingRole] = useState(false);
+  const [editTargetDoc, setEditTargetDoc] = useState<CloudProjectDoc | null>(null);
 
   const handleForceActivateAdmin = async () => {
     setIsChangingRole(true);
@@ -126,6 +129,25 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
       setErrorMsg('No se pudieron activar los permisos de administrador.');
     } finally {
       setIsChangingRole(false);
+    }
+  };
+
+  const handleConfirmEditMode = async (mode: 'keep_published' | 'hide_to_draft') => {
+    if (!editTargetDoc) return;
+    const docToEdit = editTargetDoc;
+    setEditTargetDoc(null);
+
+    if (mode === 'hide_to_draft' && docToEdit.status === 'published') {
+      try {
+        await toggleProjectVisibilityInGallery(docToEdit.id, false);
+        await loadUserPublications();
+      } catch (err) {
+        console.error('Error hiding project from gallery:', err);
+      }
+    }
+
+    if (docToEdit.projectData) {
+      onLoadProjectToEditor(docToEdit.projectData, docToEdit.id);
     }
   };
 
@@ -151,7 +173,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
         );
         setUserProjects(userOrDemo);
       } else {
-        const list = await getUserProjects(currentUser.uid);
+        const list = await getUserProjects(currentUser.uid, currentUser.email, currentUser.role === 'admin');
         setUserProjects(list);
       }
     } catch (e) {
@@ -1032,7 +1054,9 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
                   <div className={`flex items-center gap-2 pt-2 border-t ${isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'}`}>
                     <button
                       onClick={() => {
-                        if (docItem.projectData) {
+                        if (docItem.status === 'published') {
+                          setEditTargetDoc(docItem);
+                        } else if (docItem.projectData) {
                           onLoadProjectToEditor(docItem.projectData, docItem.id);
                         }
                       }}
@@ -1341,6 +1365,14 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
           </div>
         </div>
       )}
+      {/* Edit Story Choice Modal (Solo editar vs Ocultar y editar) */}
+      <EditStoryModal
+        projectDoc={editTargetDoc}
+        isOpen={!!editTargetDoc}
+        onClose={() => setEditTargetDoc(null)}
+        onConfirm={handleConfirmEditMode}
+        webAspect={webAspect}
+      />
     </div>
   );
 };

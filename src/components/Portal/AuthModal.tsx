@@ -281,7 +281,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
                 className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 text-slate-900 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer border border-slate-300"
               >
                 <Globe className="w-4 h-4 text-sky-600" />
-                <span>Continuar con Google ({ADMIN_EMAILS[0]})</span>
+                <span>Continuar con Google</span>
               </button>
               <div className="flex items-center gap-2 text-[11px] text-slate-500 my-3">
                 <div className="h-px bg-white/10 flex-1"></div>
@@ -308,23 +308,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
               )}
 
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs text-slate-300 font-medium">Correo Electrónico</label>
-                  <button
-                    type="button"
-                    onClick={() => setEmail('lavozdelosmuertos@gmail.com')}
-                    className="text-[10px] text-amber-400 hover:underline"
-                  >
-                    Usar correo Admin
-                  </button>
-                </div>
+                <label className="block text-xs text-slate-300 font-medium mb-1">Correo Electrónico</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tu@ejemplo.com o lavozdelosmuertos@gmail.com"
+                    placeholder="tu@ejemplo.com"
                     required
                     className="w-full bg-slate-900 border border-white/10 rounded-xl py-2.5 pl-9 pr-3 text-xs text-white focus:border-amber-500 outline-none"
                   />

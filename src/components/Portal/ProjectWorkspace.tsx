@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameProject, UserProfile, CloudProjectDoc, PublicationStatus } from '../../types';
-import { getUserProjects, saveProjectToCloud, updateProjectStatusInCloud, deleteProjectFromCloud } from '../../lib/firebase';
+import { getUserProjects, saveProjectToCloud, updateProjectStatusInCloud, deleteProjectFromCloud, toggleProjectVisibilityInGallery } from '../../lib/firebase';
 import { exportProjectAsZip } from '../../utils/zipExporter';
 import { Plus, Edit3, Play, CloudUpload, Send, Trash2, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen, Upload, FileJson } from 'lucide-react';
+import { EditStoryModal } from './EditStoryModal';
 
 interface ProjectWorkspaceProps {
   currentUser: UserProfile | null;
@@ -31,12 +32,17 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   const [statusFilter, setStatusFilter] = useState<PublicationStatus | 'all'>('all');
   const [savingCloudId, setSavingCloudId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [editTargetDoc, setEditTargetDoc] = useState<CloudProjectDoc | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProjects = async () => {
     if (!currentUser) return;
     setLoading(true);
-    const list = await getUserProjects(currentUser.uid);
+    const list = await getUserProjects(
+      currentUser.uid,
+      currentUser.email,
+      currentUser.role === 'admin'
+    );
     setCloudProjects(list);
     setLoading(false);
   };
@@ -126,7 +132,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
           displayName: currentUser.displayName,
           email: currentUser.email
         },
-        'draft'
+        'preserve'
       );
       if (docId && docId !== activeProject.id) {
         onSelectProject({ ...activeProject, id: docId }, docId);
@@ -139,6 +145,24 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
     } finally {
       setSavingCloudId(null);
     }
+  };
+
+  const handleConfirmEditMode = async (mode: 'keep_published' | 'hide_to_draft') => {
+    if (!editTargetDoc) return;
+    const docToEdit = editTargetDoc;
+    setEditTargetDoc(null);
+
+    if (mode === 'hide_to_draft' && docToEdit.status === 'published') {
+      try {
+        await toggleProjectVisibilityInGallery(docToEdit.id, false);
+        await fetchProjects();
+      } catch (err) {
+        console.error('Error hiding project from gallery:', err);
+      }
+    }
+
+    onSelectProject(docToEdit.projectData, docToEdit.id);
+    onOpenEditor();
   };
 
   const handleSubmitForReview = async (doc: CloudProjectDoc) => {
@@ -431,8 +455,12 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => {
-                        onSelectProject(doc.projectData, doc.id);
-                        onOpenEditor();
+                        if (doc.status === 'published') {
+                          setEditTargetDoc(doc);
+                        } else {
+                          onSelectProject(doc.projectData, doc.id);
+                          onOpenEditor();
+                        }
                       }}
                       className="py-2 bg-[#A4332A] hover:bg-[#8B2A22] text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
@@ -541,6 +569,15 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
           })}
         </div>
       )}
+
+      {/* Edit Story Choice Modal (Solo editar vs Ocultar y editar) */}
+      <EditStoryModal
+        projectDoc={editTargetDoc}
+        isOpen={!!editTargetDoc}
+        onClose={() => setEditTargetDoc(null)}
+        onConfirm={handleConfirmEditMode}
+        webAspect={webAspect}
+      />
     </div>
   );
 };

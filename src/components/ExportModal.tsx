@@ -43,7 +43,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           displayName: currentUser.displayName,
           email: currentUser.email,
         },
-        'draft'
+        'preserve'
       );
       if (savedDocId && savedDocId !== project.id) {
         onImportProject({ ...project, id: savedDocId });

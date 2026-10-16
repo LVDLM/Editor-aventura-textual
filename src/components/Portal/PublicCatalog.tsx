@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Search, BookOpen, Filter, Package, Clock, User, Info, X, Lock, Sun, Moon, CheckCircle2, Compass, Layers, ArrowRight, Tag, ChevronLeft, ChevronRight, Maximize2, Share2, Check } from 'lucide-react';
+import { Play, Download, Search, BookOpen, Filter, Package, Clock, User, Info, X, Lock, Sun, Moon, CheckCircle2, Compass, Layers, ArrowRight, Tag, ChevronLeft, ChevronRight, Maximize2, Share2, Check, Edit3 } from 'lucide-react';
 import { CloudProjectDoc, GameProject, UserProfile, GENRE_TAGS } from '../../types';
-import { getPublishedProjects, saveProjectToCloud } from '../../lib/firebase';
+import { getPublishedProjects, saveProjectToCloud, toggleProjectVisibilityInGallery } from '../../lib/firebase';
 import { sampleGameProject } from '../../data/sampleGame';
 import { exportProjectAsZip } from '../../utils/zipExporter';
 import { renderTextWithLinks } from '../../utils/textUtils';
+import { EditStoryModal } from './EditStoryModal';
 
 interface PublicCatalogProps {
   onPlayProject: (project: GameProject) => void;
@@ -12,6 +13,8 @@ interface PublicCatalogProps {
   currentUser?: UserProfile | null;
   webAspect?: 'clean' | 'classic';
   onAspectChange?: (aspect: 'clean' | 'classic') => void;
+  onSelectProject?: (proj: GameProject, cloudDocId: string | null) => void;
+  onOpenEditor?: () => void;
 }
 
 export const PublicCatalog: React.FC<PublicCatalogProps> = ({
@@ -20,6 +23,8 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   currentUser,
   webAspect = 'clean',
   onAspectChange,
+  onSelectProject,
+  onOpenEditor,
 }) => {
   const isClean = webAspect === 'clean';
   const [publishedProjects, setPublishedProjects] = useState<CloudProjectDoc[]>([]);
@@ -28,6 +33,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [seeding, setSeeding] = useState(false);
   const [selectedDocModal, setSelectedDocModal] = useState<CloudProjectDoc | null>(null);
+  const [editTargetDoc, setEditTargetDoc] = useState<CloudProjectDoc | null>(null);
   const [fullCoverImage, setFullCoverImage] = useState<{ src: string; title: string } | null>(null);
   const [showAllStories, setShowAllStories] = useState(false);
 
@@ -41,6 +47,28 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   useEffect(() => {
     fetchCatalog();
   }, []);
+
+  const handleConfirmEditMode = async (mode: 'keep_published' | 'hide_to_draft') => {
+    if (!editTargetDoc) return;
+    const docToEdit = editTargetDoc;
+    setEditTargetDoc(null);
+
+    if (mode === 'hide_to_draft' && docToEdit.status === 'published') {
+      try {
+        await toggleProjectVisibilityInGallery(docToEdit.id, false);
+        await fetchCatalog();
+      } catch (err) {
+        console.error('Error hiding project from gallery:', err);
+      }
+    }
+
+    if (onSelectProject) {
+      onSelectProject(docToEdit.projectData, docToEdit.id);
+    }
+    if (onOpenEditor) {
+      onOpenEditor();
+    }
+  };
 
   const getProjectCoverImage = (projectData: GameProject): string | null => {
     if (!projectData || !projectData.scenes) return null;
@@ -423,6 +451,33 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                         </button>
                       </div>
 
+                      {(() => {
+                        const isAuthor = currentUser && (
+                          doc.authorId === currentUser.uid ||
+                          (currentUser.email && doc.authorEmail?.toLowerCase() === currentUser.email.toLowerCase())
+                        );
+                        const isAdmin = currentUser?.role === 'admin' || currentUser?.email === 'lavozdelosmuertos@gmail.com';
+                        const canEdit = (isAuthor || isAdmin) && !!onOpenEditor;
+
+                        if (canEdit) {
+                          return (
+                            <button
+                              onClick={() => setEditTargetDoc(doc)}
+                              className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border shadow-sm ${
+                                isClean
+                                  ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#A4332A] border-[#A4332A]/30 hover:border-[#A4332A]'
+                                  : 'bg-[#2C241C] hover:bg-[#382E25] text-[#C9A24B] border-[#C9A24B]/30 hover:border-[#C9A24B]'
+                              }`}
+                              title="Modificar esta historia (elegir si mantener visible en galería u ocultar)"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-[#A4332A]" />
+                              <span>Editar Historia (Elegir visibilidad)</span>
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
+
                       {/* Download option check */}
                       <div className="grid grid-cols-2 gap-2 pt-1">
                         <button
@@ -776,6 +831,37 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   Cerrar
                 </button>
 
+                {(() => {
+                  const isAuthor = currentUser && (
+                    selectedDocModal.authorId === currentUser.uid ||
+                    (currentUser.email && selectedDocModal.authorEmail?.toLowerCase() === currentUser.email.toLowerCase())
+                  );
+                  const isAdmin = currentUser?.role === 'admin' || currentUser?.email === 'lavozdelosmuertos@gmail.com';
+                  const canEdit = (isAuthor || isAdmin) && !!onOpenEditor;
+
+                  if (canEdit) {
+                    return (
+                      <button
+                        onClick={() => {
+                          const docItem = selectedDocModal;
+                          setSelectedDocModal(null);
+                          setEditTargetDoc(docItem);
+                        }}
+                        className={`px-4 py-2 font-bold rounded-xl text-xs transition-colors flex items-center gap-1.5 cursor-pointer border ${
+                          isClean
+                            ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#A4332A] border-[#A4332A]/40'
+                            : 'bg-[#2C241C] hover:bg-[#382E25] text-[#C9A24B] border-[#C9A24B]/40'
+                        }`}
+                        title="Modificar esta historia en el editor"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-[#A4332A]" />
+                        <span>Editar Relato</span>
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <button
                   onClick={() => {
                     const data = selectedDocModal.publishedData || selectedDocModal.projectData;
@@ -796,6 +882,15 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
           </div>
         </div>
       )}
+
+      {/* Edit Story Choice Modal (Solo editar vs Ocultar y editar) */}
+      <EditStoryModal
+        projectDoc={editTargetDoc}
+        isOpen={!!editTargetDoc}
+        onClose={() => setEditTargetDoc(null)}
+        onConfirm={handleConfirmEditMode}
+        webAspect={webAspect}
+      />
 
       {/* Full Cover Image Viewer Modal */}
       {fullCoverImage && (

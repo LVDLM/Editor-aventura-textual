@@ -31,7 +31,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { UserProfile, CloudProjectDoc, GameProject, UserRole, SoundDefinition } from '../types';
+import { UserProfile, CloudProjectDoc, GameProject, UserRole, SoundDefinition, PublicationStatus } from '../types';
 import { DEFAULT_SOUND_LIBRARY, setGlobalSoundLibrary } from '../utils/audio';
 
 // Designated Admin Emails
@@ -403,17 +403,91 @@ export async function getPublishedProjects(): Promise<CloudProjectDoc[]> {
 /**
  * Fetch projects authored by a specific user
  */
-export async function getUserProjects(authorId: string): Promise<CloudProjectDoc[]> {
+/**
+ * Fetch projects authored by a specific user, with email and admin fallback
+ */
+export async function getUserProjects(
+  authorId: string,
+  userEmail?: string,
+  isAdmin?: boolean
+): Promise<CloudProjectDoc[]> {
   try {
-    const q = query(
-      collection(db, 'projects'),
-      where('authorId', '==', authorId)
-    );
-    const snap = await getDocs(q);
     const list: CloudProjectDoc[] = [];
-    snap.forEach((docSnap) => {
-      list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
-    });
+    const seenIds = new Set<string>();
+
+    const normEmail = (userEmail || '').toLowerCase().trim();
+    const isAdminUser = isAdmin || normEmail === 'lavozdelosmuertos@gmail.com' || normEmail.includes('lavozdelosmuertos');
+
+    if (isAdminUser) {
+      // For administrator / editorial account, fetch and filter all relevant stories
+      const allProjects = await getAllProjectsForAdmin();
+      for (const p of allProjects) {
+        const pEmail = (p.authorEmail || '').toLowerCase().trim();
+        const pAuthorName = (p.authorName || '').toLowerCase().trim();
+        const pProjAuthor = (p.projectData?.author || '').toLowerCase().trim();
+
+        const isMine =
+          p.authorId === authorId ||
+          (normEmail && pEmail === normEmail) ||
+          pEmail === 'lavozdelosmuertos@gmail.com' ||
+          pAuthorName === 'urdimbre' ||
+          pAuthorName.includes('lavozdelosmuertos') ||
+          pProjAuthor === 'urdimbre' ||
+          p.authorId === 'system_admin_seed' ||
+          p.id === 'sample_misterio_habitacion' ||
+          p.id === 'el_misterio_de_la_habitacion';
+
+        if (isMine && !seenIds.has(p.id)) {
+          seenIds.add(p.id);
+          // Auto-migrate authorId to current active authorId if different (except static seed demo)
+          if (p.authorId !== authorId && !p.id.startsWith('sample_')) {
+            try {
+              updateDoc(doc(db, 'projects', p.id), { authorId, authorEmail: userEmail || p.authorEmail });
+            } catch (e) {
+              console.warn('Auto-syncing authorId for admin project:', e);
+            }
+          }
+          list.push(p);
+        }
+      }
+    } else {
+      // Standard author: query by authorId
+      const qAuthor = query(
+        collection(db, 'projects'),
+        where('authorId', '==', authorId)
+      );
+      const snapAuthor = await getDocs(qAuthor);
+      snapAuthor.forEach((docSnap) => {
+        if (!seenIds.has(docSnap.id)) {
+          seenIds.add(docSnap.id);
+          list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
+        }
+      });
+
+      // Also query by authorEmail if user has an email, recovering projects across logins
+      if (normEmail) {
+        const qEmail = query(
+          collection(db, 'projects'),
+          where('authorEmail', '==', normEmail)
+        );
+        const snapEmail = await getDocs(qEmail);
+        snapEmail.forEach((docSnap) => {
+          if (!seenIds.has(docSnap.id)) {
+            seenIds.add(docSnap.id);
+            const data = { id: docSnap.id, ...docSnap.data() } as CloudProjectDoc;
+            if (data.authorId !== authorId) {
+              try {
+                updateDoc(doc(db, 'projects', docSnap.id), { authorId });
+              } catch (e) {
+                console.warn('Auto-syncing authorId for user project:', e);
+              }
+            }
+            list.push(data);
+          }
+        });
+      }
+    }
+
     return list.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
   } catch (err) {
     console.error('Error fetching user projects:', err);
@@ -440,14 +514,16 @@ export async function getAllProjectsForAdmin(): Promise<CloudProjectDoc[]> {
 }
 
 /**
- * Save or update a project document in Cloud Firestore
+ * Save or update a project document in Cloud Firestore.
+ * Supports preserving 'published' status when editing drafts so live readers are not interrupted.
  */
 export async function saveProjectToCloud(
   docId: string | null,
   projectData: GameProject,
   author: { uid: string; displayName: string; email: string },
-  status: 'draft' | 'pending_review' | 'published' = 'draft',
-  reviewFeedback: string = ''
+  status?: 'draft' | 'pending_review' | 'published' | 'preserve',
+  reviewFeedback: string = '',
+  publishNewVersion: boolean = false
 ): Promise<string> {
   const now = new Date().toISOString();
   let idToUse = docId || projectData.id || `proj_${Date.now()}`;
@@ -479,17 +555,36 @@ export async function saveProjectToCloud(
   // Update working projectData with current ID
   projectData.id = idToUse;
 
+  // Determine effective status:
+  // If status is 'preserve' or not supplied, keep current status if existing
+  let effectiveStatus: PublicationStatus = 'draft';
+  if (status === 'preserve' || status === undefined) {
+    effectiveStatus = existingData?.status || 'draft';
+  } else if (status === 'draft') {
+    // If status was already published, and caller specifically asked for 'draft', check if it was explicit hide
+    effectiveStatus = 'draft';
+  } else {
+    effectiveStatus = status;
+  }
+
   const currentPubVersion = existingData?.publishedVersion || 0;
   let publishedData = existingData?.publishedData || null;
-  let publishedVersion = existingData?.publishedVersion || (status === 'published' ? 1 : null);
+  let publishedVersion = existingData?.publishedVersion || (effectiveStatus === 'published' ? 1 : null);
   let publishedAt = existingData?.publishedAt || null;
   let hasUnpublishedChanges = existingData?.hasUnpublishedChanges || false;
 
-  if (status === 'published') {
-    publishedData = projectData; // Create live snapshot
-    publishedVersion = currentPubVersion + 1;
-    publishedAt = now;
-    hasUnpublishedChanges = false;
+  if (effectiveStatus === 'published') {
+    if (publishNewVersion || !existingData?.publishedData) {
+      // Author / admin is officially publishing or updating the public live snapshot
+      publishedData = projectData;
+      publishedVersion = currentPubVersion + 1;
+      publishedAt = now;
+      hasUnpublishedChanges = false;
+    } else {
+      // "Solo editar (mantener visible)": Keep existing published snapshot live for readers!
+      // Only projectData (working draft) gets updated.
+      hasUnpublishedChanges = true;
+    }
   } else {
     if (existingData?.publishedData) {
       hasUnpublishedChanges = true;
@@ -503,7 +598,7 @@ export async function saveProjectToCloud(
     authorId: author.uid,
     authorName: projectData.author || author.displayName || 'Autor Anónimo',
     authorEmail: author.email || '',
-    status: status,
+    status: effectiveStatus,
     allowDownload: projectData.allowDownload ?? existingData?.allowDownload ?? false,
     projectData: projectData, // Working draft
     updatedAt: now,
@@ -525,6 +620,35 @@ export async function saveProjectToCloud(
 
   await setDoc(ref, sanitizedPayload, { merge: true });
   return idToUse;
+}
+
+/**
+ * Toggle project visibility in the public Gallery / Biblioteca.
+ * visible: true -> status: 'published' (visible to everyone)
+ * visible: false -> status: 'draft' (hidden from public gallery)
+ */
+export async function toggleProjectVisibilityInGallery(
+  docId: string,
+  visible: boolean
+): Promise<void> {
+  const ref = doc(db, 'projects', docId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data() as CloudProjectDoc;
+  const now = new Date().toISOString();
+
+  if (visible) {
+    await updateDoc(ref, {
+      status: 'published',
+      publishedData: data.publishedData || data.projectData,
+      updatedAt: now,
+    });
+  } else {
+    await updateDoc(ref, {
+      status: 'draft',
+      updatedAt: now,
+    });
+  }
 }
 
 /**

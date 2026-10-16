@@ -397,6 +397,13 @@ export default function App() {
               resetGameStateForProject(projToPlay);
               setCurrentView('play');
             }}
+            onSelectProject={(selectedProj, docId) => {
+              const sanitized = sanitizeProjectForPlay(selectedProj);
+              setProject(sanitized);
+              setCurrentCloudDocId(docId);
+              resetGameStateForProject(sanitized);
+            }}
+            onOpenEditor={() => setCurrentView('edit')}
             onOpenWorkspace={() => {
               if (!currentUser) {
                 setShowAuthModal(true);
