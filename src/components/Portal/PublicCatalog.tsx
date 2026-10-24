@@ -648,7 +648,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   <img
                     src={(selectedDocModal.publishedData ? getProjectCoverImage(selectedDocModal.publishedData) : getProjectCoverImage(selectedDocModal.projectData))!}
                     alt={`Carátula de ${selectedDocModal.title}`}
-                    className={`w-full max-h-64 object-cover rounded-xl border-2 shadow-md mx-auto group-hover:opacity-90 transition-all ${
+                    className={`w-auto max-w-full max-h-80 object-contain rounded-xl border-2 shadow-md mx-auto group-hover:opacity-90 transition-all ${
                       isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'
                     }`}
                   />

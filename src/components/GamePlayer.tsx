@@ -1927,14 +1927,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                           className="tracking-wide space-y-3 transition-all"
                         >
                           {blockImg && (
-                            <div className="w-full text-center">
+                            <div className="w-full text-center my-3">
                               <img
                                 src={blockImg}
                                 alt="Ilustración"
                                 className={
                                   isPortada
-                                    ? 'w-full max-h-[380px] object-cover rounded-2xl border-2 border-amber-500/50 shadow-2xl mx-auto'
-                                    : 'w-full max-h-[280px] object-cover rounded-xl border border-white/10 shadow-lg mx-auto'
+                                    ? 'w-auto max-w-full h-auto max-h-[85vh] object-contain rounded-2xl border-2 border-amber-500/50 shadow-2xl mx-auto block'
+                                    : 'w-auto max-w-full h-auto max-h-[80vh] object-contain rounded-xl border border-white/10 shadow-lg mx-auto block'
                                 }
                               />
                             </div>

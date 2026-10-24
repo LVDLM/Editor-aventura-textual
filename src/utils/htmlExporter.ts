@@ -781,9 +781,9 @@ ${jsonProject}
 
           if (imgSrc) {
             if (isPortada) {
-              combinedHTML += '<div style="margin-bottom: 1rem; text-align: center;"><img src="' + escapeHTML(imgSrc) + '" alt="Portada" style="width: 100%; max-height: 380px; object-fit: cover; border-radius: 16px; border: 2px solid var(--accent); box-shadow: 0 8px 25px rgba(0,0,0,0.5);" /></div>';
+              combinedHTML += '<div style="margin-bottom: 1rem; text-align: center;"><img src="' + escapeHTML(imgSrc) + '" alt="Portada" style="display: block; max-width: 100%; height: auto; max-height: 85vh; object-fit: contain; border-radius: 16px; border: 2px solid var(--accent); box-shadow: 0 8px 25px rgba(0,0,0,0.5); margin: 0 auto;" /></div>';
             } else {
-              combinedHTML += '<div style="margin-bottom: 1rem; text-align: center;"><img src="' + escapeHTML(imgSrc) + '" alt="Ilustración" style="display: block; width: 100%; max-height: 280px; object-fit: cover; border-radius: 12px; margin: 0 auto; border: 1px solid var(--border-color);" /></div>';
+              combinedHTML += '<div style="margin-bottom: 1rem; text-align: center;"><img src="' + escapeHTML(imgSrc) + '" alt="Ilustración" style="display: block; max-width: 100%; height: auto; max-height: 80vh; object-fit: contain; border-radius: 12px; margin: 0 auto; border: 1px solid var(--border-color);" /></div>';
             }
           }
 

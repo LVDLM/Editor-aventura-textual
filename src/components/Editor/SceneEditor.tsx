@@ -2241,7 +2241,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                           <img
                             src={block.imageFileData || block.imageUrl}
                             alt="Previsualización"
-                            className="w-20 h-16 object-cover rounded-lg border border-white/10 shrink-0"
+                            className="w-24 h-20 object-contain bg-black/60 rounded-lg border border-white/10 shrink-0 p-0.5"
                           />
                           <div className="text-xs space-y-1 overflow-hidden">
                             <p className="font-semibold text-amber-300 truncate">
