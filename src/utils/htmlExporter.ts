@@ -1218,14 +1218,20 @@ ${jsonProject}
             if (!gameState.appendedTexts[gameState.currentSceneId]) {
               gameState.appendedTexts[gameState.currentSceneId] = [];
             }
+            const currentList = gameState.appendedTexts[gameState.currentSceneId];
             const parentBlock = (scene.textBlocks || []).find(function(b) {
-              return isWordMatchInText(hs.word, b.text);
+              if (isWordMatchInText(hs.word, b.text)) return true;
+              return currentList.some(function(item) {
+                if (typeof item !== 'string' && item.blockId === b.id) {
+                  return isWordMatchInText(hs.word, item.text);
+                }
+                return false;
+              });
             });
             const entryObj = {
               text: sc.appendStoryText,
               blockId: parentBlock ? parentBlock.id : null
             };
-            const currentList = gameState.appendedTexts[gameState.currentSceneId];
             const exists = currentList.some(function(item) {
               return (typeof item === 'string' ? item : item.text) === sc.appendStoryText;
             });
@@ -1328,14 +1334,20 @@ ${jsonProject}
             if (!gameState.appendedTexts[gameState.currentSceneId]) {
               gameState.appendedTexts[gameState.currentSceneId] = [];
             }
+            const currentList = gameState.appendedTexts[gameState.currentSceneId];
             const parentBlock = (scene.textBlocks || []).find(function(b) {
-              return isWordMatchInText(hs.word, b.text);
+              if (isWordMatchInText(hs.word, b.text)) return true;
+              return currentList.some(function(item) {
+                if (typeof item !== 'string' && item.blockId === b.id) {
+                  return isWordMatchInText(hs.word, item.text);
+                }
+                return false;
+              });
             });
             const entryObj = {
               text: fsc.appendStoryText,
               blockId: parentBlock ? parentBlock.id : null
             };
-            const currentList = gameState.appendedTexts[gameState.currentSceneId];
             const exists = currentList.some(function(item) {
               return (typeof item === 'string' ? item : item.text) === fsc.appendStoryText;
             });

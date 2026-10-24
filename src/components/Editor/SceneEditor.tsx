@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
 import { ALL_VERBS } from '../../utils/verbs';
 import { playSound } from '../../utils/audio';
-import { isWordMatchInText } from '../../utils/textUtils';
+import { isWordMatchInText, isWordChar } from '../../utils/textUtils';
 import { HotspotEditorModal } from './HotspotEditorModal';
 import { DialogueEditor } from './DialogueEditor';
 import { validateProjectScenes } from '../../utils/sceneValidator';
@@ -13,6 +13,7 @@ import {
   Plus,
   Trash2,
   Edit3,
+  ExternalLink,
   Sparkles,
   MousePointer,
   Check,
@@ -111,6 +112,8 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   const [selectedText, setSelectedText] = useState('');
   const [manualKeyword, setManualKeyword] = useState('');
   const [inlineFlagName, setInlineFlagName] = useState('');
+  const [editingAppendedKey, setEditingAppendedKey] = useState<string | null>(null);
+  const [editingAppendedText, setEditingAppendedText] = useState<string>('');
 
   const handleAddGlobalFlag = (flagKey: string) => {
     const cleanKey = flagKey.trim().toLowerCase().replace(/\s+/g, '_');
@@ -695,7 +698,8 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   };
 
   const handleAddHotspot = (wordToAdd: string) => {
-    const cleanWord = wordToAdd.trim();
+    const rawClean = wordToAdd.trim().replace(/^[¿¡"«'“(\s]+|[.,;:?!)»’”\s]+$/g, '');
+    const cleanWord = rawClean || wordToAdd.trim();
     if (!cleanWord || !activeScene) return;
 
     // Check if hotspot already exists
@@ -762,6 +766,243 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
         };
       }),
     }));
+  };
+
+  const handleUpdateAppendedText = (
+    hotspotId: string,
+    actionId: string,
+    isFailAction: boolean,
+    newText: string
+  ) => {
+    if (!activeScene) return;
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          hotspots: s.hotspots.map((hs) => {
+            if (hs.id !== hotspotId) return hs;
+            return {
+              ...hs,
+              actions: hs.actions.map((act) => {
+                if (act.id !== actionId) return act;
+                if (isFailAction) {
+                  return {
+                    ...act,
+                    failStateChange: {
+                      ...(act.failStateChange || {}),
+                      appendStoryText: newText,
+                    },
+                  };
+                }
+                return {
+                  ...act,
+                  stateChange: {
+                    ...(act.stateChange || {}),
+                    appendStoryText: newText,
+                  },
+                };
+              }),
+            };
+          }),
+        };
+      }),
+    }));
+  };
+
+  interface AppendedResponseItem {
+    hotspot: Hotspot;
+    action: any;
+    cause: string;
+    text: string;
+    isGameOver?: boolean;
+    isFailAction: boolean;
+  }
+
+  const getBlockHotspotsAndAppended = (
+    scene: Scene | undefined,
+    blockText: string
+  ): {
+    blockHotspots: Hotspot[];
+    appendedResponses: AppendedResponseItem[];
+    allBlockTexts: string[];
+    hotspotOriginMap: Record<string, { isFromAppended: boolean; cause?: string; triggerWord?: string }>;
+  } => {
+    if (!scene) {
+      return {
+        blockHotspots: [],
+        appendedResponses: [],
+        allBlockTexts: [blockText || ''],
+        hotspotOriginMap: {},
+      };
+    }
+
+    const visitedHotspotIds = new Set<string>();
+    const blockHotspots: Hotspot[] = [];
+    const appendedResponses: AppendedResponseItem[] = [];
+    const hotspotOriginMap: Record<string, { isFromAppended: boolean; cause?: string; triggerWord?: string }> = {};
+
+    // 1. Initial direct hotspots matching block.text
+    (scene.hotspots || []).forEach((hs) => {
+      if (isWordMatchInText(hs.word, blockText)) {
+        if (!visitedHotspotIds.has(hs.id)) {
+          visitedHotspotIds.add(hs.id);
+          blockHotspots.push(hs);
+          hotspotOriginMap[hs.id] = { isFromAppended: false };
+        }
+      }
+    });
+
+    // 2. Iteratively gather appended texts and chained hotspots in appended texts
+    let foundNew = true;
+    let iterations = 0;
+    while (foundNew && iterations < 8) {
+      iterations++;
+      foundNew = false;
+
+      // Check actions on all current blockHotspots
+      blockHotspots.forEach((hs) => {
+        (hs.actions || []).forEach((act) => {
+          // Normal stateChange.appendStoryText
+          const txt = act.stateChange?.appendStoryText?.trim();
+          if (txt) {
+            const already = appendedResponses.some(
+              (r) => r.hotspot.id === hs.id && r.action.id === act.id && !r.isFailAction
+            );
+            if (!already) {
+              let verbAction = 'activar';
+              if (act.verb === 'mirar') verbAction = 'examinar';
+              else if (act.verb === 'coger') verbAction = 'coger';
+              else if (act.verb === 'usar') verbAction = 'usar';
+              else if (act.verb === 'abrir') verbAction = 'abrir';
+              else if (act.verb === 'hablar') verbAction = 'hablar con';
+              else if (act.verb === 'empujar') verbAction = 'empujar';
+              else if (act.verb === 'ir_a') verbAction = 'ir a';
+
+              const causeStr = `Al ${verbAction} ${hs.word}`;
+              appendedResponses.push({
+                hotspot: hs,
+                action: act,
+                cause: causeStr,
+                text: txt,
+                isGameOver: act.isGameOver || act.stateChange?.isGameOver,
+                isFailAction: false,
+              });
+              foundNew = true;
+            }
+          }
+
+          // failStateChange.appendStoryText
+          const failTxt = act.failStateChange?.appendStoryText?.trim();
+          if (failTxt) {
+            const alreadyFail = appendedResponses.some(
+              (r) => r.hotspot.id === hs.id && r.action.id === act.id && r.isFailAction
+            );
+            if (!alreadyFail) {
+              let verbAction = 'activar';
+              if (act.verb === 'mirar') verbAction = 'examinar';
+              else if (act.verb === 'coger') verbAction = 'coger';
+              else if (act.verb === 'usar') verbAction = 'usar';
+              else if (act.verb === 'abrir') verbAction = 'abrir';
+              else if (act.verb === 'hablar') verbAction = 'hablar con';
+              else if (act.verb === 'empujar') verbAction = 'empujar';
+              else if (act.verb === 'ir_a') verbAction = 'ir a';
+
+              const causeStr = `Al fallar ${verbAction} ${hs.word}`;
+              appendedResponses.push({
+                hotspot: hs,
+                action: act,
+                cause: causeStr,
+                text: failTxt,
+                isGameOver: act.isGameOver || act.failStateChange?.isGameOver,
+                isFailAction: true,
+              });
+              foundNew = true;
+            }
+          }
+        });
+      });
+
+      // Check all hotspots in scene to see if any match the collected appended texts
+      (scene.hotspots || []).forEach((hs) => {
+        if (!visitedHotspotIds.has(hs.id)) {
+          const matchingAppended = appendedResponses.find((r) => isWordMatchInText(hs.word, r.text));
+          if (matchingAppended) {
+            visitedHotspotIds.add(hs.id);
+            blockHotspots.push(hs);
+            hotspotOriginMap[hs.id] = {
+              isFromAppended: true,
+              triggerWord: matchingAppended.hotspot.word,
+              cause: matchingAppended.cause,
+            };
+            foundNew = true;
+          }
+        }
+      });
+    }
+
+    const allBlockTexts = [blockText || '', ...appendedResponses.map((r) => r.text)];
+
+    return { blockHotspots, appendedResponses, allBlockTexts, hotspotOriginMap };
+  };
+
+  const renderAppendedTextContent = (
+    text: string,
+    sceneHotspots: Hotspot[],
+    onHotspotClick: (hs: Hotspot) => void
+  ) => {
+    if (!text) return null;
+
+    const matchingHotspots = (sceneHotspots || []).filter((hs) => isWordMatchInText(hs.word, text));
+    if (matchingHotspots.length === 0) {
+      return <span className="text-amber-100">{text}</span>;
+    }
+
+    const sorted = [...matchingHotspots].sort((a, b) => b.word.length - a.word.length);
+    const regexPatterns = sorted.map((hs) => {
+      const escape = hs.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const startChar = hs.word.charAt(0);
+      const endChar = hs.word.charAt(hs.word.length - 1);
+      const prefix = isWordChar(startChar) ? '(?<![\\p{L}\\p{N}_])' : '';
+      const suffix = isWordChar(endChar) ? '(?![\\p{L}\\p{N}_])' : '';
+      return `(${prefix}${escape}${suffix})`;
+    });
+
+    try {
+      const fullRegex = new RegExp(regexPatterns.join('|'), 'giu');
+      const parts = text.split(fullRegex).filter(Boolean);
+
+      return (
+        <span className="text-amber-100">
+          {parts.map((part, idx) => {
+            const matched = sorted.find((hs) => hs.word.toLowerCase() === part.toLowerCase());
+            if (matched) {
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const sel = window.getSelection()?.toString().trim();
+                    if (sel && sel.length > 0) return;
+                    onHotspotClick(matched);
+                  }}
+                  className="inline text-amber-300 font-semibold underline decoration-amber-400/80 hover:decoration-amber-300 hover:text-amber-100 hover:bg-amber-500/25 px-1 py-0.5 rounded cursor-pointer transition-colors"
+                  title={`Palabra clave "${matched.word}" (Clic para editar acciones)`}
+                >
+                  {part}
+                </button>
+              );
+            }
+            return <span key={idx}>{part}</span>;
+          })}
+        </span>
+      );
+    } catch (err) {
+      console.error('Error rendering appended text with keywords:', err);
+      return <span className="text-amber-100">{text}</span>;
+    }
   };
 
   const validationIssues = validateProjectScenes(project);
@@ -2144,182 +2385,20 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     </button>
                   </div>
 
-                  {/* Calculate Appended Story Text from Keywords */}
+                  {/* Appended Story Text and Keywords for this Paragraph Block */}
                   {(() => {
-                    const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
-                      isWordMatchInText(hs.word, block.text)
-                    );
-
-                    const appendedResponses: { cause: string; text: string; isGameOver?: boolean }[] = [];
-
-                    blockHotspots.forEach((hs) => {
-                      hs.actions.forEach((act) => {
-                        const txt = act.stateChange?.appendStoryText?.trim();
-                        if (txt) {
-                          let verbAction = 'activar';
-                          if (act.verb === 'mirar') verbAction = 'examinar';
-                          else if (act.verb === 'coger') verbAction = 'coger';
-                          else if (act.verb === 'usar') verbAction = 'usar';
-                          else if (act.verb === 'abrir') verbAction = 'abrir';
-                          else if (act.verb === 'hablar') verbAction = 'hablar con';
-                          else if (act.verb === 'empujar') verbAction = 'empujar';
-                          else if (act.verb === 'ir_a') verbAction = 'ir a';
-
-                          const causeStr = `Al ${verbAction} ${hs.word}`;
-                          appendedResponses.push({
-                            cause: causeStr,
-                            text: txt,
-                            isGameOver: act.isGameOver || act.stateChange?.isGameOver
-                          });
-                        }
-                      });
-                    });
-
+                    const { blockHotspots, appendedResponses, allBlockTexts, hotspotOriginMap } =
+                      getBlockHotspotsAndAppended(activeScene, block.text);
                     const hasAppended = appendedResponses.length > 0;
 
-                    return (
-                      <>
-                        <textarea
-                          ref={(el) => {
-                            textareaRefs.current[block.id] = el;
-                          }}
-                          rows={4}
-                          value={block.text}
-                          onChange={(e) => handleUpdateBlockText(block.id, e.target.value)}
-                          onMouseUp={handleMouseUpTextSelection}
-                          className={`w-full bg-black/60 border border-white/10 p-3 text-sm text-white leading-relaxed focus:border-amber-500 outline-none font-serif border-t-0 ${
-                            hasAppended ? 'rounded-b-none border-b-0' : 'rounded-b-xl'
-                          }`}
-                          placeholder={`Escribe el texto del párrafo #${index + 1}...`}
-                        />
-
-                        {hasAppended && (
-                          <div className="bg-black/85 border border-white/10 border-t border-t-amber-500/40 rounded-b-xl p-3.5 space-y-2.5 font-serif text-slate-200 text-sm leading-relaxed shadow-inner">
-                            {appendedResponses.map((item, i) => (
-                              <div key={i} className="space-y-1">
-                                <p>
-                                  <span className="font-sans font-bold text-[11px] text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 mr-2 inline-block">
-                                    [{item.cause}]
-                                  </span>
-                                  <span className="text-amber-100">{item.text}</span>
-                                  {item.isGameOver && (
-                                    <span className="ml-2 font-sans text-[10px] bg-rose-950 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-bold">
-                                      💀 Fin de partida
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  {/* Hotspots / Interactive Keywords for THIS paragraph block */}
-                  <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-xs font-bold text-amber-300">
-                        <span>Palabras Clave en este Párrafo:</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        Haz clic sobre una palabra para configurar acciones (mirar, usar, etc.)
-                      </span>
-                    </div>
-
-                    {(() => {
-                      const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
-                        isWordMatchInText(hs.word, block.text)
+                    const cleanSelected = selectedText.trim();
+                    const isSelectedInThisBlock =
+                      cleanSelected.length > 0 &&
+                      allBlockTexts.some(
+                        (txt) =>
+                          isWordMatchInText(cleanSelected, txt) ||
+                          txt.toLowerCase().includes(cleanSelected.toLowerCase())
                       );
-
-                      const cleanSelected = selectedText.trim();
-                      const isSelectedInThisBlock =
-                        cleanSelected.length > 0 &&
-                        (isWordMatchInText(cleanSelected, block.text) ||
-                          block.text.toLowerCase().includes(cleanSelected.toLowerCase()));
-
-                      if (blockHotspots.length === 0 && !isSelectedInThisBlock) {
-                        return (
-                          <p className="text-[11px] text-slate-400 italic">
-                            No se detectan palabras clave en este párrafo. Selecciona texto en el párrafo de arriba para convertirlo en palabra clave.
-                          </p>
-                        );
-                      }
-
-                      return (
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          {blockHotspots.map((hs) => (
-                            <div
-                              key={hs.id}
-                              onClick={() => setActiveHotspotForEdit(hs)}
-                              className="bg-black/80 border border-amber-500/40 hover:border-amber-400 rounded-xl px-3 py-1.5 flex items-center gap-2 cursor-pointer group transition-all shadow-sm hover:shadow-amber-500/10"
-                            >
-                              <span className="text-xs font-bold text-amber-300 group-hover:text-amber-200">
-                                "{hs.word}"
-                              </span>
-
-                              {/* Action verb pills */}
-                              <div className="flex items-center gap-1">
-                                {hs.actions.map((act) => (
-                                  <span
-                                    key={act.id}
-                                    className="text-[9px] font-mono font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded"
-                                  >
-                                    {act.verb}
-                                  </span>
-                                ))}
-                                {hs.actions.length === 0 && (
-                                  <span className="text-[9px] text-slate-500 italic">sin acciones</span>
-                                )}
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveHotspotForEdit(hs);
-                                }}
-                                className="p-0.5 text-slate-400 hover:text-amber-300 cursor-pointer"
-                                title="Editar acciones de esta palabra"
-                              >
-                                <Settings className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteHotspot(hs.id);
-                                }}
-                                className="p-0.5 text-slate-500 hover:text-rose-400 cursor-pointer"
-                                title="Eliminar esta palabra clave"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-
-                          {isSelectedInThisBlock && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleAddHotspot(cleanSelected);
-                                setSelectedText('');
-                              }}
-                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md animate-pulse cursor-pointer border border-amber-400/50"
-                            >
-                              <span>Convertir "{cleanSelected}" en Palabra Clave</span>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Dialogue Editor Section directly below Keywords block */}
-                  {(() => {
-                    const blockHotspots = (activeScene?.hotspots || []).filter((hs) =>
-                      isWordMatchInText(hs.word, block.text)
-                    );
 
                     const hotspotDialogues: Array<{
                       hotspot: Hotspot;
@@ -2338,16 +2417,248 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                     const totalDialogues = (hasBlockDialogue ? 1 : 0) + hotspotDialogues.length;
 
                     return (
-                      <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                            <MessageSquare className="w-4 h-4 text-amber-400" />
-                            <span>Diálogos y Conversaciones en este Párrafo ({totalDialogues})</span>
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            Edita o corrige el árbol de diálogo fácilmente
-                          </span>
+                      <>
+                        <textarea
+                          ref={(el) => {
+                            textareaRefs.current[block.id] = el;
+                          }}
+                          rows={4}
+                          value={block.text}
+                          onChange={(e) => handleUpdateBlockText(block.id, e.target.value)}
+                          onMouseUp={handleMouseUpTextSelection}
+                          className={`w-full bg-black/60 border border-white/10 p-3 text-sm text-white leading-relaxed focus:border-amber-500 outline-none font-serif border-t-0 ${
+                            hasAppended ? 'rounded-b-none border-b-0' : 'rounded-b-xl'
+                          }`}
+                          placeholder={`Escribe el texto del párrafo #${index + 1}...`}
+                        />
+
+                        {hasAppended && (
+                          <div
+                            onMouseUp={handleMouseUpTextSelection}
+                            className="bg-black/85 border border-white/10 border-t border-t-amber-500/40 rounded-b-xl p-3.5 space-y-3 font-serif text-slate-200 text-sm leading-relaxed shadow-inner"
+                          >
+                            <div className="flex items-center justify-between text-[11px] text-amber-400/90 font-sans border-b border-amber-500/20 pb-2">
+                              <span className="font-semibold flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Párrafos añadidos dinámicamente por acciones:</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 hidden sm:inline">
+                                Selecciona cualquier palabra para convertirla en palabra de acción
+                              </span>
+                            </div>
+
+                            {appendedResponses.map((item, i) => {
+                              const itemKey = `${item.hotspot.id}_${item.action.id}_${item.isFailAction ? 'fail' : 'succ'}`;
+                              const isEditingThis = editingAppendedKey === itemKey;
+
+                              return (
+                                <div
+                                  key={i}
+                                  className="p-2.5 rounded-lg bg-black/50 border border-amber-500/20 space-y-2 group transition-all"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveHotspotForEdit(item.hotspot);
+                                        }}
+                                        className="font-sans font-bold text-[11px] text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 px-2 py-0.5 rounded border border-amber-500/30 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                        title={`Configurar acción de "${item.hotspot.word}" que genera este párrafo`}
+                                      >
+                                        <span>[{item.cause}]</span>
+                                        <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                                      </button>
+
+                                      {item.isGameOver && (
+                                        <span className="font-sans text-[10px] bg-rose-950 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-bold">
+                                          💀 Fin de partida
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-1">
+                                      {!isEditingThis && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingAppendedKey(itemKey);
+                                            setEditingAppendedText(item.text);
+                                          }}
+                                          className="px-2 py-0.5 rounded text-[10px] text-amber-300/80 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 flex items-center gap-1 cursor-pointer transition-colors"
+                                          title="Editar el texto de este párrafo añadido directamente"
+                                        >
+                                          <Edit3 className="w-3 h-3" />
+                                          <span>Editar texto</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {isEditingThis ? (
+                                    <div className="space-y-2 pt-1 font-sans">
+                                      <textarea
+                                        value={editingAppendedText}
+                                        onChange={(e) => setEditingAppendedText(e.target.value)}
+                                        rows={3}
+                                        className="w-full bg-slate-900 border border-amber-500/40 rounded-lg p-2.5 text-sm text-slate-100 font-serif leading-relaxed outline-none focus:border-amber-400"
+                                        placeholder="Escribe el texto añadido..."
+                                      />
+                                      <div className="flex items-center gap-2 justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingAppendedKey(null)}
+                                          className="px-2.5 py-1 text-xs text-slate-400 hover:text-white rounded bg-white/5 hover:bg-white/10 cursor-pointer"
+                                        >
+                                          Cancelar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateAppendedText(
+                                              item.hotspot.id,
+                                              item.action.id,
+                                              item.isFailAction,
+                                              editingAppendedText
+                                            );
+                                            setEditingAppendedKey(null);
+                                          }}
+                                          className="px-3 py-1 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded flex items-center gap-1 cursor-pointer shadow-sm"
+                                        >
+                                          <Check className="w-3 h-3" />
+                                          <span>Guardar texto</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      onMouseUp={handleMouseUpTextSelection}
+                                      onDoubleClick={handleMouseUpTextSelection}
+                                      className="text-slate-200 text-sm leading-relaxed select-text"
+                                    >
+                                      {renderAppendedTextContent(
+                                        item.text,
+                                        activeScene?.hotspots || [],
+                                        (hs) => setActiveHotspotForEdit(hs)
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Hotspots / Interactive Keywords for THIS paragraph block */}
+                        <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <span className="text-xs font-bold text-amber-300">
+                              <span>Palabras Clave en este Párrafo:</span>
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              Haz clic sobre una palabra para configurar acciones (mirar, usar, etc.)
+                            </span>
+                          </div>
+
+                          {blockHotspots.length === 0 && !isSelectedInThisBlock ? (
+                            <p className="text-[11px] text-slate-400 italic">
+                              No se detectan palabras clave en este párrafo ni en sus textos añadidos. Selecciona texto arriba para convertirlo en palabra clave.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {blockHotspots.map((hs) => {
+                                const originInfo = hotspotOriginMap[hs.id];
+                                const isFromAppended = originInfo?.isFromAppended;
+
+                                return (
+                                  <div
+                                    key={hs.id}
+                                    onClick={() => setActiveHotspotForEdit(hs)}
+                                    className="bg-black/80 border border-amber-500/40 hover:border-amber-400 rounded-xl px-3 py-1.5 flex items-center gap-2 cursor-pointer group transition-all shadow-sm hover:shadow-amber-500/10"
+                                  >
+                                    <span className="text-xs font-bold text-amber-300 group-hover:text-amber-200">
+                                      "{hs.word}"
+                                    </span>
+
+                                    {isFromAppended && (
+                                      <span
+                                        className="text-[9px] font-mono text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 rounded"
+                                        title={`Palabra clave perteneciente al párrafo añadido (${originInfo?.cause || ''})`}
+                                      >
+                                        añadido
+                                      </span>
+                                    )}
+
+                                    {/* Action verb pills */}
+                                    <div className="flex items-center gap-1">
+                                      {hs.actions.map((act) => (
+                                        <span
+                                          key={act.id}
+                                          className="text-[9px] font-mono font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded"
+                                        >
+                                          {act.verb}
+                                        </span>
+                                      ))}
+                                      {hs.actions.length === 0 && (
+                                        <span className="text-[9px] text-slate-500 italic">sin acciones</span>
+                                      )}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveHotspotForEdit(hs);
+                                      }}
+                                      className="p-0.5 text-slate-400 hover:text-amber-300 cursor-pointer"
+                                      title="Editar acciones de esta palabra"
+                                    >
+                                      <Settings className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteHotspot(hs.id);
+                                      }}
+                                      className="p-0.5 text-slate-500 hover:text-rose-400 cursor-pointer"
+                                      title="Eliminar esta palabra clave"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+
+                              {isSelectedInThisBlock && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleAddHotspot(cleanSelected);
+                                    setSelectedText('');
+                                  }}
+                                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md animate-pulse cursor-pointer border border-amber-400/50"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Convertir "{cleanSelected}" en Palabra Clave</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
+
+                        {/* Dialogue Editor Section directly below Keywords block */}
+                        <div className="bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                              <MessageSquare className="w-4 h-4 text-amber-400" />
+                              <span>Diálogos y Conversaciones en este Párrafo ({totalDialogues})</span>
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              Edita o corrige el árbol de diálogo fácilmente
+                            </span>
+                          </div>
 
                         {totalDialogues === 0 ? (
                           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -2452,8 +2763,9 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                           </div>
                         )}
                       </div>
-                    );
-                  })()}
+                    </>
+                  );
+                })()}
 
                   {/* Flag Condition Controls */}
                   {(() => {

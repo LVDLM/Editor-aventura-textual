@@ -733,9 +733,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     const ruleIndex = topRules.length > 0 ? Math.min(currentUseCount, topRules.length - 1) : -1;
     const rule = ruleIndex >= 0 ? topRules[ruleIndex] : null;
 
-    // Check if interaction triggers a Pop-up Dialogue Modal
     const currentSceneObj = project.scenes.find((s) => s.id === gameState.currentSceneId);
-    const parentBlock = currentSceneObj?.textBlocks.find((b) => isWordMatchInText(hotspot.word, b.text));
+    const currentSceneAppended = gameState.appendedTextsPerScene[gameState.currentSceneId] || [];
+    const parentBlock = currentSceneObj?.textBlocks.find((b) => {
+      if (isWordMatchInText(hotspot.word, b.text)) return true;
+      return currentSceneAppended.some((entry: any) => {
+        if (typeof entry !== 'string' && entry.blockId === b.id) {
+          return isWordMatchInText(hotspot.word, entry.text);
+        }
+        return false;
+      });
+    });
 
     let dialogueToStart: DialogueBlock | null = rule?.dialogue || parentBlock?.dialogue || null;
     let characterToStart: GameCharacter | null =
@@ -870,8 +878,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         if (sc?.appendStoryText) {
           const currentList = newAppended[prev.currentSceneId] || [];
-          const currentSceneObj = project.scenes.find((s) => s.id === prev.currentSceneId);
-          const parentBlock = currentSceneObj?.textBlocks.find((b) => isWordMatchInText(hotspot.word, b.text));
+          const parentBlock = currentSceneObj?.textBlocks.find((b) => {
+            if (isWordMatchInText(hotspot.word, b.text)) return true;
+            return currentList.some((t: any) => {
+              if (typeof t !== 'string' && t.blockId === b.id) {
+                return isWordMatchInText(hotspot.word, t.text);
+              }
+              return false;
+            });
+          });
           const isAlreadyAppended = currentList.some((t) => (typeof t === 'string' ? t : t.text) === sc.appendStoryText);
           if (!isAlreadyAppended) {
             const entryObj: AppendedTextEntry = parentBlock
@@ -1028,8 +1043,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         if (fsc?.appendStoryText) {
           const currentList = newAppended[prev.currentSceneId] || [];
-          const currentSceneObj = project.scenes.find((s) => s.id === prev.currentSceneId);
-          const parentBlock = currentSceneObj?.textBlocks.find((b) => isWordMatchInText(hotspot.word, b.text));
+          const parentBlock = currentSceneObj?.textBlocks.find((b) => {
+            if (isWordMatchInText(hotspot.word, b.text)) return true;
+            return currentList.some((t: any) => {
+              if (typeof t !== 'string' && t.blockId === b.id) {
+                return isWordMatchInText(hotspot.word, t.text);
+              }
+              return false;
+            });
+          });
           const isAlreadyAppended = currentList.some((t) => (typeof t === 'string' ? t : t.text) === fsc.appendStoryText);
           if (!isAlreadyAppended) {
             const entryObj: AppendedTextEntry = parentBlock
