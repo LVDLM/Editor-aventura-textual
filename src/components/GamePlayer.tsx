@@ -450,15 +450,36 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           let newInventory = [...prev.inventory];
           let nextSceneId = prev.currentSceneId;
 
-          if (sc?.addItemId && !newInventory.includes(sc.addItemId)) {
+          if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+            Object.entries(sc.addItems).forEach(([id, qty]) => {
+              const count = Math.max(0, Math.floor(Number(qty) || 0));
+              for (let i = 0; i < count; i++) {
+                newInventory.push(id);
+              }
+            });
+          } else if (sc?.addItemId) {
             newInventory.push(sc.addItemId);
           }
-          if (sc?.removeItemId) {
-            newInventory = newInventory.filter((id) => id !== sc.removeItemId);
+
+          if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
+            Object.entries(sc.removeItems).forEach(([id, qty]) => {
+              const count = Math.max(0, Math.floor(Number(qty) || 0));
+              for (let i = 0; i < count; i++) {
+                const idx = newInventory.indexOf(id);
+                if (idx !== -1) newInventory.splice(idx, 1);
+              }
+            });
+          } else {
+            if (sc?.removeItemId) {
+              const idx = newInventory.indexOf(sc.removeItemId);
+              if (idx !== -1) newInventory.splice(idx, 1);
+            }
+            if (sc?.removeItem2Id) {
+              const idx = newInventory.indexOf(sc.removeItem2Id);
+              if (idx !== -1) newInventory.splice(idx, 1);
+            }
           }
-          if (sc?.removeItem2Id) {
-            newInventory = newInventory.filter((id) => id !== sc.removeItem2Id);
-          }
+
           if (sc?.goToSceneId) {
             nextSceneId = sc.goToSceneId;
           }
@@ -582,11 +603,28 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       let newInventory = [...prev.inventory];
       let nextSceneId = prev.currentSceneId;
 
-      if (sc?.addItemId && !newInventory.includes(sc.addItemId)) {
+      if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+        Object.entries(sc.addItems).forEach(([id, qty]) => {
+          const count = Math.max(0, Math.floor(Number(qty) || 0));
+          for (let i = 0; i < count; i++) {
+            newInventory.push(id);
+          }
+        });
+      } else if (sc?.addItemId) {
         newInventory.push(sc.addItemId);
       }
-      if (sc?.removeItemId) {
-        newInventory = newInventory.filter((id: string) => id !== sc.removeItemId);
+
+      if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
+        Object.entries(sc.removeItems).forEach(([id, qty]) => {
+          const count = Math.max(0, Math.floor(Number(qty) || 0));
+          for (let i = 0; i < count; i++) {
+            const idx = newInventory.indexOf(id);
+            if (idx !== -1) newInventory.splice(idx, 1);
+          }
+        });
+      } else if (sc?.removeItemId) {
+        const idx = newInventory.indexOf(sc.removeItemId);
+        if (idx !== -1) newInventory.splice(idx, 1);
       }
       if (sc?.goToSceneId) {
         nextSceneId = sc.goToSceneId;
@@ -843,8 +881,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       }
 
       const sc = rule.stateChange;
-      const itemObj = sc?.addItemId ? project.inventoryItems.find((i) => i.id === sc.addItemId) : null;
-      const willPickupItem = !!(itemObj && !gameState.inventory.includes(sc!.addItemId!));
+      const firstAddedItemId = (sc?.addItems && Object.keys(sc.addItems)[0]) || sc?.addItemId;
+      const itemObj = firstAddedItemId ? project.inventoryItems.find((i) => i.id === firstAddedItemId) : null;
+      const hasItemGains = !!((sc?.addItems && Object.keys(sc.addItems).length > 0) || sc?.addItemId);
+      const willPickupItem = hasItemGains;
       const isAutosaveTriggered = willPickupItem || !!sc?.goToSceneId;
       const isRuleGameOver = !!rule.isGameOver || !!rule.stateChange?.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.responseMessage || '');
 
@@ -864,16 +904,34 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           [useKey]: (prev.verbUseCounts?.[useKey] || 0) + 1,
         };
 
-        if (sc?.addItemId && !newInventory.includes(sc.addItemId)) {
+        if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+          Object.entries(sc.addItems).forEach(([id, qty]) => {
+            const count = Math.max(0, Math.floor(Number(qty) || 0));
+            for (let i = 0; i < count; i++) {
+              newInventory.push(id);
+            }
+          });
+        } else if (sc?.addItemId) {
           newInventory.push(sc.addItemId);
         }
 
-        if (sc?.removeItemId) {
-          newInventory = newInventory.filter((id) => id !== sc.removeItemId);
-        }
-
-        if (sc?.removeItem2Id) {
-          newInventory = newInventory.filter((id) => id !== sc.removeItem2Id);
+        if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
+          Object.entries(sc.removeItems).forEach(([id, qty]) => {
+            const count = Math.max(0, Math.floor(Number(qty) || 0));
+            for (let i = 0; i < count; i++) {
+              const idx = newInventory.indexOf(id);
+              if (idx !== -1) newInventory.splice(idx, 1);
+            }
+          });
+        } else {
+          if (sc?.removeItemId) {
+            const idx = newInventory.indexOf(sc.removeItemId);
+            if (idx !== -1) newInventory.splice(idx, 1);
+          }
+          if (sc?.removeItem2Id) {
+            const idx = newInventory.indexOf(sc.removeItem2Id);
+            if (idx !== -1) newInventory.splice(idx, 1);
+          }
         }
 
         if (sc?.appendStoryText) {
@@ -960,15 +1018,25 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           isGameOver: true,
           message: rawMsg.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
         });
-      } else if (willPickupItem && itemObj) {
+      } else if (willPickupItem && (itemObj || (sc?.addItems && Object.keys(sc.addItems).length > 0))) {
         playSound('pickup');
-        const itemMsg = `¡Has conseguido: ${itemObj.name}!`;
+        let itemMsg = '';
+        if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+          const list = Object.entries(sc.addItems).map(([id, qty]) => {
+            const it = project.inventoryItems.find((i) => i.id === id);
+            const name = it?.name || id;
+            return qty > 1 ? `${qty}x ${name}` : name;
+          }).join(', ');
+          itemMsg = `¡Has conseguido: ${list}!`;
+        } else if (itemObj) {
+          itemMsg = `¡Has conseguido: ${itemObj.name}!`;
+        }
         setModalFeedback({
           type: 'item',
-          title: itemObj.name,
+          title: itemObj?.name || 'Objetos recibidos',
           verbIconName: 'Hand',
           isAutosaved: true,
-          itemImageUrl: itemObj.imageFileData || itemObj.imageUrl,
+          itemImageUrl: itemObj?.imageFileData || itemObj?.imageUrl,
           message: messageToShow ? `${messageToShow}\n\n${itemMsg}` : itemMsg,
         });
       } else if (messageToShow) {
@@ -1029,16 +1097,34 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         let nextSceneId = prev.currentSceneId;
         const newAppended = { ...prev.appendedTextsPerScene };
 
-        if (fsc?.addItemId && !newInventory.includes(fsc.addItemId)) {
+        if (fsc?.addItems && Object.keys(fsc.addItems).length > 0) {
+          Object.entries(fsc.addItems).forEach(([id, qty]) => {
+            const count = Math.max(0, Math.floor(Number(qty) || 0));
+            for (let i = 0; i < count; i++) {
+              newInventory.push(id);
+            }
+          });
+        } else if (fsc?.addItemId) {
           newInventory.push(fsc.addItemId);
         }
 
-        if (fsc?.removeItemId) {
-          newInventory = newInventory.filter((id) => id !== fsc.removeItemId);
-        }
-
-        if (fsc?.removeItem2Id) {
-          newInventory = newInventory.filter((id) => id !== fsc.removeItem2Id);
+        if (fsc?.removeItems && Object.keys(fsc.removeItems).length > 0) {
+          Object.entries(fsc.removeItems).forEach(([id, qty]) => {
+            const count = Math.max(0, Math.floor(Number(qty) || 0));
+            for (let i = 0; i < count; i++) {
+              const idx = newInventory.indexOf(id);
+              if (idx !== -1) newInventory.splice(idx, 1);
+            }
+          });
+        } else {
+          if (fsc?.removeItemId) {
+            const idx = newInventory.indexOf(fsc.removeItemId);
+            if (idx !== -1) newInventory.splice(idx, 1);
+          }
+          if (fsc?.removeItem2Id) {
+            const idx = newInventory.indexOf(fsc.removeItem2Id);
+            if (idx !== -1) newInventory.splice(idx, 1);
+          }
         }
 
         if (fsc?.appendStoryText) {
@@ -1255,7 +1341,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       responseText += `${character.name}: ${option.npcResponse}`;
     }
 
-    if (giveItemObj) {
+    if (option.giveItems && Object.keys(option.giveItems).length > 0) {
+      const summary = Object.entries(option.giveItems)
+        .map(([id, qty]) => {
+          const item = project.inventoryItems.find((i) => i.id === id);
+          const name = item?.name || id;
+          return qty > 1 ? `${qty}x ${name}` : name;
+        })
+        .join(', ');
+      responseText += `\n\n[Recibido: ${summary}]`;
+    } else if (giveItemObj) {
       responseText += `\n\n[Recibido: ${giveItemObj.name}]`;
     }
     if (consumeItemObj) {
@@ -1264,19 +1359,30 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     // Track items received during this dialogue session
     const currentReceived = activeDialogue?.receivedItemIds || [];
-    const updatedReceived = giveItemObj ? [...currentReceived, giveItemObj.id] : currentReceived;
+    const itemsToAdd = option.giveItems && Object.keys(option.giveItems).length > 0
+      ? Object.keys(option.giveItems)
+      : (giveItemObj ? [giveItemObj.id] : []);
+    const updatedReceived = [...currentReceived, ...itemsToAdd];
 
     setGameState((prev: any) => {
       const newFlags = { ...prev.flags, ...(option.setFlags || {}) };
       let newInventory = [...prev.inventory];
       let nextSceneId = prev.currentSceneId;
 
-      if (option.giveItemId && !newInventory.includes(option.giveItemId)) {
+      if (option.giveItems && Object.keys(option.giveItems).length > 0) {
+        Object.entries(option.giveItems).forEach(([id, qty]) => {
+          const count = Math.max(0, Math.floor(Number(qty) || 0));
+          for (let i = 0; i < count; i++) {
+            newInventory.push(id);
+          }
+        });
+      } else if (option.giveItemId) {
         newInventory.push(option.giveItemId);
       }
 
       if (option.requiredItemId && option.consumeRequiredItem) {
-        newInventory = newInventory.filter((id) => id !== option.requiredItemId);
+        const idx = newInventory.indexOf(option.requiredItemId);
+        if (idx !== -1) newInventory.splice(idx, 1);
       }
 
       if (option.goToSceneId) {
@@ -2194,9 +2300,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               )}
 
               {(() => {
+                const uniqueInventoryIds = Array.from(new Set(gameState.inventory));
                 const itemsToDisplay: InventoryItem[] = isSceneTesting
                   ? project.inventoryItems
-                  : (gameState.inventory
+                  : (uniqueInventoryIds
                       .map((itemId: string) => project.inventoryItems.find((i) => i.id === itemId))
                       .filter(Boolean) as InventoryItem[]);
 
@@ -2214,7 +2321,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     {itemsToDisplay.map((item) => {
                       const isSelected = selectedInventoryItemId === item.id;
                       const itemImg = item.imageFileData || item.imageUrl;
-                      const isObtained = gameState.inventory.includes(item.id);
+                      const quantity = gameState.inventory.filter((id: string) => id === item.id).length;
+                      const isObtained = quantity > 0;
                       const isNeeded = isItemNeededInScene(item, currentScene);
 
                       let slotBorderClass = `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`;
@@ -2237,11 +2345,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                             type="button"
                             onClick={() => handleSelectInventoryItem(item.id)}
                             className={`w-full flex items-center justify-center p-2 rounded-xl text-xs font-medium border transition-all cursor-pointer relative min-h-[44px] ${slotBorderClass}`}
-                            title={item.name}
+                            title={quantity > 1 ? `${item.name} (${quantity} unidades)` : item.name}
                           >
                             {/* Mobile view (< sm): SHOW ONLY TEXT */}
                             <span className="sm:hidden truncate text-xs font-semibold px-1 text-center">
                               {item.name}
+                              {quantity > 1 ? ` (x${quantity})` : ''}
                             </span>
 
                             {/* Desktop view (>= sm): SHOW ONLY MINIATURE THUMBNAIL IMAGE */}
@@ -2261,6 +2370,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                               {isSelected && (
                                 <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-slate-900 shadow animate-pulse z-10" />
                               )}
+
+                              {/* Number in bottom-right corner ONLY when quantity > 1 (never show 1) */}
+                              {quantity > 1 && (
+                                <span className="absolute bottom-0.5 right-0.5 bg-slate-950/95 border border-amber-400 text-amber-300 font-black font-mono text-[10px] min-w-[16px] h-4 px-1 rounded flex items-center justify-center shadow-lg leading-none z-10 select-none">
+                                  {quantity}
+                                </span>
+                              )}
                             </div>
 
                             {/* Status indicator badge in testing mode */}
@@ -2269,19 +2385,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                                 className={`absolute -top-1 -left-1 w-3 h-3 rounded-full border border-slate-950 shadow-sm z-20 ${
                                   isObtained ? 'bg-emerald-500' : isNeeded ? 'bg-blue-500' : 'bg-rose-500'
                                 }`}
-                                title={isObtained ? 'Obtenido' : isNeeded ? 'Necesario en esta escena' : 'No obtenido'}
+                                title={isObtained ? (quantity > 1 ? `Obtenido (${quantity})` : 'Obtenido') : isNeeded ? 'Necesario en esta escena' : 'No obtenido'}
                               />
                             )}
                           </button>
 
                           {/* Hover Tooltip showing item name and testing status on desktop */}
                           <div className="hidden sm:block opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 absolute -top-10 left-1/2 -translate-x-1/2 z-30 bg-slate-950/95 border border-amber-400/60 text-amber-200 text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap backdrop-blur-md">
-                            <span>{item.name}</span>
+                            <span>{item.name}{quantity > 1 ? ` (x${quantity})` : ''}</span>
                             {isSceneTesting && (
                               <span className={`ml-1.5 text-[10px] ${
                                 isObtained ? 'text-emerald-400' : isNeeded ? 'text-blue-400' : 'text-rose-400'
                               }`}>
-                                • {isObtained ? '🟢 Obtenido' : isNeeded ? '🔵 Necesario en escena' : '🔴 No obtenido'}
+                                • {isObtained ? (quantity > 1 ? `🟢 Obtenido (x${quantity})` : '🟢 Obtenido') : isNeeded ? '🔵 Necesario en escena' : '🔴 No obtenido'}
                               </span>
                             )}
                           </div>
@@ -2297,7 +2413,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               <div className={`mt-3 p-3 rounded-xl border text-xs ${themeConfig.actionBoxBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass} space-y-2`}>
                 <div className="flex items-start justify-between gap-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className={`font-bold text-sm ${themeConfig.accentClass}`}>{selectedItemObj.name}</p>
+                    <p className={`font-bold text-sm ${themeConfig.accentClass}`}>
+                      {selectedItemObj.name}
+                      {(() => {
+                        const qty = gameState.inventory.filter((id: string) => id === selectedItemObj.id).length;
+                        return qty > 1 ? ` (x${qty})` : '';
+                      })()}
+                    </p>
                     <p className={`text-[11px] leading-relaxed mt-0.5 ${themeConfig.textMutedClass}`}>{selectedItemObj.description}</p>
                   </div>
                   <button

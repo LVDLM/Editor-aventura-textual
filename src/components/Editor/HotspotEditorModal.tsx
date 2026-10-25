@@ -47,6 +47,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   
   // State change consequences (Conditions MET)
   const [addItemId, setAddItemId] = useState('');
+  const [addItemsMap, setAddItemsMap] = useState<Record<string, number>>({});
   const [removeItemId, setRemoveItemId] = useState('');
   const [flagToSet, setFlagToSet] = useState('');
   const [flagSetValue, setFlagSetValue] = useState<boolean>(true);
@@ -61,6 +62,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [failIsGameOver, setFailIsGameOver] = useState(false);
   const [failSoundEffect, setFailSoundEffect] = useState<SoundEffectType>('none');
   const [failAddItemId, setFailAddItemId] = useState('');
+  const [failAddItemsMap, setFailAddItemsMap] = useState<Record<string, number>>({});
   const [failRemoveItemId, setFailRemoveItemId] = useState('');
   const [failFlagToSet, setFailFlagToSet] = useState('');
   const [failFlagSetValue, setFailFlagSetValue] = useState<boolean>(true);
@@ -87,7 +89,17 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setCharacterId(action.characterId);
     
     // Success consequences
-    setAddItemId(action.stateChange?.addItemId || '');
+    if (action.stateChange?.addItems && Object.keys(action.stateChange.addItems).length > 0) {
+      setAddItemsMap(action.stateChange.addItems);
+      setAddItemId(Object.keys(action.stateChange.addItems)[0] || '');
+    } else if (action.stateChange?.addItemId) {
+      setAddItemsMap({ [action.stateChange.addItemId]: 1 });
+      setAddItemId(action.stateChange.addItemId);
+    } else {
+      setAddItemsMap({});
+      setAddItemId('');
+    }
+
     setRemoveItemId(action.stateChange?.removeItemId || '');
     if (action.stateChange?.setFlags) {
       const entries = Object.entries(action.stateChange.setFlags);
@@ -122,7 +134,18 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(action.failMessage || '')
     );
     setFailSoundEffect(action.failSoundEffect || 'none');
-    setFailAddItemId(action.failStateChange?.addItemId || '');
+
+    if (action.failStateChange?.addItems && Object.keys(action.failStateChange.addItems).length > 0) {
+      setFailAddItemsMap(action.failStateChange.addItems);
+      setFailAddItemId(Object.keys(action.failStateChange.addItems)[0] || '');
+    } else if (action.failStateChange?.addItemId) {
+      setFailAddItemsMap({ [action.failStateChange.addItemId]: 1 });
+      setFailAddItemId(action.failStateChange.addItemId);
+    } else {
+      setFailAddItemsMap({});
+      setFailAddItemId('');
+    }
+
     setFailRemoveItemId(action.failStateChange?.removeItemId || '');
     if (action.failStateChange?.setFlags) {
       const entries = Object.entries(action.failStateChange.setFlags);
@@ -160,7 +183,16 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     // Success state changes
     const stateChangeObj: any = {};
-    if (addItemId) stateChangeObj.addItemId = addItemId;
+    const cleanAddItems: Record<string, number> = {};
+    Object.entries(addItemsMap).forEach(([itemId, qty]) => {
+      const n = Math.floor(Number(qty) || 0);
+      if (n > 0) cleanAddItems[itemId] = n;
+    });
+    if (Object.keys(cleanAddItems).length > 0) {
+      stateChangeObj.addItems = cleanAddItems;
+      stateChangeObj.addItemId = Object.keys(cleanAddItems)[0];
+    }
+
     if (removeItemId) stateChangeObj.removeItemId = removeItemId;
     if (goToSceneId) stateChangeObj.goToSceneId = goToSceneId;
     if (appendStoryText.trim()) stateChangeObj.appendStoryText = appendStoryText.trim();
@@ -174,7 +206,16 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     // Fail state changes
     const failStateChangeObj: any = {};
-    if (failAddItemId) failStateChangeObj.addItemId = failAddItemId;
+    const cleanFailAddItems: Record<string, number> = {};
+    Object.entries(failAddItemsMap).forEach(([itemId, qty]) => {
+      const n = Math.floor(Number(qty) || 0);
+      if (n > 0) cleanFailAddItems[itemId] = n;
+    });
+    if (Object.keys(cleanFailAddItems).length > 0) {
+      failStateChangeObj.addItems = cleanFailAddItems;
+      failStateChangeObj.addItemId = Object.keys(cleanFailAddItems)[0];
+    }
+
     if (failRemoveItemId) failStateChangeObj.removeItemId = failRemoveItemId;
     if (failGoToSceneId) failStateChangeObj.goToSceneId = failGoToSceneId;
     if (failAppendStoryText.trim()) failStateChangeObj.appendStoryText = failAppendStoryText.trim();
@@ -284,6 +325,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setCharacterId(undefined);
 
     setAddItemId('');
+    setAddItemsMap({});
     setRemoveItemId('');
     setFlagToSet('');
     setFlagSetValue(true);
@@ -297,6 +339,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setFailIsGameOver(false);
     setFailSoundEffect('none');
     setFailAddItemId('');
+    setFailAddItemsMap({});
     setFailRemoveItemId('');
     setFailFlagToSet('');
     setFailFlagSetValue(true);
@@ -763,20 +806,79 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                       Efectos e Impactos en el Juego (Éxito):
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                      <div>
-                        <label className="block text-[10px] text-slate-400 mb-1">Entregar Objeto</label>
-                        <select
-                          value={addItemId}
-                          onChange={(e) => setAddItemId(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
-                        >
-                          <option value="">-- Ninguno --</option>
-                          {project.inventoryItems.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              + {item.name}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="col-span-1 sm:col-span-2 md:col-span-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] text-slate-400 font-semibold">Entregar Objetos</label>
+                          {Object.values(addItemsMap).some((q: number) => Number(q) > 0) && (
+                            <span className="text-[9px] text-emerald-400 font-bold font-mono bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                              {Object.values(addItemsMap).reduce((a: number, b: number) => a + Number(b), 0)} uds.
+                            </span>
+                          )}
+                        </div>
+                        {project.inventoryItems.length === 0 ? (
+                          <div className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-[11px] text-slate-500 italic">
+                            Sin objetos en el inventario
+                          </div>
+                        ) : (
+                          <div className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 max-h-32 overflow-y-auto space-y-1">
+                            {project.inventoryItems.map((item) => {
+                              const qty = addItemsMap[item.id] || 0;
+                              const isChecked = qty > 0;
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={`flex items-center justify-between gap-1.5 px-1.5 py-0.5 rounded text-xs transition-colors ${
+                                    isChecked
+                                      ? 'bg-emerald-950/60 text-emerald-200 border border-emerald-500/40'
+                                      : 'text-slate-300 hover:bg-slate-800/40'
+                                  }`}
+                                >
+                                  <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        const next = { ...addItemsMap };
+                                        if (e.target.checked) {
+                                          next[item.id] = 1;
+                                        } else {
+                                          delete next[item.id];
+                                        }
+                                        setAddItemsMap(next);
+                                        setAddItemId(Object.keys(next)[0] || '');
+                                      }}
+                                      className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                                    />
+                                    <span className="truncate text-[11px] font-medium" title={item.name}>
+                                      {item.name}
+                                    </span>
+                                  </label>
+
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="999"
+                                    value={qty > 0 ? qty : ''}
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      const next = { ...addItemsMap };
+                                      if (isNaN(val) || val <= 0) {
+                                        delete next[item.id];
+                                      } else {
+                                        next[item.id] = val;
+                                      }
+                                      setAddItemsMap(next);
+                                      setAddItemId(Object.keys(next)[0] || '');
+                                    }}
+                                    className="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[11px] text-center font-mono font-bold text-amber-300 focus:border-amber-400 outline-none shrink-0"
+                                    title={`Unidades de ${item.name} a entregar`}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -963,20 +1065,79 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                       Efectos e Impactos en el Juego al Fallar (Muerte / Cambio de escena / Banderas / Texto):
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                      <div>
-                        <label className="block text-[10px] text-slate-400 mb-1">Entregar Objeto al Fallar</label>
-                        <select
-                          value={failAddItemId}
-                          onChange={(e) => setFailAddItemId(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
-                        >
-                          <option value="">-- Ninguno --</option>
-                          {project.inventoryItems.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              + {item.name}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="col-span-1 sm:col-span-2 md:col-span-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] text-slate-400 font-semibold">Entregar al Fallar</label>
+                          {Object.values(failAddItemsMap).some((q: number) => Number(q) > 0) && (
+                            <span className="text-[9px] text-rose-400 font-bold font-mono bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-500/30">
+                              {Object.values(failAddItemsMap).reduce((a: number, b: number) => a + Number(b), 0)} uds.
+                            </span>
+                          )}
+                        </div>
+                        {project.inventoryItems.length === 0 ? (
+                          <div className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-[11px] text-slate-500 italic">
+                            Sin objetos en el inventario
+                          </div>
+                        ) : (
+                          <div className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 max-h-32 overflow-y-auto space-y-1">
+                            {project.inventoryItems.map((item) => {
+                              const qty = failAddItemsMap[item.id] || 0;
+                              const isChecked = qty > 0;
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={`flex items-center justify-between gap-1.5 px-1.5 py-0.5 rounded text-xs transition-colors ${
+                                    isChecked
+                                      ? 'bg-rose-950/60 text-rose-200 border border-rose-500/40'
+                                      : 'text-slate-300 hover:bg-slate-800/40'
+                                  }`}
+                                >
+                                  <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        const next = { ...failAddItemsMap };
+                                        if (e.target.checked) {
+                                          next[item.id] = 1;
+                                        } else {
+                                          delete next[item.id];
+                                        }
+                                        setFailAddItemsMap(next);
+                                        setFailAddItemId(Object.keys(next)[0] || '');
+                                      }}
+                                      className="rounded border-slate-700 bg-slate-950 text-rose-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                                    />
+                                    <span className="truncate text-[11px] font-medium" title={item.name}>
+                                      {item.name}
+                                    </span>
+                                  </label>
+
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="999"
+                                    value={qty > 0 ? qty : ''}
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      const next = { ...failAddItemsMap };
+                                      if (isNaN(val) || val <= 0) {
+                                        delete next[item.id];
+                                      } else {
+                                        next[item.id] = val;
+                                      }
+                                      setFailAddItemsMap(next);
+                                      setFailAddItemId(Object.keys(next)[0] || '');
+                                    }}
+                                    className="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[11px] text-center font-mono font-bold text-rose-300 focus:border-rose-400 outline-none shrink-0"
+                                    title={`Unidades de ${item.name} a entregar al fallar`}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -1203,8 +1364,25 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                               {act.failMessage && <p className="italic font-serif">"{act.failMessage}"</p>}
                               {act.failStateChange && (
                                 <div className="flex items-center gap-2 text-[10px] text-rose-300/80 pt-0.5 flex-wrap">
-                                  {act.failStateChange.addItemId && <span>+ Objeto añadido</span>}
-                                  {act.failStateChange.removeItemId && <span>- Objeto retirado</span>}
+                                  {(() => {
+                                    const itemsMap = act.failStateChange.addItems;
+                                    if (itemsMap && Object.keys(itemsMap).length > 0) {
+                                      const labels = Object.entries(itemsMap).map(([id, qty]) => {
+                                        const itemObj = project.inventoryItems.find((i) => i.id === id);
+                                        const name = itemObj?.name || id;
+                                        return qty > 1 ? `${qty}x ${name}` : name;
+                                      });
+                                      return <span>+ {labels.join(', ')}</span>;
+                                    }
+                                    if (act.failStateChange.addItemId) {
+                                      const itemObj = project.inventoryItems.find((i) => i.id === act.failStateChange.addItemId);
+                                      return <span>+ {itemObj?.name || 'Objeto añadido'}</span>;
+                                    }
+                                    return null;
+                                  })()}
+                                  {act.failStateChange.removeItemId && (
+                                    <span>- {project.inventoryItems.find((i) => i.id === act.failStateChange.removeItemId)?.name || 'Objeto retirado'}</span>
+                                  )}
                                   {act.failStateChange.setFlags && <span>🚩 Banderas cambiadas</span>}
                                   {act.failStateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
                                   {act.failStateChange.appendStoryText && <span>📝 Párrafo añadido</span>}
@@ -1215,8 +1393,25 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
                           {act.stateChange && (
                             <div className="flex items-center gap-2 text-[10px] text-amber-400/90 pt-1 flex-wrap">
-                              {act.stateChange.addItemId && <span>+ Objeto añadido</span>}
-                              {act.stateChange.removeItemId && <span>- Objeto retirado</span>}
+                              {(() => {
+                                const itemsMap = act.stateChange.addItems;
+                                if (itemsMap && Object.keys(itemsMap).length > 0) {
+                                  const labels = Object.entries(itemsMap).map(([id, qty]) => {
+                                    const itemObj = project.inventoryItems.find((i) => i.id === id);
+                                    const name = itemObj?.name || id;
+                                    return qty > 1 ? `${qty}x ${name}` : name;
+                                  });
+                                  return <span>+ {labels.join(', ')}</span>;
+                                }
+                                if (act.stateChange.addItemId) {
+                                  const itemObj = project.inventoryItems.find((i) => i.id === act.stateChange.addItemId);
+                                  return <span>+ {itemObj?.name || 'Objeto añadido'}</span>;
+                                }
+                                return null;
+                              })()}
+                              {act.stateChange.removeItemId && (
+                                <span>- {project.inventoryItems.find((i) => i.id === act.stateChange.removeItemId)?.name || 'Objeto retirado'}</span>
+                              )}
                               {act.stateChange.setFlags && <span>🚩 Banderas cambiadas</span>}
                               {act.stateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
                               {act.stateChange.appendStoryText && <span>📝 Párrafo añadido</span>}

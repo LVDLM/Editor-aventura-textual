@@ -213,6 +213,17 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
       border-color: var(--accent);
       color: var(--accent);
     }
+    .inv-qty-badge {
+      background: rgba(245, 158, 11, 0.2);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-weight: 800;
+      font-family: monospace;
+      font-size: 0.75rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
 
     .btn {
       background-color: #334155;
@@ -1034,12 +1045,28 @@ ${jsonProject}
           gameState.flags[k] = sc.setFlags[k];
         }
       }
-      if (sc.addItemId && gameState.inventory.indexOf(sc.addItemId) === -1) {
+      if (sc.addItems && Object.keys(sc.addItems).length > 0) {
+        for (var k in sc.addItems) {
+          var n = Math.floor(Number(sc.addItems[k]) || 0);
+          for (var c = 0; c < n; c++) gameState.inventory.push(k);
+        }
+      } else if (sc.addItemId) {
         gameState.inventory.push(sc.addItemId);
       }
-      if (sc.removeItemId) {
-        gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItemId; });
+
+      if (sc.removeItems && Object.keys(sc.removeItems).length > 0) {
+        for (var rk in sc.removeItems) {
+          var rn = Math.floor(Number(sc.removeItems[rk]) || 0);
+          for (var rc = 0; rc < rn; rc++) {
+            var ridx = gameState.inventory.indexOf(rk);
+            if (ridx !== -1) gameState.inventory.splice(ridx, 1);
+          }
+        }
+      } else if (sc.removeItemId) {
+        var idx = gameState.inventory.indexOf(sc.removeItemId);
+        if (idx !== -1) gameState.inventory.splice(idx, 1);
       }
+
       if (sc.goToSceneId) {
         gameState.currentSceneId = sc.goToSceneId;
         renderScene(sc.goToSceneId);
@@ -1076,13 +1103,23 @@ ${jsonProject}
         return;
       }
 
-      list.innerHTML = gameState.inventory.map(itemId => {
+      var uniqueItemIds = [];
+      for (var i = 0; i < gameState.inventory.length; i++) {
+        var id = gameState.inventory[i];
+        if (uniqueItemIds.indexOf(id) === -1) {
+          uniqueItemIds.push(id);
+        }
+      }
+
+      list.innerHTML = uniqueItemIds.map(itemId => {
         const item = PROJECT.inventoryItems.find(i => i.id === itemId);
         if (!item) return '';
+        const count = gameState.inventory.filter(id => id === itemId).length;
         const isSel = selectedInventoryItem === itemId ? 'selected' : '';
-        const isComboTarget = selectedInventoryItem && selectedInventoryItem !== itemId ? '<span style="font-size: 0.65rem; color: #fbbf24; background: rgba(245, 158, 11, 0.15); padding: 2px 5px; border-radius: 4px; float: right;">🧩 Combinar</span>' : '';
-        const useBadge = item.useEffectAction ? '<span style="font-size: 0.65rem; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 2px 5px; border-radius: 4px; float: right; margin-right: 4px;">✨ Usar</span>' : '';
-        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\\'' + itemId + '\\\')">📦 ' + escapeHTML(item.name) + ' ' + isComboTarget + useBadge + '</div>';
+        const qtyBadge = count > 1 ? '<span class="inv-qty-badge">x' + count + '</span>' : '';
+        const isComboTarget = selectedInventoryItem && selectedInventoryItem !== itemId ? '<span style="font-size: 0.65rem; color: #fbbf24; background: rgba(245, 158, 11, 0.15); padding: 2px 5px; border-radius: 4px; margin-left: auto;">🧩 Combinar</span>' : '';
+        const useBadge = item.useEffectAction ? '<span style="font-size: 0.65rem; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 2px 5px; border-radius: 4px; margin-left: 4px;">✨ Usar</span>' : '';
+        return '<div class="inv-item ' + isSel + '" onclick="selectInventoryItem(\\\'' + itemId + '\\\')"><span>📦 ' + escapeHTML(item.name) + ' ' + qtyBadge + '</span><span style="display: flex; align-items: center; gap: 4px;">' + isComboTarget + useBadge + '</span></div>';
       }).join('');
     }
 
@@ -1201,7 +1238,19 @@ ${jsonProject}
         if (rule.stateChange) {
           const sc = rule.stateChange;
           if (sc.setFlags) Object.assign(gameState.flags, sc.setFlags);
-          if (sc.addItemId && !gameState.inventory.includes(sc.addItemId)) {
+          if (sc.addItems && Object.keys(sc.addItems).length > 0) {
+            for (var ak in sc.addItems) {
+              var an = Math.floor(Number(sc.addItems[ak]) || 0);
+              for (var ac = 0; ac < an; ac++) gameState.inventory.push(ak);
+              const addedItem = PROJECT.inventoryItems.find(i => i.id === ak);
+              if (addedItem && !itemImgSrc) {
+                itemImgSrc = getImageSrc(addedItem);
+                if (itemImgSrc) {
+                  addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+                }
+              }
+            }
+          } else if (sc.addItemId) {
             gameState.inventory.push(sc.addItemId);
             const addedItem = PROJECT.inventoryItems.find(i => i.id === sc.addItemId);
             if (addedItem) {
@@ -1211,8 +1260,18 @@ ${jsonProject}
               }
             }
           }
-          if (sc.removeItemId) {
-            gameState.inventory = gameState.inventory.filter(i => i !== sc.removeItemId);
+
+          if (sc.removeItems && Object.keys(sc.removeItems).length > 0) {
+            for (var rk in sc.removeItems) {
+              var rn = Math.floor(Number(sc.removeItems[rk]) || 0);
+              for (var rc = 0; rc < rn; rc++) {
+                var ridx = gameState.inventory.indexOf(rk);
+                if (ridx !== -1) gameState.inventory.splice(ridx, 1);
+              }
+            }
+          } else if (sc.removeItemId) {
+            var rmidx = gameState.inventory.indexOf(sc.removeItemId);
+            if (rmidx !== -1) gameState.inventory.splice(rmidx, 1);
           }
           if (sc.appendStoryText) {
             if (!gameState.appendedTexts[gameState.currentSceneId]) {
@@ -1322,13 +1381,30 @@ ${jsonProject}
         if (failedRule && failedRule.failStateChange) {
           const fsc = failedRule.failStateChange;
           if (fsc.setFlags) Object.assign(gameState.flags, fsc.setFlags);
-          if (fsc.addItemId && !gameState.inventory.includes(fsc.addItemId)) {
+          if (fsc.addItems && Object.keys(fsc.addItems).length > 0) {
+            for (var fak in fsc.addItems) {
+              var fan = Math.floor(Number(fsc.addItems[fak]) || 0);
+              for (var fac = 0; fac < fan; fac++) gameState.inventory.push(fak);
+              const addedItem = PROJECT.inventoryItems.find(i => i.id === fak);
+              if (addedItem && !failImgSrc) failImgSrc = getImageSrc(addedItem);
+            }
+          } else if (fsc.addItemId) {
             gameState.inventory.push(fsc.addItemId);
             const addedItem = PROJECT.inventoryItems.find(i => i.id === fsc.addItemId);
             if (addedItem) failImgSrc = getImageSrc(addedItem);
           }
-          if (fsc.removeItemId) {
-            gameState.inventory = gameState.inventory.filter(i => i !== fsc.removeItemId);
+
+          if (fsc.removeItems && Object.keys(fsc.removeItems).length > 0) {
+            for (var frk in fsc.removeItems) {
+              var frn = Math.floor(Number(fsc.removeItems[frk]) || 0);
+              for (var frc = 0; frc < frn; frc++) {
+                var fridx = gameState.inventory.indexOf(frk);
+                if (fridx !== -1) gameState.inventory.splice(fridx, 1);
+              }
+            }
+          } else if (fsc.removeItemId) {
+            var frmidx = gameState.inventory.indexOf(fsc.removeItemId);
+            if (frmidx !== -1) gameState.inventory.splice(frmidx, 1);
           }
           if (fsc.appendStoryText) {
             if (!gameState.appendedTexts[gameState.currentSceneId]) {

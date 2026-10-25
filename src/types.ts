@@ -113,8 +113,10 @@ export const SOUND_EFFECT_OPTIONS: { id: SoundEffectType; label: string; categor
 export interface StateChange {
   setFlags?: Record<string, boolean>; // e.g., { habitacion_iluminada: true }
   addItemId?: string; // Add item to inventory
+  addItems?: Record<string, number>; // Add multiple items or multiple quantities: { [itemId]: quantity }
   removeItemId?: string; // Remove item from inventory
   removeItem2Id?: string; // Optional second item to remove from inventory (e.g. for item combinations)
+  removeItems?: Record<string, number>; // Optional multiple items / quantities to remove: { [itemId]: quantity }
   goToSceneId?: string; // Jump to another scene
   appendStoryText?: string; // Append extra text paragraph to current scene
   revealHotspotIds?: string[]; // Enable hidden hotspots
@@ -176,6 +178,7 @@ export interface DialogueOption {
   requiredItemId?: string; // Requires item in player's inventory (-item / requirement)
   consumeRequiredItem?: boolean; // If true, removes requiredItemId from player inventory (-item)
   giveItemId?: string; // Character gives item to player (+item)
+  giveItems?: Record<string, number>; // Character gives multiple items or quantities to player (+items)
   requiredFlags?: Record<string, boolean>;
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
