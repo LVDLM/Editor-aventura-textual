@@ -3,7 +3,7 @@ import { Hotspot, ActionRule, GameProject, VerbType, SoundEffectType, SOUND_EFFE
 import { ALL_VERBS } from '../../utils/verbs';
 import { playSound, getAllMergedSounds } from '../../utils/audio';
 import { DialogueEditor } from './DialogueEditor';
-import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare } from 'lucide-react';
+import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown } from 'lucide-react';
 
 interface HotspotEditorModalProps {
   hotspot: Hotspot;
@@ -69,6 +69,8 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [failSetFlagsMap, setFailSetFlagsMap] = useState<Record<string, boolean>>({});
   const [failGoToSceneId, setFailGoToSceneId] = useState('');
   const [failAppendStoryText, setFailAppendStoryText] = useState('');
+  const [isAddItemsDropdownOpen, setIsAddItemsDropdownOpen] = useState(false);
+  const [isFailAddItemsDropdownOpen, setIsFailAddItemsDropdownOpen] = useState(false);
 
   const [duplicateConflict, setDuplicateConflict] = useState<{
     newRule: ActionRule;
@@ -346,6 +348,8 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setFailSetFlagsMap({});
     setFailGoToSceneId('');
     setFailAppendStoryText('');
+    setIsAddItemsDropdownOpen(false);
+    setIsFailAddItemsDropdownOpen(false);
   };
 
   const toggleRequiredFlag = (flagKey: string) => {
@@ -806,78 +810,121 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                       Efectos e Impactos en el Juego (Éxito):
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                      <div className="col-span-1 sm:col-span-2 md:col-span-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-[10px] text-slate-400 font-semibold">Entregar Objetos</label>
-                          {Object.values(addItemsMap).some((q: number) => Number(q) > 0) && (
-                            <span className="text-[9px] text-emerald-400 font-bold font-mono bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                              {Object.values(addItemsMap).reduce((a: number, b: number) => a + Number(b), 0)} uds.
-                            </span>
-                          )}
-                        </div>
-                        {project.inventoryItems.length === 0 ? (
-                          <div className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-[11px] text-slate-500 italic">
-                            Sin objetos en el inventario
-                          </div>
-                        ) : (
-                          <div className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 max-h-32 overflow-y-auto space-y-1">
-                            {project.inventoryItems.map((item) => {
-                              const qty = addItemsMap[item.id] || 0;
-                              const isChecked = qty > 0;
-                              return (
-                                <div
-                                  key={item.id}
-                                  className={`flex items-center justify-between gap-1.5 px-1.5 py-0.5 rounded text-xs transition-colors ${
-                                    isChecked
-                                      ? 'bg-emerald-950/60 text-emerald-200 border border-emerald-500/40'
-                                      : 'text-slate-300 hover:bg-slate-800/40'
-                                  }`}
-                                >
-                                  <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer select-none">
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={(e) => {
-                                        const next = { ...addItemsMap };
-                                        if (e.target.checked) {
-                                          next[item.id] = 1;
-                                        } else {
-                                          delete next[item.id];
-                                        }
-                                        setAddItemsMap(next);
-                                        setAddItemId(Object.keys(next)[0] || '');
-                                      }}
-                                      className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
-                                    />
-                                    <span className="truncate text-[11px] font-medium" title={item.name}>
-                                      {item.name}
-                                    </span>
-                                  </label>
+                      <div className="relative">
+                        <label className="block text-[10px] text-slate-400 mb-1">Entregar Objeto(s)</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddItemsDropdownOpen((prev) => !prev);
+                            setIsFailAddItemsDropdownOpen(false);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 flex items-center justify-between gap-1 text-left cursor-pointer transition-colors"
+                        >
+                          <span className="truncate">
+                            {(() => {
+                              const entries = Object.entries(addItemsMap).filter(([_, q]) => Number(q) > 0);
+                              if (entries.length === 0) return <span className="text-slate-400">-- Ninguno --</span>;
+                              const labels = entries.map(([id, qty]) => {
+                                const item = project.inventoryItems.find((i) => i.id === id);
+                                const name = item?.name || id;
+                                return Number(qty) > 1 ? `${qty}x ${name}` : name;
+                              });
+                              return <span className="text-emerald-300 font-medium">+ {labels.join(', ')}</span>;
+                            })()}
+                          </span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isAddItemsDropdownOpen ? 'rotate-180 text-emerald-400' : ''}`} />
+                        </button>
 
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="999"
-                                    value={qty > 0 ? qty : ''}
-                                    placeholder="0"
-                                    onChange={(e) => {
-                                      const val = parseInt(e.target.value, 10);
-                                      const next = { ...addItemsMap };
-                                      if (isNaN(val) || val <= 0) {
-                                        delete next[item.id];
-                                      } else {
-                                        next[item.id] = val;
-                                      }
-                                      setAddItemsMap(next);
-                                      setAddItemId(Object.keys(next)[0] || '');
+                        {isAddItemsDropdownOpen && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-40"
+                              onClick={() => setIsAddItemsDropdownOpen(false)}
+                            />
+                            <div className="absolute left-0 top-full mt-1.5 w-72 z-50 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl p-2 max-h-56 overflow-y-auto space-y-1.5">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 px-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  Entregar Objetos
+                                </span>
+                                {Object.values(addItemsMap).some((q: number) => Number(q) > 0) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAddItemsMap({});
+                                      setAddItemId('');
                                     }}
-                                    className="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[11px] text-center font-mono font-bold text-amber-300 focus:border-amber-400 outline-none shrink-0"
-                                    title={`Unidades de ${item.name} a entregar`}
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
+                                    className="text-[10px] text-rose-400 hover:underline cursor-pointer font-medium"
+                                  >
+                                    Quitar todos
+                                  </button>
+                                )}
+                              </div>
+
+                              {project.inventoryItems.length === 0 ? (
+                                <p className="text-[11px] text-slate-500 italic p-2">Sin objetos creados en el juego.</p>
+                              ) : (
+                                project.inventoryItems.map((item) => {
+                                  const qty = addItemsMap[item.id] || 0;
+                                  const isChecked = qty > 0;
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className={`flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${
+                                        isChecked
+                                          ? 'bg-emerald-950/70 text-emerald-200 border border-emerald-500/40'
+                                          : 'text-slate-300 hover:bg-slate-900 border border-transparent'
+                                      }`}
+                                    >
+                                      <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer select-none">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            const next = { ...addItemsMap };
+                                            if (e.target.checked) {
+                                              next[item.id] = 1;
+                                            } else {
+                                              delete next[item.id];
+                                            }
+                                            setAddItemsMap(next);
+                                            setAddItemId(Object.keys(next)[0] || '');
+                                          }}
+                                          className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                                        />
+                                        <span className="truncate text-xs font-medium" title={item.name}>
+                                          {item.name}
+                                        </span>
+                                      </label>
+
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max="999"
+                                          value={qty > 0 ? qty : ''}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10);
+                                            const next = { ...addItemsMap };
+                                            if (isNaN(val) || val <= 0) {
+                                              delete next[item.id];
+                                            } else {
+                                              next[item.id] = val;
+                                            }
+                                            setAddItemsMap(next);
+                                            setAddItemId(Object.keys(next)[0] || '');
+                                          }}
+                                          className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-center font-mono font-bold text-amber-300 focus:border-amber-400 outline-none"
+                                          title={`Unidades de ${item.name} a entregar`}
+                                        />
+                                        <span className="text-[10px] text-slate-500 font-mono">uds</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
 
@@ -1065,78 +1112,121 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                       Efectos e Impactos en el Juego al Fallar (Muerte / Cambio de escena / Banderas / Texto):
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-                      <div className="col-span-1 sm:col-span-2 md:col-span-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-[10px] text-slate-400 font-semibold">Entregar al Fallar</label>
-                          {Object.values(failAddItemsMap).some((q: number) => Number(q) > 0) && (
-                            <span className="text-[9px] text-rose-400 font-bold font-mono bg-rose-950/60 px-1.5 py-0.2 rounded border border-rose-500/30">
-                              {Object.values(failAddItemsMap).reduce((a: number, b: number) => a + Number(b), 0)} uds.
-                            </span>
-                          )}
-                        </div>
-                        {project.inventoryItems.length === 0 ? (
-                          <div className="w-full bg-slate-900/60 border border-slate-800 rounded-lg p-2 text-[11px] text-slate-500 italic">
-                            Sin objetos en el inventario
-                          </div>
-                        ) : (
-                          <div className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 max-h-32 overflow-y-auto space-y-1">
-                            {project.inventoryItems.map((item) => {
-                              const qty = failAddItemsMap[item.id] || 0;
-                              const isChecked = qty > 0;
-                              return (
-                                <div
-                                  key={item.id}
-                                  className={`flex items-center justify-between gap-1.5 px-1.5 py-0.5 rounded text-xs transition-colors ${
-                                    isChecked
-                                      ? 'bg-rose-950/60 text-rose-200 border border-rose-500/40'
-                                      : 'text-slate-300 hover:bg-slate-800/40'
-                                  }`}
-                                >
-                                  <label className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer select-none">
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={(e) => {
-                                        const next = { ...failAddItemsMap };
-                                        if (e.target.checked) {
-                                          next[item.id] = 1;
-                                        } else {
-                                          delete next[item.id];
-                                        }
-                                        setFailAddItemsMap(next);
-                                        setFailAddItemId(Object.keys(next)[0] || '');
-                                      }}
-                                      className="rounded border-slate-700 bg-slate-950 text-rose-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
-                                    />
-                                    <span className="truncate text-[11px] font-medium" title={item.name}>
-                                      {item.name}
-                                    </span>
-                                  </label>
+                      <div className="relative">
+                        <label className="block text-[10px] text-slate-400 mb-1">Entregar al Fallar</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsFailAddItemsDropdownOpen((prev) => !prev);
+                            setIsAddItemsDropdownOpen(false);
+                          }}
+                          className="w-full bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 flex items-center justify-between gap-1 text-left cursor-pointer transition-colors"
+                        >
+                          <span className="truncate">
+                            {(() => {
+                              const entries = Object.entries(failAddItemsMap).filter(([_, q]) => Number(q) > 0);
+                              if (entries.length === 0) return <span className="text-slate-400">-- Ninguno --</span>;
+                              const labels = entries.map(([id, qty]) => {
+                                const item = project.inventoryItems.find((i) => i.id === id);
+                                const name = item?.name || id;
+                                return Number(qty) > 1 ? `${qty}x ${name}` : name;
+                              });
+                              return <span className="text-rose-300 font-medium">+ {labels.join(', ')}</span>;
+                            })()}
+                          </span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isFailAddItemsDropdownOpen ? 'rotate-180 text-rose-400' : ''}`} />
+                        </button>
 
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max="999"
-                                    value={qty > 0 ? qty : ''}
-                                    placeholder="0"
-                                    onChange={(e) => {
-                                      const val = parseInt(e.target.value, 10);
-                                      const next = { ...failAddItemsMap };
-                                      if (isNaN(val) || val <= 0) {
-                                        delete next[item.id];
-                                      } else {
-                                        next[item.id] = val;
-                                      }
-                                      setFailAddItemsMap(next);
-                                      setFailAddItemId(Object.keys(next)[0] || '');
+                        {isFailAddItemsDropdownOpen && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-40"
+                              onClick={() => setIsFailAddItemsDropdownOpen(false)}
+                            />
+                            <div className="absolute left-0 top-full mt-1.5 w-72 z-50 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl p-2 max-h-56 overflow-y-auto space-y-1.5">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 px-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                  Entregar Objetos (Fallo)
+                                </span>
+                                {Object.values(failAddItemsMap).some((q: number) => Number(q) > 0) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFailAddItemsMap({});
+                                      setFailAddItemId('');
                                     }}
-                                    className="w-12 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[11px] text-center font-mono font-bold text-rose-300 focus:border-rose-400 outline-none shrink-0"
-                                    title={`Unidades de ${item.name} a entregar al fallar`}
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
+                                    className="text-[10px] text-rose-400 hover:underline cursor-pointer font-medium"
+                                  >
+                                    Quitar todos
+                                  </button>
+                                )}
+                              </div>
+
+                              {project.inventoryItems.length === 0 ? (
+                                <p className="text-[11px] text-slate-500 italic p-2">Sin objetos creados en el juego.</p>
+                              ) : (
+                                project.inventoryItems.map((item) => {
+                                  const qty = failAddItemsMap[item.id] || 0;
+                                  const isChecked = qty > 0;
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className={`flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${
+                                        isChecked
+                                          ? 'bg-rose-950/70 text-rose-200 border border-rose-500/40'
+                                          : 'text-slate-300 hover:bg-slate-900 border border-transparent'
+                                      }`}
+                                    >
+                                      <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer select-none">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            const next = { ...failAddItemsMap };
+                                            if (e.target.checked) {
+                                              next[item.id] = 1;
+                                            } else {
+                                              delete next[item.id];
+                                            }
+                                            setFailAddItemsMap(next);
+                                            setFailAddItemId(Object.keys(next)[0] || '');
+                                          }}
+                                          className="rounded border-slate-700 bg-slate-900 text-rose-500 focus:ring-0 cursor-pointer w-3.5 h-3.5"
+                                        />
+                                        <span className="truncate text-xs font-medium" title={item.name}>
+                                          {item.name}
+                                        </span>
+                                      </label>
+
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max="999"
+                                          value={qty > 0 ? qty : ''}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = parseInt(e.target.value, 10);
+                                            const next = { ...failAddItemsMap };
+                                            if (isNaN(val) || val <= 0) {
+                                              delete next[item.id];
+                                            } else {
+                                              next[item.id] = val;
+                                            }
+                                            setFailAddItemsMap(next);
+                                            setFailAddItemId(Object.keys(next)[0] || '');
+                                          }}
+                                          className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-center font-mono font-bold text-rose-300 focus:border-rose-400 outline-none"
+                                          title={`Unidades de ${item.name} a entregar al fallar`}
+                                        />
+                                        <span className="text-[10px] text-slate-500 font-mono">uds</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
 
