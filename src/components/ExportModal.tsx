@@ -6,6 +6,7 @@ import { Download, Upload, X, Archive, Cloud } from 'lucide-react';
 
 interface ExportModalProps {
   project: GameProject;
+  currentCloudDocId?: string | null;
   onImportProject: (project: GameProject) => void;
   onClose: () => void;
   currentUser?: UserProfile | null;
@@ -15,6 +16,7 @@ interface ExportModalProps {
 
 export const ExportModal: React.FC<ExportModalProps> = ({
   project,
+  currentCloudDocId,
   onImportProject,
   onClose,
   currentUser,
@@ -35,8 +37,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setIsSavingCloud(true);
     setCloudMessage(null);
     try {
+      const targetDocId = currentCloudDocId || project.id || null;
       const savedDocId = await saveProjectToCloud(
-        project.id,
+        targetDocId,
         project,
         {
           uid: currentUser.uid,

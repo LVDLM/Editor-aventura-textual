@@ -539,12 +539,14 @@ export async function saveProjectToCloud(
     console.warn('Checking project doc existence (may be a new project or draft):', err);
   }
 
-  // If the target doc is the default sample game ('el_misterio_de_la_habitacion')
-  // or exists but belongs to a different author (and current user isn't admin),
-  // assign a fresh project ID so the author saves their own copy safely.
+  // If the target doc is the default sample game ('el_misterio_de_la_habitacion' or 'sample_misterio_habitacion')
+  // and caller is NOT an admin/owner, or if it belongs to another author,
+  // assign a fresh project ID so the caller gets their own copy safely.
   const isAdminUser = author.email === 'lavozdelosmuertos@gmail.com' || (author as any).role === 'admin';
+  const isTargetDefaultDemo = idToUse === 'el_misterio_de_la_habitacion' || idToUse === 'sample_misterio_habitacion';
+
   if (
-    idToUse === 'el_misterio_de_la_habitacion' ||
+    (!isAdminUser && isTargetDefaultDemo) ||
     (existingData && existingData.authorId && existingData.authorId !== author.uid && !isAdminUser)
   ) {
     idToUse = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;

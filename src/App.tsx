@@ -339,9 +339,9 @@ export default function App() {
     }
   };
 
-  const handleImportProject = (imported: GameProject) => {
+  const handleImportProject = (imported: GameProject, docId?: string | null) => {
     setProject(imported);
-    setCurrentCloudDocId(null);
+    setCurrentCloudDocId(docId !== undefined ? docId : (imported.id || null));
     resetGameStateForProject(imported);
   };
 
@@ -447,6 +447,7 @@ export default function App() {
           <ProjectWorkspace
             currentUser={currentUser}
             activeProject={project}
+            currentCloudDocId={currentCloudDocId}
             onSelectProject={(selectedProj, docId) => {
               const sanitized = sanitizeProjectForPlay(selectedProj);
               setProject(sanitized);
@@ -537,6 +538,7 @@ export default function App() {
       {showExport && (
         <ExportModal
           project={project}
+          currentCloudDocId={currentCloudDocId}
           onImportProject={handleImportProject}
           onClose={() => setShowExport(false)}
           currentUser={currentUser}

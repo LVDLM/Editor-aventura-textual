@@ -8,6 +8,7 @@ import { EditStoryModal } from './EditStoryModal';
 interface ProjectWorkspaceProps {
   currentUser: UserProfile | null;
   activeProject: GameProject;
+  currentCloudDocId?: string | null;
   onSelectProject: (proj: GameProject, cloudDocId: string | null) => void;
   onOpenEditor: () => void;
   onPlayProject: (proj: GameProject) => void;
@@ -19,6 +20,7 @@ interface ProjectWorkspaceProps {
 export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   currentUser,
   activeProject,
+  currentCloudDocId,
   onSelectProject,
   onOpenEditor,
   onPlayProject,
@@ -124,8 +126,9 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
     setSavingCloudId('active');
     setMessage(null);
     try {
+      const targetDocId = currentCloudDocId || activeProject.id;
       const docId = await saveProjectToCloud(
-        activeProject.id,
+        targetDocId,
         activeProject,
         {
           uid: currentUser.uid,
@@ -393,7 +396,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredProjects.map((doc) => {
-            const isCurrentlyLoaded = activeProject.id === doc.projectData.id;
+            const isCurrentlyLoaded = (currentCloudDocId && currentCloudDocId === doc.id) || activeProject.id === doc.projectData.id;
             return (
               <div
                 key={doc.id}
