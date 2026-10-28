@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { GameProject, UserProfile } from '../types';
+import React, { useState, useRef } from 'react';
+import { GameProject, UserProfile, CloudProjectDoc } from '../types';
 import { exportProjectAsZip, projectHasImages } from '../utils/zipExporter';
-import { saveProjectToCloud } from '../lib/firebase';
+import { saveProjectToCloud, getProjectByIdFromCloud, getUserProjects } from '../lib/firebase';
 import { Download, Upload, X, Archive, Cloud } from 'lucide-react';
+import { ImportJSONModal, ImportPendingData } from './Portal/ImportJSONModal';
 
 interface ExportModalProps {
   project: GameProject;
   currentCloudDocId?: string | null;
-  onImportProject: (project: GameProject) => void;
+  onImportProject: (project: GameProject, docId?: string | null) => void;
   onClose: () => void;
   currentUser?: UserProfile | null;
   onOpenAuth?: () => void;
@@ -27,6 +28,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [isExportingZip, setIsExportingZip] = useState(false);
   const [isSavingCloud, setIsSavingCloud] = useState(false);
   const [cloudMessage, setCloudMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pendingImport, setPendingImport] = useState<ImportPendingData | null>(null);
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const hasImages = projectHasImages(project);
 
   const handleSaveToCloud = async () => {
@@ -98,22 +102,118 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsReadingFile(true);
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const parsed = JSON.parse(evt.target?.result as string) as GameProject;
-        if (parsed.scenes && parsed.initialSceneId) {
-          onImportProject(parsed);
-          alert('¡Proyecto cargado correctamente en el editor!');
-          onClose();
+        if (parsed.scenes && (parsed.initialSceneId || parsed.title)) {
+          let matchedDoc: CloudProjectDoc | null = null;
+          if (currentUser) {
+            const targetCheckId = currentCloudDocId || project.id || parsed.id;
+            if (targetCheckId) {
+              matchedDoc = await getProjectByIdFromCloud(targetCheckId);
+            }
+            if (!matchedDoc && parsed.id && parsed.id !== targetCheckId) {
+              matchedDoc = await getProjectByIdFromCloud(parsed.id);
+            }
+            if (!matchedDoc) {
+              try {
+                const list = await getUserProjects(currentUser.uid, currentUser.email, currentUser.role === 'admin');
+                matchedDoc = list.find(
+                  (p) =>
+                    p.id === parsed.id ||
+                    p.projectData?.id === parsed.id ||
+                    (p.title && parsed.title && p.title.trim().toLowerCase() === parsed.title.trim().toLowerCase())
+                ) || null;
+              } catch (err) {
+                console.warn('Could not query user projects for import:', err);
+              }
+            }
+          }
+
+          setPendingImport({
+            fileProject: parsed,
+            fileName: file.name,
+            fileLastModified: file.lastModified,
+            matchedCloudDoc: matchedDoc,
+            editorProject: project,
+          });
         } else {
-          alert('El archivo no tiene una estructura de proyecto válida.');
+          alert('El archivo no tiene una estructura de proyecto válida (falta la lista de escenas).');
         }
       } catch (err) {
-        alert('Error al leer el archivo JSON.');
+        console.error(err);
+        alert('Error al leer el archivo JSON. Asegúrate de que tenga un formato correcto.');
+      } finally {
+        setIsReadingFile(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleOverwriteCloud = async (targetDocId: string, importedProject: GameProject) => {
+    if (!currentUser) return;
+    setIsSavingCloud(true);
+    try {
+      const savedDocId = await saveProjectToCloud(
+        targetDocId,
+        importedProject,
+        {
+          uid: currentUser.uid,
+          displayName: currentUser.displayName,
+          email: currentUser.email,
+        },
+        'preserve'
+      );
+      onImportProject(importedProject, savedDocId);
+      setPendingImport(null);
+      onClose();
+      alert(`¡Proyecto "${importedProject.title || 'Historia'}" cargado en el editor y borrador actualizado en la nube!`);
+    } catch (err) {
+      console.error(err);
+      alert('Error al actualizar el proyecto en la nube.');
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
+
+  const handleSaveAsNew = async (importedProject: GameProject) => {
+    if (!currentUser) return;
+    setIsSavingCloud(true);
+    try {
+      const newId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const copy = { ...importedProject, id: newId };
+      const savedDocId = await saveProjectToCloud(
+        newId,
+        copy,
+        {
+          uid: currentUser.uid,
+          displayName: currentUser.displayName,
+          email: currentUser.email,
+        },
+        'draft'
+      );
+      onImportProject(copy, savedDocId);
+      setPendingImport(null);
+      onClose();
+      alert(`¡"${copy.title || 'Historia'}" guardada como nueva historia independiente en la nube y cargada en el editor!`);
+    } catch (err) {
+      console.error(err);
+      alert('Error al guardar la nueva historia en la nube.');
+    } finally {
+      setIsSavingCloud(false);
+    }
+  };
+
+  const handleOpenLocalOnly = (importedProject: GameProject, matchedDocId: string | null) => {
+    onImportProject(importedProject, matchedDocId);
+    setPendingImport(null);
+    onClose();
+    alert(`¡Proyecto "${importedProject.title || 'Historia'}" cargado en el editor local!`);
   };
 
   return (
@@ -312,11 +412,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   : 'bg-[#3B3026] hover:bg-[#4A3D30] text-[#F4EFE3] border-[#42362B]'
               }`}>
                 <Upload className={`w-4 h-4 ${isClean ? 'text-[#3B6D11]' : 'text-[#C9A24B]'}`} />
-                <span>Abrir Archivo JSON</span>
+                <span>{isReadingFile ? 'Analizando archivo...' : 'Abrir Archivo JSON'}</span>
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept=".json"
                   onChange={handleImportJSON}
+                  disabled={isReadingFile}
                   className="hidden"
                 />
               </label>
@@ -362,6 +464,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* JSON Import Comparison & Confirmation Modal */}
+      <ImportJSONModal
+        data={pendingImport}
+        isOpen={!!pendingImport}
+        onClose={() => setPendingImport(null)}
+        onOverwriteCloud={handleOverwriteCloud}
+        onSaveAsNew={handleSaveAsNew}
+        onOpenLocalOnly={handleOpenLocalOnly}
+        webAspect={webAspect}
+      />
     </div>
   );
 };

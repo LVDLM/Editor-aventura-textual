@@ -4,6 +4,7 @@ import { getUserProjects, saveProjectToCloud, updateProjectStatusInCloud, delete
 import { exportProjectAsZip } from '../../utils/zipExporter';
 import { Plus, Edit3, Play, CloudUpload, Send, Trash2, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen, Upload, FileJson } from 'lucide-react';
 import { EditStoryModal } from './EditStoryModal';
+import { ImportJSONModal, ImportPendingData } from './ImportJSONModal';
 
 interface ProjectWorkspaceProps {
   currentUser: UserProfile | null;
@@ -35,6 +36,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
   const [savingCloudId, setSavingCloudId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [editTargetDoc, setEditTargetDoc] = useState<CloudProjectDoc | null>(null);
+  const [pendingImport, setPendingImport] = useState<ImportPendingData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProjects = async () => {
@@ -58,37 +60,28 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
       try {
         const parsed = JSON.parse(evt.target?.result as string) as GameProject;
         if (parsed.scenes && (parsed.initialSceneId || parsed.title)) {
-          onSelectProject(parsed, null);
-          
           if (currentUser) {
-            try {
-              const savedDocId = await saveProjectToCloud(
-                parsed.id || `proj_${Date.now()}`,
-                parsed,
-                {
-                  uid: currentUser.uid,
-                  displayName: currentUser.displayName,
-                  email: currentUser.email
-                },
-                'draft'
-              );
-              onSelectProject(parsed, savedDocId);
-              setMessage({
-                type: 'success',
-                text: `¡Proyecto "${parsed.title || 'Importado'}" importado desde el archivo .JSON y guardado en tu nube!`
-              });
-              await fetchProjects();
-            } catch (cloudErr) {
-              console.error(cloudErr);
-              setMessage({
-                type: 'success',
-                text: `¡Proyecto "${parsed.title || 'Importado'}" importado con éxito al editor local!`
-              });
-            }
+            // Find existing matching story in cloud (by exact doc ID, projectData ID, or matching title)
+            const match = cloudProjects.find(
+              (p) =>
+                p.id === parsed.id ||
+                p.projectData?.id === parsed.id ||
+                (p.title && parsed.title && p.title.trim().toLowerCase() === parsed.title.trim().toLowerCase())
+            );
+
+            setPendingImport({
+              fileProject: parsed,
+              fileName: file.name,
+              fileLastModified: file.lastModified,
+              matchedCloudDoc: match || null,
+            });
           } else {
+            // Not logged in: open directly in editor
+            onSelectProject(parsed, null);
+            onOpenEditor();
             setMessage({
               type: 'success',
-              text: `¡Proyecto "${parsed.title || 'Importado'}" importado con éxito!`
+              text: `¡Proyecto "${parsed.title || 'Importado'}" cargado con éxito en el editor local!`
             });
           }
         } else {
@@ -110,6 +103,84 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleOverwriteCloud = async (targetDocId: string, project: GameProject) => {
+    if (!currentUser) return;
+    setSavingCloudId('active');
+    setMessage(null);
+    try {
+      const savedDocId = await saveProjectToCloud(
+        targetDocId,
+        project,
+        {
+          uid: currentUser.uid,
+          displayName: currentUser.displayName,
+          email: currentUser.email
+        },
+        'preserve' // Preserves published snapshot so readers on live web are unaffected
+      );
+      onSelectProject(project, savedDocId);
+      setPendingImport(null);
+      setMessage({
+        type: 'success',
+        text: `¡Borrador de "${project.title || 'Historia'}" sobrescrito con éxito en la nube con el archivo local!`
+      });
+      await fetchProjects();
+    } catch (err) {
+      console.error(err);
+      setMessage({
+        type: 'error',
+        text: 'Error al sobrescribir el proyecto en la nube.'
+      });
+    } finally {
+      setSavingCloudId(null);
+    }
+  };
+
+  const handleSaveAsNew = async (project: GameProject) => {
+    if (!currentUser) return;
+    setSavingCloudId('active');
+    setMessage(null);
+    try {
+      const newId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const copy: GameProject = { ...project, id: newId };
+      const savedDocId = await saveProjectToCloud(
+        newId,
+        copy,
+        {
+          uid: currentUser.uid,
+          displayName: currentUser.displayName,
+          email: currentUser.email
+        },
+        'draft'
+      );
+      onSelectProject(copy, savedDocId);
+      setPendingImport(null);
+      setMessage({
+        type: 'success',
+        text: `¡"${copy.title || 'Historia'}" guardada como nueva historia independiente en tu nube!`
+      });
+      await fetchProjects();
+    } catch (err) {
+      console.error(err);
+      setMessage({
+        type: 'error',
+        text: 'Error al guardar la nueva historia en la nube.'
+      });
+    } finally {
+      setSavingCloudId(null);
+    }
+  };
+
+  const handleOpenLocalOnly = (project: GameProject, matchedDocId: string | null) => {
+    onSelectProject(project, matchedDocId);
+    setPendingImport(null);
+    onOpenEditor();
+    setMessage({
+      type: 'success',
+      text: `¡Proyecto cargado en el editor local sin modificar la nube!`
+    });
   };
 
   useEffect(() => {
@@ -579,6 +650,17 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
         isOpen={!!editTargetDoc}
         onClose={() => setEditTargetDoc(null)}
         onConfirm={handleConfirmEditMode}
+        webAspect={webAspect}
+      />
+
+      {/* JSON Import Comparison & Overwrite Confirmation Modal */}
+      <ImportJSONModal
+        data={pendingImport}
+        isOpen={!!pendingImport}
+        onClose={() => setPendingImport(null)}
+        onOverwriteCloud={handleOverwriteCloud}
+        onSaveAsNew={handleSaveAsNew}
+        onOpenLocalOnly={handleOpenLocalOnly}
         webAspect={webAspect}
       />
     </div>
