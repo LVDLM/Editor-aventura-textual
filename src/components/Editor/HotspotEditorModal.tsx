@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Hotspot, ActionRule, GameProject, VerbType, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
-import { ALL_VERBS } from '../../utils/verbs';
+import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
 import { playSound, getAllMergedSounds } from '../../utils/audio';
 import { DialogueEditor } from './DialogueEditor';
 import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown } from 'lucide-react';
@@ -20,6 +20,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   onClose,
   onAddGlobalFlag,
 }) => {
+  const projectVerbs = getProjectVerbs(project);
   const [currentHotspot, setCurrentHotspot] = useState<Hotspot>({ ...hotspot });
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
 
@@ -36,7 +37,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   };
 
   // Action form state
-  const [verb, setVerb] = useState<VerbType>('mirar');
+  const [verb, setVerb] = useState<VerbType>(() => projectVerbs[0]?.id || 'mirar');
   const [responseMessage, setResponseMessage] = useState('');
   const [requiredItemId, setRequiredItemId] = useState('');
   const [requiredFlagsMap, setRequiredFlagsMap] = useState<Record<string, boolean>>({});
@@ -283,7 +284,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     );
 
     if (existingRule && !forceMode) {
-      const verbObj = ALL_VERBS.find((v) => v.id === verb);
+      const verbObj = projectVerbs.find((v) => v.id === verb) || ALL_VERBS.find((v) => v.id === verb);
       setDuplicateConflict({
         newRule,
         existingRule,
@@ -575,7 +576,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                   onChange={(e) => setVerb(e.target.value as VerbType)}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:ring-1 focus:ring-amber-500 font-semibold"
                 >
-                  {ALL_VERBS.map((v) => (
+                  {projectVerbs.map((v) => (
                     <option key={v.id} value={v.id}>
                       {v.label}
                     </option>
@@ -1383,7 +1384,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                   return orderedActions.map((act) => {
                     const sameVerbActions = grouped[act.verb] || [];
                     const verbIndex = sameVerbActions.findIndex((a) => a.id === act.id);
-                    const verbObj = ALL_VERBS.find((v) => v.id === act.verb);
+                    const verbObj = projectVerbs.find((v) => v.id === act.verb) || ALL_VERBS.find((v) => v.id === act.verb);
                     const displayVerbName = verbObj?.label || act.verb;
 
                     const reqFlagsList = act.requiredFlags ? Object.keys(act.requiredFlags) : [];

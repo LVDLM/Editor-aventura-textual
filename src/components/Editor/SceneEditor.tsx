@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
-import { ALL_VERBS } from '../../utils/verbs';
+import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
 import { playSound } from '../../utils/audio';
 import { isWordMatchInText, isWordChar } from '../../utils/textUtils';
 import { HotspotEditorModal } from './HotspotEditorModal';
@@ -1999,7 +1999,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                             className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white outline-none"
                           >
                             <option value="">Cualquier verbo</option>
-                            {ALL_VERBS.map((v) => (
+                            {getProjectVerbs(project).map((v) => (
                               <option key={v.id} value={v.id}>
                                 {v.label}
                               </option>

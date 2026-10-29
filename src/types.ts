@@ -2,7 +2,8 @@
  * Types for the Point & Click Text Adventure Engine (Motor de Aventuras en Texto)
  */
 
-export type VerbType = 'mirar' | 'usar' | 'abrir' | 'coger' | 'hablar' | 'empujar' | 'ir_a';
+export type StandardVerbType = 'mirar' | 'usar' | 'abrir' | 'coger' | 'hablar' | 'empujar' | 'ir_a';
+export type VerbType = StandardVerbType | (string & {});
 
 export interface VerbDefinition {
   id: VerbType;
@@ -291,6 +292,7 @@ export interface GameProject {
   gameCompleteSubtitle?: string; // Custom subtitle for end message banner (e.g., "Has completado felizmente la historia.")
 
   defaultResponses: Record<VerbType, string>;
+  customVerbs?: VerbDefinition[]; // Custom action verbs defined for this specific game
   globalFlags: Record<string, boolean>; // Initial default flags
   inventoryItems: InventoryItem[];
   characters?: GameCharacter[];

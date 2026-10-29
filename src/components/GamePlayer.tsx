@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter, Scene } from '../types';
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
-import { ALL_VERBS } from '../utils/verbs';
+import { ALL_VERBS, getProjectVerbs, renderVerbIcon } from '../utils/verbs';
 import { playSound } from '../utils/audio';
 import {
   Eye,
@@ -186,6 +186,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   toggleSound,
   isSceneTesting = false,
 }) => {
+  const projectVerbs = getProjectVerbs(project);
   const [activeVerb, setActiveVerb] = useState<VerbType | null>(null);
   const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null);
   const [showSaveNotification, setShowSaveNotification] = useState(false);
@@ -720,7 +721,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       return;
     }
 
-    const verbObj = ALL_VERBS.find((v) => v.id === verbToUse);
+    const verbObj = projectVerbs.find((v) => v.id === verbToUse) || ALL_VERBS.find((v) => v.id === verbToUse);
     const verbIconName = verbObj?.iconName || 'Eye';
 
     const selectedItemObj = selectedInventoryItemId
@@ -1701,16 +1702,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   };
 
   const getVerbIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Eye': return <Eye className="w-5 h-5" />;
-      case 'Zap': return <Zap className="w-5 h-5" />;
-      case 'DoorOpen': return <DoorOpen className="w-5 h-5" />;
-      case 'Hand': return <Hand className="w-5 h-5" />;
-      case 'MessageSquare': return <MessageSquare className="w-5 h-5" />;
-      case 'Move': return <Move className="w-5 h-5" />;
-      case 'Footprints': return <Footprints className="w-5 h-5" />;
-      default: return <Eye className="w-5 h-5" />;
-    }
+    return renderVerbIcon(iconName, 'w-5 h-5');
   };
 
   // Selected item object
@@ -1908,7 +1900,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 : selectedItemObj
                 ? `Usar ${selectedItemObj.name} con`
                 : activeVerb
-                ? ALL_VERBS.find((v) => v.id === activeVerb)?.label.toUpperCase() || activeVerb.toUpperCase()
+                ? (projectVerbs.find((v) => v.id === activeVerb)?.label.toUpperCase() || ALL_VERBS.find((v) => v.id === activeVerb)?.label.toUpperCase() || activeVerb.toUpperCase())
                 : 'SELECCIONAR ACCIÓN...'}
             </span>
             {!activeVerb && !selectedItemObj && (
@@ -2252,7 +2244,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {ALL_VERBS.map((v) => {
+              {projectVerbs.map((v) => {
                 const isActive = activeVerb === v.id;
                 return (
                   <button
@@ -2502,7 +2494,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
-              {ALL_VERBS.map((v) => {
+              {projectVerbs.map((v) => {
                 const hs = currentScene?.hotspots.find((h) => h.id === contextMenu.hotspotId);
                 return (
                   <button

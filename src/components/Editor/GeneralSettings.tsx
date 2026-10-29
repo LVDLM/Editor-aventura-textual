@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
-import { GameProject, EngineTheme, VerbType, UserProfile, GENRE_TAGS } from '../../types';
-import { ALL_VERBS } from '../../utils/verbs';
+import React, { useEffect, useState } from 'react';
+import { GameProject, EngineTheme, VerbType, UserProfile, GENRE_TAGS, VerbDefinition } from '../../types';
+import { ALL_VERBS, getProjectVerbs, AVAILABLE_VERB_ICONS, renderVerbIcon } from '../../utils/verbs';
+import { Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, Sparkles, Check, X, ShieldAlert, Edit2 } from 'lucide-react';
 
 interface GeneralSettingsProps {
   project: GameProject;
@@ -16,6 +17,123 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   webAspect = 'clean',
 }) => {
   const isClean = webAspect === 'clean';
+
+  // State for adding custom verbs
+  const [showAddVerbModal, setShowAddVerbModal] = useState(false);
+  const [newVerbId, setNewVerbId] = useState('');
+  const [newVerbLabel, setNewVerbLabel] = useState('');
+  const [newVerbIcon, setNewVerbIcon] = useState('Swords');
+  const [newVerbFallback, setNewVerbFallback] = useState('');
+  const [errorAddVerb, setErrorAddVerb] = useState<string | null>(null);
+
+  const activeVerbs = getProjectVerbs(project);
+
+  const handleUpdateVerb = (index: number, updates: Partial<VerbDefinition>) => {
+    const list = [...activeVerbs];
+    list[index] = { ...list[index], ...updates };
+    updateProject((prev) => ({
+      ...prev,
+      customVerbs: list,
+    }));
+  };
+
+  const handleUpdateFallback = (verbId: string, text: string) => {
+    updateProject((prev) => ({
+      ...prev,
+      defaultResponses: {
+        ...prev.defaultResponses,
+        [verbId]: text,
+      },
+    }));
+  };
+
+  const handleMoveVerb = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= activeVerbs.length) return;
+    const list = [...activeVerbs];
+    const item = list[index];
+    list[index] = list[targetIndex];
+    list[targetIndex] = item;
+    updateProject((prev) => ({
+      ...prev,
+      customVerbs: list,
+    }));
+  };
+
+  const handleRemoveVerb = (index: number) => {
+    if (activeVerbs.length <= 2) {
+      alert('Debes mantener al menos 2 verbos de acción en el juego.');
+      return;
+    }
+    const verbToRemove = activeVerbs[index];
+    if (confirm(`¿Estás seguro de que deseas eliminar el verbo "${verbToRemove.label}"? Las acciones que usen este verbo podrían requerir reasignación.`)) {
+      const list = activeVerbs.filter((_, i) => i !== index);
+      updateProject((prev) => ({
+        ...prev,
+        customVerbs: list,
+      }));
+    }
+  };
+
+  const handleAddNewVerb = () => {
+    const cleanId = newVerbId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const cleanLabel = newVerbLabel.trim();
+    if (!cleanId) {
+      setErrorAddVerb('Por favor, introduce un identificador único (ej: luchar, hechizar, disparar).');
+      return;
+    }
+    if (!cleanLabel) {
+      setErrorAddVerb('Por favor, introduce la etiqueta visible para el botón (ej: Luchar con).');
+      return;
+    }
+    if (activeVerbs.some((v) => v.id === cleanId)) {
+      setErrorAddVerb(`Ya existe un verbo con el identificador "${cleanId}". Elige otro ID.`);
+      return;
+    }
+
+    const newDef: VerbDefinition = {
+      id: cleanId,
+      label: cleanLabel,
+      iconName: newVerbIcon,
+      defaultText: newVerbFallback.trim() || `Intentas ${cleanLabel.toLowerCase()}, pero no surte efecto.`,
+    };
+
+    const updatedList = [...activeVerbs, newDef];
+    updateProject((prev) => ({
+      ...prev,
+      customVerbs: updatedList,
+      defaultResponses: {
+        ...prev.defaultResponses,
+        [cleanId]: newDef.defaultText,
+      },
+    }));
+
+    // Reset form
+    setNewVerbId('');
+    setNewVerbLabel('');
+    setNewVerbIcon('Swords');
+    setNewVerbFallback('');
+    setErrorAddVerb(null);
+    setShowAddVerbModal(false);
+  };
+
+  const handleResetToDefaults = () => {
+    if (confirm('¿Quieres restablecer la lista de verbos a los 7 verbos clásicos predeterminados (Mirar, Usar, Abrir, Coger, Hablar, Empujar, Ir a)?')) {
+      updateProject((prev) => {
+        const defaultResp: Record<string, string> = { ...prev.defaultResponses };
+        ALL_VERBS.forEach((v) => {
+          if (!defaultResp[v.id]) {
+            defaultResp[v.id] = v.defaultText;
+          }
+        });
+        return {
+          ...prev,
+          customVerbs: [...ALL_VERBS],
+          defaultResponses: defaultResp,
+        };
+      });
+    }
+  };
 
   // Auto-fill author if empty and user is logged in
   useEffect(() => {
@@ -355,56 +473,304 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
         </div>
       </div>
 
-      {/* Default Verb Fallback Messages */}
-      <div className={`border rounded-2xl p-6 shadow-sm space-y-4 ${
+      {/* Verbs and Fallbacks Management Section */}
+      <div className={`border rounded-2xl p-6 shadow-sm space-y-5 ${
         isClean ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'
       }`}>
-        <div className={`flex items-center justify-between border-b pb-3 flex-wrap gap-2 ${
+        <div className={`flex items-center justify-between border-b pb-4 flex-wrap gap-3 ${
           isClean ? 'border-slate-200' : 'border-slate-800'
         }`}>
           <div>
-            <h3 className={`font-bold text-base ${isClean ? 'text-slate-900' : 'text-slate-100'}`}>
-              Mensajes Genéricos de Respuesta (Fallbacks)
+            <h3 className={`font-bold text-base flex items-center gap-2 ${isClean ? 'text-slate-900' : 'text-slate-100'}`}>
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              <span>Verbos de Acción y Mensajes Genéricos (Fallbacks)</span>
             </h3>
+            <p className={`text-xs mt-1 ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
+              Personaliza los botones de acción para este juego y su mensaje cuando una palabra no tenga acción asociada.
+            </p>
           </div>
-          <span className={`text-xs ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>
-            Respuesta cuando una palabra no tiene una acción específica
-          </span>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setErrorAddVerb(null);
+                setShowAddVerbModal(true);
+              }}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Añadir Nuevo Verbo</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleResetToDefaults}
+              className={`px-3 py-1.5 text-xs font-medium rounded-xl border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                isClean
+                  ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                  : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
+              }`}
+              title="Restablecer a los 7 verbos clásicos predeterminados"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restablecer Verbos</span>
+            </button>
+          </div>
         </div>
 
-        <p className={`text-xs leading-relaxed ${isClean ? 'text-slate-600' : 'text-slate-400'}`}>
-          Si el jugador ejecuta un verbo (por ejemplo "abrir") sobre una palabra que no tiene una acción configurada, se mostrará este mensaje genérico por defecto.
-        </p>
+        {/* Modal / Panel for Adding Custom Verb */}
+        {showAddVerbModal && (
+          <div className={`p-4 rounded-xl border space-y-3.5 animate-fadeIn ${
+            isClean ? 'bg-amber-50/70 border-amber-200' : 'bg-amber-950/20 border-amber-500/30'
+          }`}>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                <Plus className="w-4 h-4" />
+                <span>Nuevo Verbo de Acción</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowAddVerbModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {ALL_VERBS.map((v) => (
-            <div key={v.id} className={`p-3 rounded-xl border ${
-              isClean ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'
-            }`}>
-              <label className="block text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">
-                Verbo: {v.label}
+            {errorAddVerb && (
+              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs">
+                {errorAddVerb}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                  ID técnico (slug único)
+                </label>
+                <input
+                  type="text"
+                  value={newVerbId}
+                  onChange={(e) => setNewVerbId(e.target.value)}
+                  placeholder="ej: luchar, disparar, hechizar"
+                  className={`w-full rounded-lg px-2.5 py-1.5 text-xs outline-none border font-mono ${
+                    isClean
+                      ? 'bg-white border-slate-200 text-slate-800 focus:border-amber-500'
+                      : 'bg-slate-900 border-slate-800 text-slate-100 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                  Etiqueta visible del botón
+                </label>
+                <input
+                  type="text"
+                  value={newVerbLabel}
+                  onChange={(e) => setNewVerbLabel(e.target.value)}
+                  placeholder="ej: Luchar con, Disparar a"
+                  className={`w-full rounded-lg px-2.5 py-1.5 text-xs outline-none border font-semibold ${
+                    isClean
+                      ? 'bg-white border-slate-200 text-slate-800 focus:border-amber-500'
+                      : 'bg-slate-900 border-slate-800 text-slate-100 focus:border-amber-500'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                  Icono del botón
+                </label>
+                <select
+                  value={newVerbIcon}
+                  onChange={(e) => setNewVerbIcon(e.target.value)}
+                  className={`w-full rounded-lg px-2.5 py-1.5 text-xs outline-none border ${
+                    isClean
+                      ? 'bg-white border-slate-200 text-slate-800 focus:border-amber-500'
+                      : 'bg-slate-900 border-slate-800 text-slate-100 focus:border-amber-500'
+                  }`}
+                >
+                  {AVAILABLE_VERB_ICONS.map((icon) => (
+                    <option key={icon.name} value={icon.name}>
+                      {icon.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                Mensaje Genérico de Respuesta (Fallback)
               </label>
               <input
                 type="text"
-                value={project.defaultResponses[v.id as VerbType] || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  updateProject((prev) => ({
-                    ...prev,
-                    defaultResponses: {
-                      ...prev.defaultResponses,
-                      [v.id]: val,
-                    },
-                  }));
-                }}
-                className={`w-full rounded-lg px-2.5 py-1.5 text-xs outline-none transition-colors border ${
+                value={newVerbFallback}
+                onChange={(e) => setNewVerbFallback(e.target.value)}
+                placeholder="ej: Intentas luchar, pero no hay ningún enemigo aquí."
+                className={`w-full rounded-lg px-2.5 py-1.5 text-xs outline-none border ${
                   isClean
                     ? 'bg-white border-slate-200 text-slate-800 focus:border-amber-500'
-                    : 'bg-slate-900 border-slate-800 text-slate-200 focus:border-amber-500'
+                    : 'bg-slate-900 border-slate-800 text-slate-100 focus:border-amber-500'
                 }`}
               />
             </div>
-          ))}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowAddVerbModal(false)}
+                className={`px-3 py-1.5 text-xs rounded-lg border ${
+                  isClean ? 'border-slate-200 hover:bg-slate-100' : 'border-slate-800 hover:bg-slate-800'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewVerb}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Guardar Verbo</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {activeVerbs.map((v, index) => {
+            const fallbackValue = project.defaultResponses[v.id] ?? v.defaultText ?? '';
+            return (
+              <div
+                key={v.id}
+                className={`p-3.5 rounded-xl border transition-all ${
+                  isClean
+                    ? 'bg-slate-50 border-slate-200 hover:border-amber-300'
+                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  
+                  {/* Left: Button Preview & Core Config */}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {/* Visual Button Preview */}
+                    <div
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border shrink-0 shadow-sm ${
+                        isClean
+                          ? 'bg-[#FFFDF6] border-[#C9A24B]/50 text-[#A4332A]'
+                          : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3]'
+                      }`}
+                      title="Vista previa del botón en el juego"
+                    >
+                      {renderVerbIcon(v.iconName, 'w-4 h-4')}
+                      <span className="truncate max-w-[120px]">{v.label}</span>
+                    </div>
+
+                    {/* Inputs: Label, Icon, ID */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1 min-w-0">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                          Etiqueta visible
+                        </label>
+                        <input
+                          type="text"
+                          value={v.label}
+                          onChange={(e) => handleUpdateVerb(index, { label: e.target.value })}
+                          className={`w-full rounded-lg px-2.5 py-1 text-xs outline-none border font-semibold ${
+                            isClean
+                              ? 'bg-white border-slate-200 text-slate-800 focus:border-amber-500'
+                              : 'bg-slate-900 border-slate-800 text-slate-100 focus:border-amber-500'
+                          }`}
+                          placeholder="Texto del botón..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                          Icono
+                        </label>
+                        <select
+                          value={v.iconName}
+                          onChange={(e) => handleUpdateVerb(index, { iconName: e.target.value })}
+                          className={`w-full rounded-lg px-2 py-1 text-xs outline-none border ${
+                            isClean
+                              ? 'bg-white border-slate-200 text-slate-800 focus:border-amber-500'
+                              : 'bg-slate-900 border-slate-800 text-slate-100 focus:border-amber-500'
+                          }`}
+                        >
+                          {AVAILABLE_VERB_ICONS.map((icon) => (
+                            <option key={icon.name} value={icon.name}>
+                              {icon.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions: Reorder and Delete */}
+                  <div className="flex items-center gap-1 shrink-0 self-end md:self-center">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-400 mr-1.5" title="Identificador interno del verbo">
+                      id: {v.id}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => handleMoveVerb(index, 'up')}
+                      className={`p-1.5 rounded-lg border text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed ${
+                        isClean ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'
+                      }`}
+                      title="Mover arriba en la barra de acciones"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === activeVerbs.length - 1}
+                      onClick={() => handleMoveVerb(index, 'down')}
+                      className={`p-1.5 rounded-lg border text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed ${
+                        isClean ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'
+                      }`}
+                      title="Mover abajo en la barra de acciones"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeVerbs.length <= 2}
+                      onClick={() => handleRemoveVerb(index)}
+                      className={`p-1.5 rounded-lg border text-rose-500 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed ${
+                        isClean ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'
+                      }`}
+                      title={activeVerbs.length <= 2 ? 'Se requieren al menos 2 verbos' : 'Eliminar verbo'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bottom Row: Generic Fallback Message */}
+                <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/60">
+                  <label className="block text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-1">
+                    Mensaje de Respuesta Genérica (Fallback):
+                  </label>
+                  <input
+                    type="text"
+                    value={fallbackValue}
+                    onChange={(e) => handleUpdateFallback(v.id, e.target.value)}
+                    className={`w-full rounded-lg px-2.5 py-1.5 text-xs outline-none transition-colors border ${
+                      isClean
+                        ? 'bg-white border-slate-200 text-slate-800 focus:border-amber-500'
+                        : 'bg-slate-900 border-slate-800 text-slate-200 focus:border-amber-500'
+                    }`}
+                    placeholder={`Respuesta si el jugador usa ${v.label.toLowerCase()} en un elemento sin acción específica...`}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
