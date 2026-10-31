@@ -2438,9 +2438,8 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                             className="bg-black/85 border border-white/10 border-t border-t-amber-500/40 rounded-b-xl p-3.5 space-y-3 font-serif text-slate-200 text-sm leading-relaxed shadow-inner"
                           >
                             <div className="flex items-center justify-between text-[11px] text-amber-400/90 font-sans border-b border-amber-500/20 pb-2">
-                              <span className="font-semibold flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Párrafos añadidos dinámicamente por acciones:</span>
+                              <span className="font-semibold">
+                                Párrafos añadidos dinámicamente por acciones:
                               </span>
                               <span className="text-[10px] text-slate-400 hidden sm:inline">
                                 Selecciona cualquier palabra para convertirla en palabra de acción
