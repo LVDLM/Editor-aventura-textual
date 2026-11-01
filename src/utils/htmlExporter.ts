@@ -607,7 +607,12 @@ ${jsonProject}
       const scene = getActiveScene();
       if (!scene) return false;
       if (scene.type === 'final') return true;
-      const hasBlockGameOver = (scene.textBlocks || []).some(b => b.isGameOver || b.type === 'final' || checkGameOverTag(b.text));
+      const hasBlockGameOver = (scene.textBlocks || []).some(b => {
+        if (!checkConditions(b.visibleIfFlags, b.hiddenIfFlags)) return false;
+        const reqItems = b.requiredItemIds || (b.requiredItemId ? [b.requiredItemId] : []);
+        if (reqItems.length > 0 && !reqItems.every(id => (gameState.inventory || []).includes(id))) return false;
+        return b.isGameOver || b.type === 'final' || checkGameOverTag(b.text);
+      });
       if (hasBlockGameOver) return true;
       const appended = gameState.appendedTexts[scene.id] || [];
       const hasAppendedGameOver = appended.some(t => checkGameOverTag(t));
@@ -783,7 +788,9 @@ ${jsonProject}
 
       // Text blocks
       (scene.textBlocks || []).forEach((block, bIdx) => {
-        if (checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
+        const reqItems = block.requiredItemIds || (block.requiredItemId ? [block.requiredItemId] : []);
+        const hasRequiredItems = reqItems.length === 0 || reqItems.every(id => (gameState.inventory || []).includes(id));
+        if (checkConditions(block.visibleIfFlags, block.hiddenIfFlags) && hasRequiredItems) {
           const imgSrc = getImageSrc(block);
           const isPortada = block.type === 'portada' || scene.type === 'portada';
           const hasText = !!(block.text && block.text.trim().length > 0);

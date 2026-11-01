@@ -376,17 +376,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     }
   };
 
-  const isSceneGameOver =
-    !!gameState.isGameOver ||
-    (currentScene?.textBlocks || []).some(
-      (b) => b.isGameOver || b.type === 'final' || /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(b.text)
-    ) ||
-    currentScene?.type === 'final' ||
-    ((currentScene && gameState.appendedTextsPerScene[currentScene.id]) || []).some((t) => {
-      const textVal = typeof t === 'string' ? t : t.text;
-      return /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(textVal);
-    });
-
   const checkConditions = (visibleFlags?: Record<string, boolean>, hiddenFlags?: Record<string, boolean>) => {
     if (visibleFlags) {
       for (const [k, v] of Object.entries(visibleFlags)) {
@@ -400,6 +389,26 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     }
     return true;
   };
+
+  const isSceneGameOver =
+    !!gameState.isGameOver ||
+    (currentScene?.textBlocks || []).some((b) => {
+      if (!checkConditions(b.visibleIfFlags, b.hiddenIfFlags)) return false;
+      const reqItems = b.requiredItemIds || (b.requiredItemId ? [b.requiredItemId] : []);
+      if (reqItems.length > 0 && !reqItems.every((id) => gameState.inventory.includes(id))) {
+        return false;
+      }
+      return (
+        b.isGameOver ||
+        b.type === 'final' ||
+        /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(b.text)
+      );
+    }) ||
+    currentScene?.type === 'final' ||
+    ((currentScene && gameState.appendedTextsPerScene[currentScene.id]) || []).some((t) => {
+      const textVal = typeof t === 'string' ? t : t.text;
+      return /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(textVal);
+    });
 
   const handleSelectVerb = (verb: VerbType) => {
     playSound('select');
@@ -2010,6 +2019,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 <>
                   {currentScene?.textBlocks.map((block, index) => {
                     if (!checkConditions(block.visibleIfFlags, block.hiddenIfFlags)) {
+                      return null;
+                    }
+                    const reqItems = block.requiredItemIds || (block.requiredItemId ? [block.requiredItemId] : []);
+                    if (reqItems.length > 0 && !reqItems.every((id) => gameState.inventory.includes(id))) {
                       return null;
                     }
                     const blockImg = block.imageFileData || block.imageUrl;

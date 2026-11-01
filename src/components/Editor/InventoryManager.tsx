@@ -425,18 +425,13 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
         {/* Direct Use Effect from Inventory (e.g. Health Potion, Flashlight, Book) */}
         <div className="bg-slate-950 border border-amber-500/30 rounded-2xl p-4 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/30">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold text-xs text-amber-300 block">
-                  Efecto al Usar Directamente desde el Inventario
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  Permite usar este objeto por sí solo (ej: beber poción de vida, leer un mapa, encender mechero).
-                </span>
-              </div>
+            <div>
+              <span className="font-bold text-xs text-amber-300 block">
+                Efecto al Usar Directamente desde el Inventario
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Permite usar este objeto por sí solo (ej: beber poción de vida, leer un mapa, encender mechero).
+              </span>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input

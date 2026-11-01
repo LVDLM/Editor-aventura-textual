@@ -3,6 +3,7 @@ import { Hotspot, ActionRule, GameProject, VerbType, SoundEffectType, SOUND_EFFE
 import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
 import { playSound, getAllMergedSounds } from '../../utils/audio';
 import { DialogueEditor } from './DialogueEditor';
+import { AutoGrowTextarea } from '../common/AutoGrowTextarea';
 import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown } from 'lucide-react';
 
 interface HotspotEditorModalProps {
@@ -1006,11 +1007,10 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                       <label className="block text-[10px] text-slate-400 mb-1">
                         Añadir Párrafo de Texto Extra a la Narración
                       </label>
-                      <input
-                        type="text"
+                      <AutoGrowTextarea
                         value={appendStoryText}
                         onChange={(e) => setAppendStoryText(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-emerald-500 font-serif"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-emerald-500 font-serif leading-relaxed"
                         placeholder="Ej: Ahora la puerta ha quedado abierta de par en par."
                       />
                     </div>
@@ -1308,11 +1308,10 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                       <label className="block text-[10px] text-slate-400 mb-1">
                         Añadir Párrafo de Texto Extra al Fallar (Aparece en la narración)
                       </label>
-                      <input
-                        type="text"
+                      <AutoGrowTextarea
                         value={failAppendStoryText}
                         onChange={(e) => setFailAppendStoryText(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-rose-500 font-serif"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-rose-500 font-serif leading-relaxed"
                         placeholder="Ej: Te has precipitado y la trampa ha quedado destruida junto con el mecanismo."
                       />
                     </div>

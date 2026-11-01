@@ -8,6 +8,7 @@ import {
   SOUND_EFFECT_OPTIONS,
 } from '../../types';
 import { getAllMergedSounds } from '../../utils/audio';
+import { AutoGrowTextarea } from '../common/AutoGrowTextarea';
 import {
   MessageSquare,
   Plus,
@@ -620,12 +621,11 @@ export const DialogueEditor: React.FC<DialogueEditorProps> = ({
                             <label className="block text-[11px] font-semibold mb-1 text-amber-300">
                               Añadir Párrafo de Texto Extra a la Narración
                             </label>
-                            <input
-                              type="text"
+                            <AutoGrowTextarea
                               value={opt.appendStoryText || ''}
                               onChange={(e) => handleUpdateOption(index, { ...opt, appendStoryText: e.target.value || undefined })}
                               placeholder="Ej: El personaje asiente y se retira en silencio."
-                              className="w-full px-2.5 py-1 rounded-md text-xs border border-slate-700 bg-slate-900 text-slate-100 font-serif focus:outline-none focus:border-amber-500"
+                              className="w-full px-2.5 py-1.5 rounded-md text-xs border border-slate-700 bg-slate-900 text-slate-100 font-serif leading-relaxed focus:outline-none focus:border-amber-500"
                             />
                           </div>
                         </div>

@@ -217,6 +217,8 @@ export interface SceneTextBlock {
   coverMode?: 'full' | 'with_text'; // 'full' = Portada completa, 'with_text' = Acompañada de texto
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
+  requiredItemId?: string; // Single required inventory item for backwards compatibility
+  requiredItemIds?: string[]; // Required inventory items (player must possess to see this block)
   isGameOver?: boolean; // Marks paragraph as triggering end of game
   characterId?: string; // Character associated with this paragraph
   dialogue?: DialogueBlock; // Dialogue attached to this paragraph

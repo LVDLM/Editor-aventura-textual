@@ -8,6 +8,7 @@ import { DialogueEditor } from './DialogueEditor';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 import { ValidationPanel } from './ValidationPanel';
 import { GamePlayer } from '../GamePlayer';
+import { AutoGrowTextarea } from '../common/AutoGrowTextarea';
 import {
   FileText,
   Plus,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   MousePointer,
   Check,
+  Package,
   Eye,
   EyeOff,
   Zap,
@@ -130,6 +132,18 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
   // Image section visibility & textarea refs for text formatting toolbar
   const [openImageSectionBlockIds, setOpenImageSectionBlockIds] = useState<Record<string, boolean>>({});
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+
+  // Collapsible dropdowns for paragraph conditions (Flags & Items)
+  const [expandedFlagsBlocks, setExpandedFlagsBlocks] = useState<Record<string, boolean>>({});
+  const [expandedItemsBlocks, setExpandedItemsBlocks] = useState<Record<string, boolean>>({});
+
+  const toggleBlockFlagsDropdown = (blockId: string) => {
+    setExpandedFlagsBlocks((prev) => ({ ...prev, [blockId]: !prev[blockId] }));
+  };
+
+  const toggleBlockItemsDropdown = (blockId: string) => {
+    setExpandedItemsBlocks((prev) => ({ ...prev, [blockId]: !prev[blockId] }));
+  };
 
   const applyTextFormat = (
     blockId: string,
@@ -651,6 +665,53 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               updated.hiddenIfFlags = Object.keys(current).length > 0 ? current : undefined;
             }
             return updated;
+          }),
+        };
+      }),
+    }));
+  };
+
+  const handleToggleBlockRequiredItem = (blockId: string, itemId: string) => {
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          textBlocks: s.textBlocks.map((b) => {
+            if (b.id !== blockId) return b;
+            const existingList = b.requiredItemIds ? [...b.requiredItemIds] : b.requiredItemId ? [b.requiredItemId] : [];
+            let updatedList: string[];
+            if (existingList.includes(itemId)) {
+              updatedList = existingList.filter((id) => id !== itemId);
+            } else {
+              updatedList = [...existingList, itemId];
+            }
+            return {
+              ...b,
+              requiredItemId: updatedList[0] || undefined,
+              requiredItemIds: updatedList.length > 0 ? updatedList : undefined,
+            };
+          }),
+        };
+      }),
+    }));
+  };
+
+  const handleClearBlockRequiredItems = (blockId: string) => {
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          textBlocks: s.textBlocks.map((b) => {
+            if (b.id !== blockId) return b;
+            return {
+              ...b,
+              requiredItemId: undefined,
+              requiredItemIds: undefined,
+            };
           }),
         };
       }),
@@ -2177,6 +2238,20 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                           Oculto si: {hiddenFlagsList.join(' + ')}
                         </span>
                       )}
+                      {(() => {
+                        const reqItems = block.requiredItemIds || (block.requiredItemId ? [block.requiredItemId] : []);
+                        if (reqItems.length === 0) return null;
+                        const itemNames = reqItems.map((id) => {
+                          const item = project.inventoryItems.find((it) => it.id === id);
+                          return item ? item.name : id;
+                        });
+                        return (
+                          <span className="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/30 px-2 py-0.5 rounded font-mono flex items-center gap-1">
+                            <Package className="w-3 h-3 text-sky-400" />
+                            Requiere objeto: {itemNames.join(', ')}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -2497,7 +2572,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
                                   {isEditingThis ? (
                                     <div className="space-y-2 pt-1 font-sans">
-                                      <textarea
+                                      <AutoGrowTextarea
                                         value={editingAppendedText}
                                         onChange={(e) => setEditingAppendedText(e.target.value)}
                                         rows={3}
@@ -2766,136 +2841,290 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                   );
                 })()}
 
-                  {/* Flag Condition Controls */}
+                  {/* Flag and Items Condition Controls (Collapsible Dropdowns) */}
                   {(() => {
                     const registeredKeys = Object.keys(project.globalFlags || {});
                     const visKeys = Object.keys(block.visibleIfFlags || {});
                     const hidKeys = Object.keys(block.hiddenIfFlags || {});
                     const allBlockFlagKeys = Array.from(new Set([...registeredKeys, ...visKeys, ...hidKeys]));
                     const orphanCount = visKeys.concat(hidKeys).filter((k) => !registeredKeys.includes(k)).length;
+                    const currentReqItemIds = block.requiredItemIds || (block.requiredItemId ? [block.requiredItemId] : []);
+                    const isFlagsOpen = !!expandedFlagsBlocks[block.id];
+                    const isItemsOpen = !!expandedItemsBlocks[block.id];
+                    const numVis = visKeys.filter((k) => !!block.visibleIfFlags?.[k]).length;
+                    const numHid = hidKeys.filter((k) => !!block.hiddenIfFlags?.[k]).length;
+                    const activeFlagsCount = numVis + numHid;
 
                     return (
-                      <div className="bg-slate-900/80 border border-white/5 rounded-lg p-3 space-y-2 text-xs">
+                      <div className="bg-slate-900/80 border border-white/5 rounded-lg p-2.5 space-y-2 text-xs">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-1.5 text-slate-300 text-xs font-bold">
                             <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Condiciones de Visibilidad de este Párrafo (Banderas):</span>
+                            <span>Condiciones de Visibilidad del Párrafo:</span>
                           </div>
-
-                          {orphanCount > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handlePurgeOrphanBlockFlags(block.id)}
-                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center gap-1 cursor-pointer shadow-sm"
-                              title="Elimina de este párrafo las condiciones asociadas a banderas borradas"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              <span>Limpiar {orphanCount} bandera{orphanCount > 1 ? 's' : ''} eliminada{orphanCount > 1 ? 's' : ''}</span>
-                            </button>
-                          )}
+                          <span className="text-[11px] text-slate-400">
+                            Filtros para mostrar u ocultar este párrafo
+                          </span>
                         </div>
 
-                        {allBlockFlagKeys.length === 0 ? (
-                          <p className="text-[11px] text-slate-500 italic">
-                            No hay banderas globales registradas. Puedes crearlas abajo o en la pestaña "Banderas y Variables".
-                          </p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                            {/* Visible if flags */}
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                                <Eye className="w-3 h-3 text-emerald-400" />
-                                Mostrar SOLO si se cumplen TODAS estas banderas:
-                              </label>
-                              <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
-                                {allBlockFlagKeys.map((fk) => {
-                                  const isChecked = !!block.visibleIfFlags?.[fk];
-                                  const isDeleted = !registeredKeys.includes(fk);
-                                  return (
-                                    <label key={`blk_vis_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={() => handleToggleBlockFlagCondition(block.id, 'visibleIf', fk)}
-                                        className="accent-emerald-500 rounded"
-                                      />
-                                      <span className={isChecked ? 'font-bold text-emerald-300 font-mono' : 'font-mono'}>
-                                        {fk}
-                                        {isDeleted && <span className="ml-1.5 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
+                        {/* Dos menús desplegables: Banderas y Objetos */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {/* Desplegable 1: Banderas */}
+                          <button
+                            type="button"
+                            onClick={() => toggleBlockFlagsDropdown(block.id)}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all cursor-pointer text-left ${
+                              isFlagsOpen
+                                ? 'bg-amber-500/15 border-amber-500/40 text-amber-200 shadow-sm'
+                                : activeFlagsCount > 0
+                                ? 'bg-slate-800/90 border-amber-500/30 text-slate-200 hover:bg-slate-800'
+                                : 'bg-black/40 border-white/10 text-slate-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Sliders className={`w-3.5 h-3.5 shrink-0 ${isFlagsOpen || activeFlagsCount > 0 ? 'text-amber-400' : 'text-slate-400'}`} />
+                              <span className="font-semibold text-xs truncate">Banderas</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {numVis > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-mono">
+                                    👁️ {numVis}
+                                  </span>
+                                )}
+                                {numHid > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 font-mono">
+                                    🚫 {numHid}
+                                  </span>
+                                )}
+                                {activeFlagsCount === 0 && (
+                                  <span className="text-[10px] text-slate-500">Sin condiciones</span>
+                                )}
                               </div>
                             </div>
+                            {isFlagsOpen ? (
+                              <ChevronUp className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                            )}
+                          </button>
 
-                            {/* Hidden if flags */}
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                                <EyeOff className="w-3 h-3 text-rose-400" />
-                                Ocultar si se cumple CUALQUIERA de estas banderas:
-                              </label>
-                              <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
-                                {allBlockFlagKeys.map((fk) => {
-                                  const isChecked = !!block.hiddenIfFlags?.[fk];
-                                  const isDeleted = !registeredKeys.includes(fk);
-                                  return (
-                                    <label key={`blk_hid_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={() => handleToggleBlockFlagCondition(block.id, 'hiddenIf', fk)}
-                                        className="accent-rose-500 rounded"
-                                      />
-                                      <span className={isChecked ? 'font-bold text-rose-300 font-mono' : 'font-mono'}>
-                                        {fk}
-                                        {isDeleted && <span className="ml-1.5 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
+                          {/* Desplegable 2: Objetos de Inventario */}
+                          <button
+                            type="button"
+                            onClick={() => toggleBlockItemsDropdown(block.id)}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all cursor-pointer text-left ${
+                              isItemsOpen
+                                ? 'bg-sky-500/15 border-sky-500/40 text-sky-200 shadow-sm'
+                                : currentReqItemIds.length > 0
+                                ? 'bg-slate-800/90 border-sky-500/30 text-slate-200 hover:bg-slate-800'
+                                : 'bg-black/40 border-white/10 text-slate-300 hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Package className={`w-3.5 h-3.5 shrink-0 ${isItemsOpen || currentReqItemIds.length > 0 ? 'text-sky-400' : 'text-slate-400'}`} />
+                              <span className="font-semibold text-xs truncate">Objetos Requeridos</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {currentReqItemIds.length > 0 ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-sky-500/20 text-sky-300 font-medium">
+                                    {currentReqItemIds.length} activo{currentReqItemIds.length > 1 ? 's' : ''}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500">Sin requisito</span>
+                                )}
+                              </div>
+                            </div>
+                            {isItemsOpen ? (
+                              <ChevronUp className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Panel Desplegado: Banderas */}
+                        {isFlagsOpen && (
+                          <div className="pt-2.5 border-t border-white/10 space-y-2.5">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                                <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                                Configuración de Banderas de este Párrafo:
+                              </span>
+                              {orphanCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePurgeOrphanBlockFlags(block.id)}
+                                  className="px-2 py-0.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded text-[10px] transition-colors flex items-center gap-1 cursor-pointer shadow-sm"
+                                  title="Elimina de este párrafo las condiciones asociadas a banderas borradas"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Limpiar {orphanCount} bandera{orphanCount > 1 ? 's' : ''} eliminada{orphanCount > 1 ? 's' : ''}</span>
+                                </button>
+                              )}
+                            </div>
+
+                            {allBlockFlagKeys.length === 0 ? (
+                              <p className="text-[11px] text-slate-500 italic">
+                                No hay banderas globales registradas. Puedes crearlas abajo o en la pestaña "Banderas y Variables".
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                {/* Visible if flags */}
+                                <div className="space-y-1">
+                                  <label className="block text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                                    <Eye className="w-3 h-3 text-emerald-400" />
+                                    Mostrar SOLO si se cumplen TODAS estas banderas:
+                                  </label>
+                                  <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
+                                    {allBlockFlagKeys.map((fk) => {
+                                      const isChecked = !!block.visibleIfFlags?.[fk];
+                                      const isDeleted = !registeredKeys.includes(fk);
+                                      return (
+                                        <label key={`blk_vis_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() => handleToggleBlockFlagCondition(block.id, 'visibleIf', fk)}
+                                            className="accent-emerald-500 rounded"
+                                          />
+                                          <span className={isChecked ? 'font-bold text-emerald-300 font-mono' : 'font-mono'}>
+                                            {fk}
+                                            {isDeleted && <span className="ml-1.5 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* Hidden if flags */}
+                                <div className="space-y-1">
+                                  <label className="block text-[10px] font-bold text-rose-400 flex items-center gap-1">
+                                    <EyeOff className="w-3 h-3 text-rose-400" />
+                                    Ocultar si se cumple CUALQUIERA de estas banderas:
+                                  </label>
+                                  <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
+                                    {allBlockFlagKeys.map((fk) => {
+                                      const isChecked = !!block.hiddenIfFlags?.[fk];
+                                      const isDeleted = !registeredKeys.includes(fk);
+                                      return (
+                                        <label key={`blk_hid_${block.id}_${fk}`} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer hover:text-white">
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={() => handleToggleBlockFlagCondition(block.id, 'hiddenIf', fk)}
+                                            className="accent-rose-500 rounded"
+                                          />
+                                          <span className={isChecked ? 'font-bold text-rose-300 font-mono' : 'font-mono'}>
+                                            {fk}
+                                            {isDeleted && <span className="ml-1.5 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Inline Flag Creator */}
+                            <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-[11px] text-slate-400 font-medium">¿Crear nueva bandera global desde este párrafo?</span>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={inlineFlagName}
+                                  onChange={(e) => setInlineFlagName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      if (inlineFlagName.trim()) {
+                                        handleAddGlobalFlag(inlineFlagName);
+                                        setInlineFlagName('');
+                                      }
+                                    }
+                                  }}
+                                  placeholder="ej: linterna_encendida"
+                                  className="bg-black/60 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono outline-none focus:border-amber-500 w-40"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (inlineFlagName.trim()) {
+                                      handleAddGlobalFlag(inlineFlagName);
+                                      setInlineFlagName('');
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs cursor-pointer shadow transition-colors"
+                                >
+                                  + Crear
+                                </button>
                               </div>
                             </div>
                           </div>
                         )}
 
-                    {/* Inline Flag Creator */}
-                    <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-[11px] text-slate-400 font-medium">¿Crear nueva bandera global desde este párrafo?</span>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={inlineFlagName}
-                          onChange={(e) => setInlineFlagName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              if (inlineFlagName.trim()) {
-                                handleAddGlobalFlag(inlineFlagName);
-                                setInlineFlagName('');
-                              }
-                            }
-                          }}
-                          placeholder="ej: linterna_encendida"
-                          className="bg-black/60 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white font-mono outline-none focus:border-amber-500 w-40"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (inlineFlagName.trim()) {
-                              handleAddGlobalFlag(inlineFlagName);
-                              setInlineFlagName('');
-                            }
-                          }}
-                          className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs cursor-pointer shadow transition-colors"
-                        >
-                          + Crear
-                        </button>
+                        {/* Panel Desplegado: Objetos de Inventario */}
+                        {isItemsOpen && (
+                          <div className="pt-2.5 border-t border-white/10 space-y-2.5">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <label className="block text-[11px] font-bold text-sky-400 flex items-center gap-1.5">
+                                <Package className="w-3.5 h-3.5 text-sky-400" />
+                                <span>Mostrar SOLO si el jugador TIENE este objeto en el inventario:</span>
+                              </label>
+                              {currentReqItemIds.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleClearBlockRequiredItems(block.id)}
+                                  className="px-2 py-0.5 bg-sky-950/80 hover:bg-sky-900 border border-sky-500/30 text-sky-300 font-medium rounded text-[10px] transition-colors flex items-center gap-1 cursor-pointer"
+                                  title="Desmarcar todos los objetos requeridos para este párrafo"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>Desmarcar objetos ({currentReqItemIds.length})</span>
+                                </button>
+                              )}
+                            </div>
+
+                            {project.inventoryItems.length === 0 ? (
+                              <p className="text-[11px] text-slate-500 italic">
+                                No hay objetos creados en el inventario. Puedes crearlos en la pestaña "4. Objetos del Inventario".
+                              </p>
+                            ) : (
+                              <div className="bg-black/60 border border-white/10 rounded-lg p-2 max-h-36 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                {project.inventoryItems.map((item) => {
+                                  const isChecked = currentReqItemIds.includes(item.id);
+                                  return (
+                                    <label
+                                      key={`blk_item_${block.id}_${item.id}`}
+                                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
+                                        isChecked
+                                          ? 'bg-sky-500/15 border border-sky-500/40 text-sky-200'
+                                          : 'hover:bg-white/5 text-slate-300 border border-transparent'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleBlockRequiredItem(block.id, item.id)}
+                                        className="accent-sky-500 rounded"
+                                      />
+                                      <Package className={`w-3.5 h-3.5 shrink-0 ${isChecked ? 'text-sky-400' : 'text-slate-500'}`} />
+                                      <div className="truncate flex items-center gap-1.5">
+                                        <span className={`text-xs ${isChecked ? 'font-bold text-sky-200' : ''}`}>
+                                          {item.name}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-mono">
+                                          ({item.id})
+                                        </span>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                );
-              })()}
+                    );
+                  })()}
             </div>
           );
         })}
