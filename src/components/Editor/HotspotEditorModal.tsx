@@ -4,7 +4,7 @@ import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
 import { playSound, getAllMergedSounds } from '../../utils/audio';
 import { DialogueEditor } from './DialogueEditor';
 import { AutoGrowTextarea } from '../common/AutoGrowTextarea';
-import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown } from 'lucide-react';
+import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface HotspotEditorModalProps {
   hotspot: Hotspot;
@@ -42,6 +42,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [responseMessage, setResponseMessage] = useState('');
   const [requiredItemId, setRequiredItemId] = useState('');
   const [requiredFlagsMap, setRequiredFlagsMap] = useState<Record<string, boolean>>({});
+  const [isRequiredFlagsExpanded, setIsRequiredFlagsExpanded] = useState(false);
   const [soundEffect, setSoundEffect] = useState<SoundEffectType>('none');
   const [dialogue, setDialogue] = useState<DialogueBlock | undefined>(undefined);
   const [characterId, setCharacterId] = useState<string | undefined>(undefined);
@@ -89,6 +90,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setResponseError(false);
     setRequiredItemId(action.requiredItemId || '');
     setRequiredFlagsMap(action.requiredFlags || {});
+    setIsRequiredFlagsExpanded(!!(action.requiredFlags && Object.keys(action.requiredFlags).length > 0));
     setDialogue(action.dialogue);
     setCharacterId(action.characterId);
     
@@ -352,6 +354,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setFailAppendStoryText('');
     setIsAddItemsDropdownOpen(false);
     setIsFailAddItemsDropdownOpen(false);
+    setIsRequiredFlagsExpanded(false);
   };
 
   const toggleRequiredFlag = (flagKey: string) => {
@@ -603,51 +606,116 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
               </div>
             </div>
 
-            {/* Required Flags (Multiple Variable combination!) */}
+            {/* Required Flags (Multiple Variable combination - Collapsible Dropdown) */}
             {(() => {
               const allReqFlagKeys = Array.from(new Set([...globalFlagKeys, ...Object.keys(requiredFlagsMap)]));
               if (allReqFlagKeys.length === 0) return null;
 
+              const activeTrueCount = Object.values(requiredFlagsMap).filter((v) => v === true).length;
+              const activeFalseCount = Object.values(requiredFlagsMap).filter((v) => v === false).length;
+              const totalActiveCount = activeTrueCount + activeFalseCount;
+
               return (
-                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-2">
-                  <label className="block text-xs font-bold text-amber-300">
-                    <span>Combinación de Banderas / Variables Requeridas para esta Acción:</span>
-                  </label>
-                  <p className="text-[11px] text-slate-400">
-                    Haz clic en cada bandera para alternar su estado requerido: <span className="text-emerald-400 font-semibold">🟢 ACTIVADA (debe valer TRUE)</span> ➔ <span className="text-rose-400 font-semibold">🔴 DESACTIVADA (debe valer FALSE)</span> ➔ <span className="text-slate-400">⚪ Sin requisito (indiferente)</span>.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
-                    {allReqFlagKeys.map((fk) => {
-                      const flagVal = requiredFlagsMap[fk];
-                      const isTrue = flagVal === true;
-                      const isFalse = flagVal === false;
-                      const isDeleted = !globalFlagKeys.includes(fk);
-                      return (
-                        <button
-                          key={`req_${fk}`}
-                          type="button"
-                          onClick={() => toggleRequiredFlag(fk)}
-                          className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
-                            isTrue
-                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 font-bold'
-                              : isFalse
-                              ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold'
-                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                          }`}
+                <div className="bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden transition-all">
+                  {/* Collapsible Header Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsRequiredFlagsExpanded((prev) => !prev)}
+                    className={`w-full p-3 flex items-center justify-between text-left cursor-pointer transition-colors ${
+                      isRequiredFlagsExpanded
+                        ? 'bg-amber-500/10 border-b border-amber-500/20'
+                        : totalActiveCount > 0
+                        ? 'bg-slate-900 hover:bg-slate-800/80'
+                        : 'bg-slate-900/60 hover:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <Sliders className={`w-4 h-4 shrink-0 ${totalActiveCount > 0 || isRequiredFlagsExpanded ? 'text-amber-400' : 'text-slate-400'}`} />
+                      <span className="text-xs font-bold text-amber-300">
+                        Combinación de Banderas / Variables Requeridas para esta Acción:
+                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {activeTrueCount > 0 && (
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold flex items-center gap-1">
+                            <span>🟢</span> {activeTrueCount} activa{activeTrueCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {activeFalseCount > 0 && (
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 font-mono font-bold flex items-center gap-1">
+                            <span>🔴</span> {activeFalseCount} desactivada{activeFalseCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {totalActiveCount === 0 && (
+                          <span className="text-[11px] text-slate-500 italic">
+                            (Sin condiciones de banderas)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      {totalActiveCount > 0 && (
+                        <span
+                          role="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRequiredFlagsMap({});
+                          }}
+                          className="px-2 py-0.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-500/30 text-rose-300 font-medium rounded text-[10px] transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Eliminar todas las condiciones de banderas para esta acción"
                         >
-                          <span className="font-mono">
-                            {fk}
-                            {isDeleted && <span className="ml-1 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
-                          </span>
-                          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                            isTrue ? 'bg-emerald-500/30 text-emerald-300' : isFalse ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-500'
-                          }`}>
-                            {isTrue ? '🟢 ACTIVADA' : isFalse ? '🔴 DESACTIVADA' : '⚪ SIN REQ'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          <X className="w-3 h-3" />
+                          <span>Limpiar ({totalActiveCount})</span>
+                        </span>
+                      )}
+                      {isRequiredFlagsExpanded ? (
+                        <ChevronUp className="w-4 h-4 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Expanded Content */}
+                  {isRequiredFlagsExpanded && (
+                    <div className="p-3 space-y-2.5">
+                      <p className="text-[11px] text-slate-400">
+                        Haz clic en cada bandera para alternar su estado requerido: <span className="text-emerald-400 font-semibold">🟢 ACTIVADA (debe valer TRUE)</span> ➔ <span className="text-rose-400 font-semibold">🔴 DESACTIVADA (debe valer FALSE)</span> ➔ <span className="text-slate-400">⚪ Sin requisito (indiferente)</span>.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1 max-h-64 overflow-y-auto pr-1">
+                        {allReqFlagKeys.map((fk) => {
+                          const flagVal = requiredFlagsMap[fk];
+                          const isTrue = flagVal === true;
+                          const isFalse = flagVal === false;
+                          const isDeleted = !globalFlagKeys.includes(fk);
+                          return (
+                            <button
+                              key={`req_${fk}`}
+                              type="button"
+                              onClick={() => toggleRequiredFlag(fk)}
+                              className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                                isTrue
+                                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200 font-bold'
+                                  : isFalse
+                                  ? 'bg-rose-500/20 border-rose-500/50 text-rose-200 font-bold'
+                                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              <span className="font-mono truncate mr-2" title={fk}>
+                                {fk}
+                                {isDeleted && <span className="ml-1 text-[10px] text-rose-400 font-sans font-bold">(⚠️ Eliminada)</span>}
+                              </span>
+                              <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                isTrue ? 'bg-emerald-500/30 text-emerald-300' : isFalse ? 'bg-rose-500/30 text-rose-300' : 'bg-slate-800 text-slate-500'
+                              }`}>
+                                {isTrue ? '🟢 ACTIVADA' : isFalse ? '🔴 DESACTIVADA' : '⚪ SIN REQ'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
