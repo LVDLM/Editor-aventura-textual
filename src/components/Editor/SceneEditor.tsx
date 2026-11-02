@@ -153,51 +153,133 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
     const el = textareaRefs.current[blockId];
     if (!el) return;
 
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
+    // Guardar posición de scroll de la ventana y del textarea antes del formateo
+    const prevWindowScroll = window.scrollY;
+    const prevTextareaScroll = el.scrollTop;
+
+    let start = el.selectionStart;
+    let end = el.selectionEnd;
     const selectedTextSegment = currentText.substring(start, end);
 
-    let replacement = '';
-    let cursorOffset = 0;
+    const tagMap: Record<string, string> = {
+      bold: 'b',
+      italic: 'i',
+      underline: 'u',
+      h1: 'h1',
+      h2: 'h2',
+    };
+    const defaultPlaceholderMap: Record<string, string> = {
+      bold: 'texto en negrita',
+      italic: 'texto en cursiva',
+      underline: 'texto subrayado',
+      h1: 'Encabezado 1',
+      h2: 'Encabezado 2',
+    };
 
-    switch (formatType) {
-      case 'bold':
-        replacement = `<b>${selectedTextSegment || 'texto en negrita'}</b>`;
-        cursorOffset = selectedTextSegment ? replacement.length : 3;
-        break;
-      case 'italic':
-        replacement = `<i>${selectedTextSegment || 'texto en cursiva'}</i>`;
-        cursorOffset = selectedTextSegment ? replacement.length : 3;
-        break;
-      case 'underline':
-        replacement = `<u>${selectedTextSegment || 'texto subrayado'}</u>`;
-        cursorOffset = selectedTextSegment ? replacement.length : 3;
-        break;
-      case 'h1':
-        replacement = `<h1>${selectedTextSegment || 'Encabezado 1'}</h1>`;
-        cursorOffset = selectedTextSegment ? replacement.length : 4;
-        break;
-      case 'h2':
-        replacement = `<h2>${selectedTextSegment || 'Encabezado 2'}</h2>`;
-        cursorOffset = selectedTextSegment ? replacement.length : 4;
-        break;
-      case 'normal':
-        replacement = selectedTextSegment
-          .replace(/<\/?(h1|h2|b|i|u)>/gi, '')
-          .replace(/^(#\s*|##\s*)/, '');
-        cursorOffset = replacement.length;
-        break;
+    let replacement = '';
+    let newSelectionStart = start;
+    let newSelectionEnd = start;
+
+    if (formatType === 'normal') {
+      // Normal: elimina cualquier etiqueta de encabezado o estilo dentro de la selección
+      // o que envuelva inmediatamente la selección
+      let clean = selectedTextSegment
+        .replace(/<\/?(h1|h2|b|i|u)\b[^>]*>/gi, '')
+        .replace(/^(#\s*|##\s*)/, '');
+
+      // Si la selección estaba dentro de etiquetas que la envolvían directamente
+      const textBefore = currentText.substring(0, start);
+      const textAfter = currentText.substring(end);
+      const outerWrapRegexBefore = /(?:<\/?(h1|h2|b|i|u)\b[^>]*>)+$/i;
+      const outerWrapRegexAfter = /^(?:<\/?(h1|h2|b|i|u)\b[^>]*>)+/i;
+
+      if (outerWrapRegexBefore.test(textBefore) && outerWrapRegexAfter.test(textAfter)) {
+        const matchBefore = textBefore.match(outerWrapRegexBefore);
+        const matchAfter = textAfter.match(outerWrapRegexAfter);
+        if (matchBefore && matchAfter) {
+          start -= matchBefore[0].length;
+          end += matchAfter[0].length;
+        }
+      }
+
+      replacement = clean;
+      newSelectionStart = start;
+      newSelectionEnd = start + replacement.length;
+    } else {
+      const tag = tagMap[formatType];
+      const defaultPlaceholder = defaultPlaceholderMap[formatType] || 'texto';
+
+      const tagRegex = new RegExp(`<\/?${tag}\\b[^>]*>`, 'i');
+      const hasTagInside = tagRegex.test(selectedTextSegment);
+
+      // Comprobar si la selección está inmediatamente envuelta por la etiqueta
+      const textBefore = currentText.substring(0, start);
+      const textAfter = currentText.substring(end);
+      const wrapBeforeRegex = new RegExp(`<${tag}\\b[^>]*>$`, 'i');
+      const wrapAfterRegex = new RegExp(`^<\\/${tag}>`, 'i');
+      const isWrapped = wrapBeforeRegex.test(textBefore) && wrapAfterRegex.test(textAfter);
+
+      if (hasTagInside) {
+        // CASO 1: La selección contiene la etiqueta (ej: <b>texto</b> o <i><b>texto</b></i>)
+        // -> TOGGLE OFF: Eliminar la etiqueta específica conservando las demás
+        replacement = selectedTextSegment.replace(new RegExp(`<\/?${tag}\\b[^>]*>`, 'gi'), '');
+        newSelectionStart = start;
+        newSelectionEnd = start + replacement.length;
+      } else if (isWrapped) {
+        // CASO 2: La selección está directamente dentro de la etiqueta sin haber seleccionado las etiquetas
+        // -> TOGGLE OFF: Expandir rango para eliminar <tag> y </tag>
+        const matchBefore = textBefore.match(wrapBeforeRegex);
+        const matchAfter = textAfter.match(wrapAfterRegex);
+        const beforeLen = matchBefore ? matchBefore[0].length : 0;
+        const afterLen = matchAfter ? matchAfter[0].length : 0;
+        start -= beforeLen;
+        end += afterLen;
+        replacement = selectedTextSegment;
+        newSelectionStart = start;
+        newSelectionEnd = start + replacement.length;
+      } else {
+        // CASO 3: No tiene la etiqueta
+        // -> TOGGLE ON: Añadir la etiqueta
+        if (formatType === 'h1' || formatType === 'h2') {
+          // Si es h1 o h2, quitar primero el otro encabezado si existiera
+          const otherTag = formatType === 'h1' ? 'h2' : 'h1';
+          const cleanText = selectedTextSegment.replace(new RegExp(`<\/?${otherTag}\\b[^>]*>`, 'gi'), '');
+          replacement = `<${tag}>${cleanText || defaultPlaceholder}</${tag}>`;
+        } else {
+          replacement = `<${tag}>${selectedTextSegment || defaultPlaceholder}</${tag}>`;
+        }
+
+        if (selectedTextSegment) {
+          // Si había texto seleccionado, mantener seleccionada toda la zona formateada
+          // para poder pulsar otro estilo o alternarlo de nuevo
+          newSelectionStart = start;
+          newSelectionEnd = start + replacement.length;
+        } else {
+          // Si no había texto seleccionado, seleccionar el texto de marcador de posición
+          const openTagLen = tag.length + 2; // e.g. <b> = 3
+          newSelectionStart = start + openTagLen;
+          newSelectionEnd = start + openTagLen + defaultPlaceholder.length;
+        }
+      }
     }
 
     const newText = currentText.substring(0, start) + replacement + currentText.substring(end);
     handleUpdateBlockText(blockId, newText);
 
-    setTimeout(() => {
-      if (el) {
-        el.focus();
-        el.setSelectionRange(start + cursorOffset, start + cursorOffset);
+    // Restaurar foco, posición del cursor y posición de scroll sin saltos de pantalla
+    const restoreCursorAndScroll = () => {
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(newSelectionStart, newSelectionEnd);
+      el.scrollTop = prevTextareaScroll;
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: prevWindowScroll, behavior: 'instant' as ScrollBehavior });
       }
-    }, 50);
+    };
+
+    requestAnimationFrame(restoreCursorAndScroll);
+    setTimeout(restoreCursorAndScroll, 30);
+    setTimeout(restoreCursorAndScroll, 70);
   };
 
   const flagKeys = Object.keys(project.globalFlags || {});
@@ -2360,6 +2442,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       <div className="flex items-center gap-0.5 bg-black/60 p-0.5 rounded-lg border border-white/10 text-[11px]">
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => applyTextFormat(block.id, block.text, 'normal')}
                           className="px-2 py-0.5 rounded text-slate-300 hover:text-white hover:bg-white/10 transition-colors font-sans flex items-center gap-1 cursor-pointer"
                           title="Texto Normal"
@@ -2369,6 +2452,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => applyTextFormat(block.id, block.text, 'h1')}
                           className="px-2 py-0.5 rounded text-amber-300 hover:text-amber-200 hover:bg-white/10 transition-colors font-bold flex items-center gap-1 cursor-pointer"
                           title="Encabezado 1 (Título principal)"
@@ -2378,6 +2462,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => applyTextFormat(block.id, block.text, 'h2')}
                           className="px-2 py-0.5 rounded text-amber-200/90 hover:text-amber-100 hover:bg-white/10 transition-colors font-semibold flex items-center gap-1 cursor-pointer"
                           title="Encabezado 2 (Subtítulo)"
@@ -2393,6 +2478,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => applyTextFormat(block.id, block.text, 'bold')}
                           className="p-1 rounded bg-black/50 hover:bg-white/15 text-slate-200 hover:text-white border border-white/10 transition-colors cursor-pointer"
                           title="Formatear como Negrita (<b>)"
@@ -2401,6 +2487,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => applyTextFormat(block.id, block.text, 'italic')}
                           className="p-1 rounded bg-black/50 hover:bg-white/15 text-slate-200 hover:text-white border border-white/10 transition-colors cursor-pointer"
                           title="Formatear como Cursiva (<i>)"
@@ -2409,6 +2496,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         </button>
                         <button
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => applyTextFormat(block.id, block.text, 'underline')}
                           className="p-1 rounded bg-black/50 hover:bg-white/15 text-slate-200 hover:text-white border border-white/10 transition-colors cursor-pointer"
                           title="Formatear como Subrayado (<u>)"
