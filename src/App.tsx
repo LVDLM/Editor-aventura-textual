@@ -382,6 +382,7 @@ export default function App() {
         isOwnProject={
           !!(currentUser && (project.author === currentUser.displayName || project.authorId === currentUser.uid))
         }
+        lastAutoSaveTime={lastAutoSaveTime}
       />
 
       {/* Main View Router */}

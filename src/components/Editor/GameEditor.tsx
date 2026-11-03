@@ -6,7 +6,7 @@ import { InventoryManager } from './InventoryManager';
 import { FlagsManager } from './FlagsManager';
 import { CharacterManager } from './CharacterManager';
 import { SoundManager } from './SoundManager';
-import { FileText, Settings, Package, ToggleLeft, Play, AlertTriangle, FolderDown, Maximize2, Monitor, MoveHorizontal, CheckCircle, Save, User, Volume2 } from 'lucide-react';
+import { FileText, Settings, Package, ToggleLeft, AlertTriangle, MoveHorizontal, User, Volume2 } from 'lucide-react';
 import { validateProjectScenes } from '../../utils/sceneValidator';
 
 interface GameEditorProps {
@@ -54,213 +54,158 @@ export const GameEditor: React.FC<GameEditorProps> = ({
     }`}>
       <div className={`${containerWidthClass} mx-auto space-y-6 transition-all duration-300`}>
         
-        {/* Top Bar for Editor */}
-        <div className={`flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl border shadow-sm ${
-          isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
-        }`}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#A4332A]/10 border border-[#A4332A]/30 flex items-center justify-center text-[#A4332A] font-bold text-lg">
-              🛠️
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className={`font-serif font-bold text-lg ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
-                  Editor de Aventuras Gráficas
-                </h2>
-                <div
-                  className={`px-2.5 py-0.5 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 ${
-                    isClean
-                      ? 'bg-[#3B6D11]/10 border-[#3B6D11]/30 text-[#3B6D11]'
-                      : 'bg-[#3B6D11]/20 border-[#3B6D11]/40 text-emerald-300'
-                  }`}
-                  title="Autoguardado borrador local activo. Tus cambios en párrafos, acciones de palabras e imágenes se guardan automáticamente."
-                >
-                  <CheckCircle className="w-3 h-3 text-[#3B6D11]" />
-                  <span>Autoguardado local activo {lastAutoSaveTime ? `(${lastAutoSaveTime})` : ''}</span>
-                </div>
-              </div>
-              <p className={`text-xs ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
-                Diseña escenas, marca palabras interactivas y define la lógica de tu aventura.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Workspace Width Selector */}
-            <div className={`flex items-center gap-1 p-1 rounded-xl border text-xs font-semibold ${
-              isClean ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#1F1913] border-[#42362B] text-[#D1C7B7]'
-            }`}>
-              <span className={`px-2 text-[11px] font-bold uppercase flex items-center gap-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`} title="Ajusta el ancho de la zona de trabajo para pantallas grandes">
-                <MoveHorizontal className="w-3.5 h-3.5 text-[#C9A24B]" />
-                <span className="hidden md:inline">Ancho Zona:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => handleWidthChange('standard')}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
-                  editorWidth === 'standard'
-                    ? 'bg-[#A4332A] text-white shadow-sm'
-                    : isClean
-                    ? 'text-[#6B5C46] hover:text-[#2A2118]'
-                    : 'text-[#D1C7B7] hover:text-white'
-                }`}
-                title="Ancho Estándar (1280px) - Para pantallas normales"
-              >
-                Estándar
-              </button>
-              <button
-                type="button"
-                onClick={() => handleWidthChange('wide')}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
-                  editorWidth === 'wide'
-                    ? 'bg-[#A4332A] text-white shadow-sm'
-                    : isClean
-                    ? 'text-[#6B5C46] hover:text-[#2A2118]'
-                    : 'text-[#D1C7B7] hover:text-white'
-                }`}
-                title="Ancho Ampliado (1600px) - Recomendado para monitores grandes"
-              >
-                Amplio
-              </button>
-              <button
-                type="button"
-                onClick={() => handleWidthChange('full')}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
-                  editorWidth === 'full'
-                    ? 'bg-[#A4332A] text-white shadow-sm'
-                    : isClean
-                    ? 'text-[#6B5C46] hover:text-[#2A2118]'
-                    : 'text-[#D1C7B7] hover:text-white'
-                }`}
-                title="Pantalla Completa (100%) - Maximiza el espacio horizontal"
-              >
-                Completo
-              </button>
-            </div>
-
-            {onOpenExport && (
-              <button
-                onClick={onOpenExport}
-                className={`px-4 py-2 border rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer ${
-                  isClean
-                    ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
-                    : 'bg-[#1F1913] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
-                }`}
-                title="Guardar proyecto en la nube, descargar JSON o exportar HTML/ZIP"
-              >
-                <FolderDown className="w-4 h-4 text-[#A4332A]" />
-                <span>Guardar Proyecto</span>
-              </button>
-            )}
-
-            <button
-              onClick={onSwitchToPlay}
-              className="px-4 py-2 bg-[#3B6D11] hover:bg-[#2F570E] text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-            >
-              <Play className="w-4 h-4 fill-white" />
-              <span>Probar Juego Ahora</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className={`flex items-center gap-2 border-b pb-2 overflow-x-auto ${
+        {/* Tab Navigation & Workspace Width Selector */}
+        <div className={`flex flex-wrap items-center justify-between gap-3 border-b pb-2.5 ${
           isClean ? 'border-[#E5DCB8]' : 'border-[#42362B]'
         }`}>
-          <button
-            onClick={() => setActiveTab('scenes')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'scenes'
-                ? 'bg-[#A4332A] text-white shadow-sm'
-                : isClean
-                ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
-                : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>1. Escenas y Texto</span>
-            {validationIssues.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 bg-[#C9A24B] text-[#2A2118] font-black rounded-full text-[10px] flex items-center gap-0.5" title={`${validationIssues.length} observaciones de vinculación y retorno`}>
-                <AlertTriangle className="w-3 h-3" />
-                <span>{validationIssues.length}</span>
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              onClick={() => setActiveTab('scenes')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'scenes'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
+                  : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>1. Escenas y Texto</span>
+              {validationIssues.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 bg-[#C9A24B] text-[#2A2118] font-black rounded-full text-[10px] flex items-center gap-0.5" title={`${validationIssues.length} observaciones de vinculación y retorno`}>
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>{validationIssues.length}</span>
+                </span>
+              )}
+            </button>
 
-          <button
-            onClick={() => setActiveTab('inventory')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'inventory'
-                ? 'bg-[#A4332A] text-white shadow-sm'
-                : isClean
-                ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
-                : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
-            }`}
-          >
-            <Package className="w-4 h-4" />
-            <span>2. Inventario de Objetos</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'inventory'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
+                  : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
+              }`}
+            >
+              <Package className="w-4 h-4" />
+              <span>2. Inventario de Objetos</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('characters')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'characters'
-                ? 'bg-[#A4332A] text-white shadow-sm'
-                : isClean
-                ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
-                : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            <span>3. Personajes (NPCs)</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('characters')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'characters'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
+                  : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              <span>3. Personajes (NPCs)</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('flags')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'flags'
-                ? 'bg-[#A4332A] text-white shadow-sm'
-                : isClean
-                ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
-                : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
-            }`}
-          >
-            <ToggleLeft className="w-4 h-4" />
-            <span>4. Banderas y Variables</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('flags')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'flags'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
+                  : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
+              }`}
+            >
+              <ToggleLeft className="w-4 h-4" />
+              <span>4. Banderas y Variables</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('sounds')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'sounds'
-                ? 'bg-[#A4332A] text-white shadow-sm'
-                : isClean
-                ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
-                : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
-            }`}
-          >
-            <Volume2 className="w-4 h-4 text-amber-400" />
-            <span>5. Sonidos y Audio</span>
-            {project.customSounds && project.customSounds.length > 0 && (
-              <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-mono">
-                {project.customSounds.length}
-              </span>
-            )}
-          </button>
+            <button
+              onClick={() => setActiveTab('sounds')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'sounds'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
+                  : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
+              }`}
+            >
+              <Volume2 className="w-4 h-4 text-amber-400" />
+              <span>5. Sonidos y Audio</span>
+              {project.customSounds && project.customSounds.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded-full text-[10px] font-mono">
+                  {project.customSounds.length}
+                </span>
+              )}
+            </button>
 
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'settings'
-                ? 'bg-[#A4332A] text-white shadow-sm'
-                : isClean
-                ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
-                : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>6. Configuración y Fallbacks</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118] hover:bg-[#E5DCB8]/50'
+                  : 'text-[#D1C7B7] hover:text-white hover:bg-[#2C241C]'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>6. Configuración y Fallbacks</span>
+            </button>
+          </div>
+
+          {/* Workspace Width Selector */}
+          <div className={`flex items-center gap-1 p-1 rounded-xl border text-xs font-semibold shrink-0 shadow-xs ${
+            isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-[#D1C7B7]'
+          }`}>
+            <span className={`px-2 text-[11px] font-bold uppercase flex items-center gap-1 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`} title="Ajusta el ancho de la zona de trabajo para pantallas grandes">
+              <MoveHorizontal className="w-3.5 h-3.5 text-[#C9A24B]" />
+              <span className="hidden xl:inline">Ancho:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => handleWidthChange('standard')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
+                editorWidth === 'standard'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118]'
+                  : 'text-[#D1C7B7] hover:text-white'
+              }`}
+              title="Ancho Estándar (1280px) - Para pantallas normales"
+            >
+              Estándar
+            </button>
+            <button
+              type="button"
+              onClick={() => handleWidthChange('wide')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
+                editorWidth === 'wide'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118]'
+                  : 'text-[#D1C7B7] hover:text-white'
+              }`}
+              title="Ancho Ampliado (1600px) - Recomendado para monitores grandes"
+            >
+              Amplio
+            </button>
+            <button
+              type="button"
+              onClick={() => handleWidthChange('full')}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer text-xs font-bold ${
+                editorWidth === 'full'
+                  ? 'bg-[#A4332A] text-white shadow-sm'
+                  : isClean
+                  ? 'text-[#6B5C46] hover:text-[#2A2118]'
+                  : 'text-[#D1C7B7] hover:text-white'
+              }`}
+              title="Pantalla Completa (100%) - Maximiza el espacio horizontal"
+            >
+              Completo
+            </button>
+          </div>
         </div>
 
         {/* Tab Content */}
