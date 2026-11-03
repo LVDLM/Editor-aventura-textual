@@ -26,6 +26,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
 
   // State for Managing Combinations on an Item
   const [comboManagingItemId, setComboManagingItemId] = useState<string | null>(null);
+  const [editingComboRuleId, setEditingComboRuleId] = useState<string | null>(null);
   const [comboRequiredItemId, setComboRequiredItemId] = useState('');
   const [comboResponseMsg, setComboResponseMsg] = useState('');
   const [comboAddItem, setComboAddItem] = useState('');
@@ -211,36 +212,26 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
     }));
   };
 
-  const handleAddCombination = (targetItemId: string) => {
-    if (!comboRequiredItemId) return;
+  const handleStartEditCombination = (targetItem: InventoryItem, comboRule: ActionRule) => {
+    setComboManagingItemId(targetItem.id);
+    setEditingComboRuleId(comboRule.id);
+    setComboRequiredItemId(comboRule.requiredItemId || '');
+    setComboSound(comboRule.soundEffect || 'pickup');
+    setComboResponseMsg(comboRule.responseMessage || '');
+    setComboAddItem(comboRule.stateChange?.addItemId || '');
+    setComboRemoveThis(!!comboRule.stateChange?.removeItemId);
+    setComboRemoveRequired(!!comboRule.stateChange?.removeItem2Id);
 
-    const newRule: ActionRule = {
-      id: `combo_${Date.now()}`,
-      verb: 'usar',
-      requiredItemId: comboRequiredItemId,
-      responseMessage: comboResponseMsg.trim() || 'Has combinado los objetos con éxito.',
-      soundEffect: comboSound,
-      stateChange: {
-        addItemId: comboAddItem || undefined,
-        removeItemId: comboRemoveThis ? targetItemId : undefined,
-        removeItem2Id: comboRemoveRequired ? comboRequiredItemId : undefined,
-        setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: true } : undefined,
-      },
-    };
+    const flagEntries = Object.entries(comboRule.stateChange?.setFlags || {});
+    if (flagEntries.length > 0) {
+      setComboSetFlag(flagEntries[0][0]);
+    } else {
+      setComboSetFlag('');
+    }
+  };
 
-    updateProject((prev) => ({
-      ...prev,
-      inventoryItems: prev.inventoryItems.map((item) =>
-        item.id === targetItemId
-          ? {
-              ...item,
-              combinations: [...(item.combinations || []), newRule],
-            }
-          : item
-      ),
-    }));
-
-    // Reset combination inputs
+  const handleCancelEditCombination = () => {
+    setEditingComboRuleId(null);
     setComboRequiredItemId('');
     setComboResponseMsg('');
     setComboAddItem('');
@@ -250,7 +241,71 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
     setComboSound('pickup');
   };
 
+  const handleSaveCombination = (targetItemId: string) => {
+    if (!comboRequiredItemId) return;
+
+    if (editingComboRuleId) {
+      updateProject((prev) => ({
+        ...prev,
+        inventoryItems: prev.inventoryItems.map((item) =>
+          item.id === targetItemId
+            ? {
+                ...item,
+                combinations: (item.combinations || []).map((c) => {
+                  if (c.id !== editingComboRuleId) return c;
+                  return {
+                    ...c,
+                    requiredItemId: comboRequiredItemId,
+                    responseMessage: comboResponseMsg.trim() || 'Has combinado los objetos con éxito.',
+                    soundEffect: comboSound,
+                    stateChange: {
+                      ...c.stateChange,
+                      addItemId: comboAddItem || undefined,
+                      removeItemId: comboRemoveThis ? targetItemId : undefined,
+                      removeItem2Id: comboRemoveRequired ? comboRequiredItemId : undefined,
+                      setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: true } : undefined,
+                    },
+                  };
+                }),
+              }
+            : item
+        ),
+      }));
+    } else {
+      const newRule: ActionRule = {
+        id: `combo_${Date.now()}`,
+        verb: 'usar',
+        requiredItemId: comboRequiredItemId,
+        responseMessage: comboResponseMsg.trim() || 'Has combinado los objetos con éxito.',
+        soundEffect: comboSound,
+        stateChange: {
+          addItemId: comboAddItem || undefined,
+          removeItemId: comboRemoveThis ? targetItemId : undefined,
+          removeItem2Id: comboRemoveRequired ? comboRequiredItemId : undefined,
+          setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: true } : undefined,
+        },
+      };
+
+      updateProject((prev) => ({
+        ...prev,
+        inventoryItems: prev.inventoryItems.map((item) =>
+          item.id === targetItemId
+            ? {
+                ...item,
+                combinations: [...(item.combinations || []), newRule],
+              }
+            : item
+        ),
+      }));
+    }
+
+    handleCancelEditCombination();
+  };
+
   const handleDeleteCombination = (targetItemId: string, comboRuleId: string) => {
+    if (editingComboRuleId === comboRuleId) {
+      handleCancelEditCombination();
+    }
     updateProject((prev) => ({
       ...prev,
       inventoryItems: prev.inventoryItems.map((item) =>
@@ -708,7 +763,15 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
 
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setComboManagingItemId(isManagingCombos ? null : item.id)}
+                        onClick={() => {
+                          if (isManagingCombos) {
+                            handleCancelEditCombination();
+                            setComboManagingItemId(null);
+                          } else {
+                            handleCancelEditCombination();
+                            setComboManagingItemId(item.id);
+                          }
+                        }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
                           isManagingCombos
                             ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
@@ -799,18 +862,28 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                           const addedItem = combo.stateChange?.addItemId
                             ? project.inventoryItems.find((i) => i.id === combo.stateChange?.addItemId)
                             : null;
+                          const isThisComboEditing = isManagingCombos && editingComboRuleId === combo.id;
 
                           return (
                             <div
                               key={combo.id}
-                              className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs"
+                              className={`flex items-center justify-between rounded-lg p-2.5 text-xs transition-all ${
+                                isThisComboEditing
+                                  ? 'bg-amber-950/40 border-2 border-amber-500 shadow-md ring-1 ring-amber-500/50'
+                                  : 'bg-slate-950 border border-slate-800'
+                              }`}
                             >
                               <div className="space-y-1 pr-2">
-                                <div className="flex items-center gap-1.5 font-semibold text-slate-200">
+                                <div className="flex items-center gap-1.5 font-semibold text-slate-200 flex-wrap">
                                   <span>Usar con:</span>
                                   <span className="text-amber-400 font-bold">[{reqItem?.name || combo.requiredItemId}]</span>
                                   <ArrowRight className="w-3 h-3 text-slate-500" />
                                   <span className="text-emerald-400">"{combo.responseMessage}"</span>
+                                  {isThisComboEditing && (
+                                    <span className="text-[10px] bg-amber-500 text-slate-950 font-bold px-1.5 py-0.2 rounded uppercase">
+                                      Editando
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex flex-wrap gap-2 text-[10px] text-slate-400">
                                   {addedItem && (
@@ -830,19 +903,34 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                                   )}
                                   {combo.stateChange?.setFlags && (
                                     <span className="text-sky-300 bg-sky-950/40 px-1.5 py-0.5 rounded border border-sky-500/30">
-                                      🚩 Activación de Flags
+                                      🚩 Bandera: {Object.keys(combo.stateChange.setFlags).join(', ')}
                                     </span>
                                   )}
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => handleDeleteCombination(item.id, combo.id)}
-                                className="p-1 text-slate-400 hover:text-rose-400 transition-colors shrink-0"
-                                title="Eliminar combinación"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditCombination(item, combo)}
+                                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                    isThisComboEditing
+                                      ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                                      : 'text-slate-400 hover:text-amber-300 hover:bg-slate-900'
+                                  }`}
+                                  title="Editar esta combinación"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCombination(item.id, combo.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-lg transition-colors cursor-pointer"
+                                  title="Eliminar combinación"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
@@ -850,17 +938,25 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                     </div>
                   )}
 
-                  {/* Combination Creator Panel when toggled */}
+                  {/* Combination Creator / Editor Panel when toggled */}
                   {isManagingCombos && (
                     <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-4 space-y-3 animate-fadeIn">
                       <div className="flex items-center justify-between border-b border-amber-500/20 pb-2">
                         <h5 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                           <Puzzle className="w-4 h-4 text-amber-400" />
-                          <span>Añadir Combinación para "{item.name}"</span>
+                          <span>
+                            {editingComboRuleId
+                              ? `Editar Combinación para "${item.name}"`
+                              : `Añadir Combinación para "${item.name}"`}
+                          </span>
                         </h5>
                         <button
-                          onClick={() => setComboManagingItemId(null)}
-                          className="text-[10px] text-slate-400 hover:text-slate-200"
+                          type="button"
+                          onClick={() => {
+                            handleCancelEditCombination();
+                            setComboManagingItemId(null);
+                          }}
+                          className="text-[10px] text-slate-400 hover:text-slate-200 cursor-pointer"
                         >
                           Cerrar
                         </button>
@@ -939,15 +1035,21 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
 
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                            5. Activar Flag (Opcional)
+                            5. Activar Bandera / Flag (Opcional)
                           </label>
                           <input
                             type="text"
+                            list="combo-flags-datalist"
                             value={comboSetFlag}
                             onChange={(e) => setComboSetFlag(e.target.value)}
                             placeholder="Ej: papel_recortado"
                             className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500 font-mono"
                           />
+                          <datalist id="combo-flags-datalist">
+                            {Object.keys(project.globalFlags || {}).map((flagKey) => (
+                              <option key={flagKey} value={flagKey} />
+                            ))}
+                          </datalist>
                         </div>
                       </div>
 
@@ -973,15 +1075,27 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                         </label>
                       </div>
 
-                      <div className="flex justify-end pt-1">
+                      <div className="flex items-center justify-between pt-1">
+                        {editingComboRuleId ? (
+                          <button
+                            type="button"
+                            onClick={handleCancelEditCombination}
+                            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold rounded-xl text-xs border border-slate-700 cursor-pointer transition-colors"
+                          >
+                            Cancelar Edición
+                          </button>
+                        ) : (
+                          <div />
+                        )}
+
                         <button
                           type="button"
-                          onClick={() => handleAddCombination(item.id)}
+                          onClick={() => handleSaveCombination(item.id)}
                           disabled={!comboRequiredItemId}
-                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow cursor-pointer"
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow cursor-pointer transition-colors"
                         >
-                          <Plus className="w-4 h-4" />
-                          <span>Guardar Combinación</span>
+                          {editingComboRuleId ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                          <span>{editingComboRuleId ? 'Guardar Cambios de Combinación' : 'Guardar Combinación'}</span>
                         </button>
                       </div>
                     </div>
