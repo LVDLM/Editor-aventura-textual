@@ -241,6 +241,7 @@ export interface QTEConfig {
   onSuccessSceneId?: string; // Target scene on success
   onSuccessMessage?: string; // Custom narrative message on success
   onSuccessFlag?: string; // Global flag key to set to true on success
+  onSuccessItemIds?: string[]; // Inventory item IDs granted to the player upon QTE success
   onFailSceneId?: string; // Target scene on fail/timeout
   onFailMessage?: string; // Custom message on fail/timeout
   onFailFlag?: string; // Global flag key to set to true on fail

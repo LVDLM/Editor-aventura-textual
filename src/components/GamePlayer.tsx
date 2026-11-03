@@ -147,30 +147,33 @@ const isItemNeededInScene = (item: InventoryItem, scene?: Scene): boolean => {
 };
 
 // Filter progressive text for QTE scenes: [1] appears after action 1, [2] after action 2, etc.
+// Preserves the author's original whitespace and inline flow without forcing newline breaks.
 const filterQTEProgressiveText = (rawText: string, stepIndex: number, isFinished: boolean): string => {
   if (!/\[\d+\]/.test(rawText)) {
     return rawText;
   }
 
-  const parts = rawText.split(/(?=\[\d+\])/g);
-  const result: string[] = [];
-
-  for (const part of parts) {
-    const match = part.match(/^\s*\[(\d+)\]\s*([\s\S]*)$/);
-    if (!match) {
-      // Initial text before any [N] tag
-      result.push(part.trim());
-    } else {
-      const targetStep = parseInt(match[1], 10);
-      const textAfterTag = match[2];
-      // Revealed when stepIndex >= targetStep (e.g. [1] unlocked after step 0 is completed)
-      if (isFinished || stepIndex >= targetStep) {
-        result.push(textAfterTag.trim());
+  // If the QTE is not yet finished, cut off the text at the first unrevealed [N] tag (where N > stepIndex)
+  let visibleText = rawText;
+  if (!isFinished) {
+    const regex = /\[(\d+)\]/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(rawText)) !== null) {
+      const stepNum = parseInt(match[1], 10);
+      if (stepNum > stepIndex) {
+        visibleText = rawText.slice(0, match.index);
+        break;
       }
     }
   }
 
-  return result.filter(Boolean).join('\n\n');
+  // Remove revealed [N] tags cleanly:
+  // 1. If preceded by whitespace and followed by punctuation (e.g. "agacharte [1],"), remove leading space too -> "agacharte,"
+  // 2. Otherwise remove the tag and any single immediate trailing space/tab -> "agacharte [1] luego" -> "agacharte luego"
+  return visibleText
+    .replace(/\s+\[\d+\](?=[,.;:!?])/g, '')
+    .replace(/\[\d+\][ \t]?/g, '')
+    .trimEnd();
 };
 
 export const GamePlayer: React.FC<GamePlayerProps> = ({
@@ -198,7 +201,47 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     isGameOver?: boolean;
     itemImageUrl?: string;
     message: string;
+    onClose?: () => void;
   } | null>(null);
+  const [modalQueue, setModalQueue] = useState<{
+    type: 'action' | 'item' | 'gameover';
+    title?: string;
+    verbIconName?: string;
+    isAutosaved?: boolean;
+    isGameOver?: boolean;
+    itemImageUrl?: string;
+    message: string;
+    onClose?: () => void;
+  }[]>([]);
+
+  const dismissModalFeedback = () => {
+    const currentOnClose = modalFeedback?.onClose;
+    if (modalQueue.length > 0) {
+      const [nextModal, ...remainingQueue] = modalQueue;
+      setModalFeedback(nextModal);
+      setModalQueue(remainingQueue);
+      if (currentOnClose) currentOnClose();
+    } else {
+      setModalFeedback(null);
+      if (currentOnClose) currentOnClose();
+    }
+  };
+
+  const queueModals = (modals: {
+    type: 'action' | 'item' | 'gameover';
+    title?: string;
+    verbIconName?: string;
+    isAutosaved?: boolean;
+    isGameOver?: boolean;
+    itemImageUrl?: string;
+    message: string;
+    onClose?: () => void;
+  }[]) => {
+    if (modals.length === 0) return;
+    const [first, ...rest] = modals;
+    setModalFeedback(first);
+    setModalQueue(rest);
+  };
   
   // Details & Credits modal state
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -309,7 +352,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       setGameState((prev: any) => ({ ...prev, isGameOver: true }));
       setModalFeedback({
         type: 'gameover',
-        title: '⚡ ¡EVENTO DE TIEMPO FALLADO!',
+        title: 'Fin de partida',
         verbIconName: 'Skull',
         isGameOver: true,
         message: failMsg,
@@ -317,21 +360,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     } else if (config?.onFailSceneId) {
       setModalFeedback({
         type: 'action',
-        title: '⚡ ¡TIEMPO AGOTADO!',
-        verbIconName: 'Zap',
+        title: 'Tiempo agotado',
+        verbIconName: 'Clock',
         message: failMsg,
+        onClose: () => {
+          setGameState((prev: any) => ({
+            ...prev,
+            currentSceneId: config.onFailSceneId,
+          }));
+        },
       });
-      setTimeout(() => {
-        setGameState((prev: any) => ({
-          ...prev,
-          currentSceneId: config.onFailSceneId,
-        }));
-      }, 1200);
     } else {
       setModalFeedback({
         type: 'action',
-        title: '⚡ EVENTO FALLADO',
-        verbIconName: 'Zap',
+        title: 'Tiempo agotado',
+        verbIconName: 'Clock',
         message: failMsg,
       });
     }
@@ -341,7 +384,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setQteStatus('success');
     playSound('pickup');
     const config = currentScene?.qteConfig;
-    const successMsg = config?.onSuccessMessage || '¡Sucesión completada a tiempo con éxito!';
+    const successMsg = config?.onSuccessMessage?.trim() || 'Has completado la secuencia a tiempo.';
 
     if (config?.onSuccessFlag) {
       setGameState((prev: any) => ({
@@ -353,26 +396,67 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       }));
     }
 
-    if (config?.onSuccessSceneId) {
-      setModalFeedback({
+    const itemIdsToGrant = (config?.onSuccessItemIds || []).filter(Boolean);
+    if (itemIdsToGrant.length > 0) {
+      setGameState((prev: any) => ({
+        ...prev,
+        inventory: Array.from(new Set([...(prev.inventory || []), ...itemIdsToGrant])),
+      }));
+    }
+
+    const itemsToGrant = itemIdsToGrant
+      .map((id) => project.inventoryItems.find((it) => it.id === id))
+      .filter((it): it is InventoryItem => !!it);
+
+    const targetSceneId = config?.onSuccessSceneId;
+    const transitionAction = targetSceneId
+      ? () => {
+          setGameState((prev: any) => ({
+            ...prev,
+            currentSceneId: targetSceneId,
+          }));
+        }
+      : undefined;
+
+    const modalsToShow: {
+      type: 'action' | 'item' | 'gameover';
+      title?: string;
+      verbIconName?: string;
+      isAutosaved?: boolean;
+      isGameOver?: boolean;
+      itemImageUrl?: string;
+      message: string;
+      onClose?: () => void;
+    }[] = [];
+
+    // 1. Success message (author's custom message for overcoming the scene, without emojis/icons)
+    if (successMsg) {
+      modalsToShow.push({
         type: 'action',
-        title: '⚡ ¡EVENTO COMPLETADO CON ÉXITO!',
-        verbIconName: 'Zap',
+        title: 'Evento superado',
         message: successMsg,
+        onClose: itemsToGrant.length === 0 ? transitionAction : undefined,
       });
-      setTimeout(() => {
-        setGameState((prev: any) => ({
-          ...prev,
-          currentSceneId: config.onSuccessSceneId,
-        }));
-      }, 1200);
-    } else {
-      setModalFeedback({
-        type: 'action',
-        title: '⚡ ¡ÉXITO EN EL EVENTO!',
-        verbIconName: 'Zap',
-        message: successMsg,
+    }
+
+    // 2. Respective messages for each received object (same as normal scene pickups)
+    itemsToGrant.forEach((item, index) => {
+      const isLast = index === itemsToGrant.length - 1;
+      modalsToShow.push({
+        type: 'item',
+        title: item.name,
+        verbIconName: 'Hand',
+        itemImageUrl: item.imageFileData || item.imageUrl,
+        isAutosaved: true,
+        message: `¡Has conseguido: ${item.name}!`,
+        onClose: isLast ? transitionAction : undefined,
       });
+    });
+
+    if (modalsToShow.length > 0) {
+      queueModals(modalsToShow);
+    } else if (transitionAction) {
+      transitionAction();
     }
   };
 
@@ -1585,7 +1669,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       processedText = filterQTEProgressiveText(rawText, qteStepIndex, isFinished);
     } else {
       // In non-QTE scenes, strip [N] tags so they never appear to players
-      processedText = rawText.replace(/\[\d+\]\s*/g, '');
+      processedText = rawText
+        .replace(/\s+\[\d+\](?=[,.;:!?])/g, '')
+        .replace(/\[\d+\][ \t]?/g, '');
     }
 
     if (!processedText.trim()) return null;
@@ -2091,7 +2177,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           {modalFeedback && (
             <div
               className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
-              onClick={() => setModalFeedback(null)}
+              onClick={() => dismissModalFeedback()}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.92, y: 15 }}
@@ -2164,7 +2250,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     )}
                   </div>
                   <button
-                    onClick={() => setModalFeedback(null)}
+                    onClick={() => dismissModalFeedback()}
                     className={`p-1 rounded-lg transition-colors ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
                   >
                     <X className="w-5 h-5" />
@@ -2201,7 +2287,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     <>
                       <button
                         onClick={() => {
-                          setModalFeedback(null);
+                          dismissModalFeedback();
                           onReset();
                         }}
                         className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -2212,7 +2298,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       {onOpenSaveLoad && (
                         <button
                           onClick={() => {
-                            setModalFeedback(null);
+                            dismissModalFeedback();
                             onOpenSaveLoad();
                           }}
                           className={`px-4 py-2 font-bold rounded-xl text-xs shadow-md transition-colors flex items-center gap-1.5 cursor-pointer ${
@@ -2224,7 +2310,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                         </button>
                       )}
                       <button
-                        onClick={() => setModalFeedback(null)}
+                        onClick={() => dismissModalFeedback()}
                         className={`px-3.5 py-2 rounded-xl text-xs transition-colors border ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                       >
                         Cerrar
@@ -2232,7 +2318,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     </>
                   ) : (
                     <button
-                      onClick={() => setModalFeedback(null)}
+                      onClick={() => dismissModalFeedback()}
                       className={`px-5 py-2 font-bold rounded-xl text-xs shadow-md transition-colors cursor-pointer ${themeConfig.verbActiveBg} ${themeConfig.verbActiveText}`}
                     >
                       Entendido

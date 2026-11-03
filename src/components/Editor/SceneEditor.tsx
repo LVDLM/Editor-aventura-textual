@@ -1823,10 +1823,10 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
               {activeScene?.qteConfig?.incrementalParagraphs && (
                 <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200/90 space-y-1">
                   <div className="font-bold flex items-center gap-1.5 text-amber-300">
-                    <span>💡 Instrucciones de párrafos progresivos en QTE:</span>
+                    <span>💡 Instrucciones de revelación progresiva en QTE:</span>
                   </div>
                   <p className="text-[11px] leading-relaxed text-amber-200/80">
-                    Escribe <strong className="text-white font-mono bg-black/60 px-1 rounded">[1]</strong> al inicio del párrafo que se mostrará tras completar la 1ª acción, <strong className="text-white font-mono bg-black/60 px-1 rounded">[2]</strong> tras la 2ª, etc. El texto antes de [1] será el visible al cargar la escena. La clave [número] será invisible para el jugador.
+                    Escribe <strong className="text-white font-mono bg-black/60 px-1 rounded">[1]</strong> tras la 1ª acción, <strong className="text-white font-mono bg-black/60 px-1 rounded">[2]</strong> tras la 2ª, etc. Puedes colocarlos de forma continua dentro de la misma frase (ej: <em>agacharte [1], rodar [2] y saltar</em>) o entre párrafos. El texto se revelará progresivamente respetando tu redacción sin saltos forzados.
                   </p>
                 </div>
               )}
@@ -1913,6 +1913,57 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* Entrega de objetos al superar la escena */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-emerald-300/80 mb-1">
+                      Objetos a entregar al superar el evento (Opcional)
+                    </label>
+                    {project.inventoryItems.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">
+                        No hay objetos en el inventario. Puedes crearlos en la pestaña "2. Inventario de Objetos".
+                      </p>
+                    ) : (
+                      <div className="bg-black/50 border border-emerald-500/30 rounded-xl p-2 max-h-32 overflow-y-auto space-y-1">
+                        {project.inventoryItems.map((item) => {
+                          const isChecked = (activeScene?.qteConfig?.onSuccessItemIds || []).includes(item.id);
+                          return (
+                            <label
+                              key={`qte_item_${item.id}`}
+                              className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer transition-colors text-xs ${
+                                isChecked
+                                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 font-bold'
+                                  : 'text-slate-300 hover:bg-white/5 border border-transparent'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  updateProject((prev) => ({
+                                    ...prev,
+                                    scenes: prev.scenes.map((s) => {
+                                      if (s.id !== activeScene.id) return s;
+                                      const prevConfig = s.qteConfig || { timeLimitSeconds: 10, sequence: [] };
+                                      const currentList = prevConfig.onSuccessItemIds || [];
+                                      const updatedList = checked
+                                        ? [...currentList, item.id]
+                                        : currentList.filter((id) => id !== item.id);
+                                      return { ...s, qteConfig: { ...prevConfig, onSuccessItemIds: updatedList } };
+                                    }),
+                                  }));
+                                }}
+                                className="accent-emerald-500 w-3.5 h-3.5 rounded cursor-pointer"
+                              />
+                              <span className="truncate">{item.name}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">({item.id})</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
