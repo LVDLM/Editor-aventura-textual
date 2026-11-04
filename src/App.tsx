@@ -17,7 +17,7 @@ import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
 import { PrivacyBanner } from './components/Portal/PrivacyBanner';
 import { Footer } from './components/Footer';
 import { setSoundEnabled } from './utils/audio';
-import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud, consolidateAdminProfilesInFirestore } from './lib/firebase';
+import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud, consolidateAdminProfilesInFirestore, getMasterAdminProfile } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const sanitizeProjectForPlay = (proj: GameProject): GameProject => {
@@ -144,6 +144,19 @@ export default function App() {
 
         let profile: UserProfile | null = await getUserProfile(user.uid);
 
+        if (!profile && isAdminEmail) {
+          const master = await getMasterAdminProfile();
+          if (master) {
+            profile = {
+              ...master,
+              uid: user.uid,
+              role: 'admin',
+              displayName: 'Urdimbre',
+              email: 'lavozdelosmuertos@gmail.com',
+            };
+          }
+        }
+
         if (!profile || (isAdminEmail && (profile.role !== 'admin' || !profile.displayName || ['usuario', 'administrador', 'lector'].includes(profile.displayName.toLowerCase().trim())))) {
           profile = await createOrUpdateUserProfile(
             user.uid,
@@ -153,11 +166,11 @@ export default function App() {
           );
         }
 
-        // Guarantee currentUser.uid ALWAYS matches user.uid from Firebase Auth, and admin name is Urdimbre
         if (profile) {
-          profile.uid = user.uid;
-          if (isAdminEmail && (!profile.displayName || ['usuario', 'administrador', 'lector'].includes(profile.displayName.toLowerCase().trim()))) {
+          if (isAdminEmail) {
+            profile.role = 'admin';
             profile.displayName = 'Urdimbre';
+            profile.email = 'lavozdelosmuertos@gmail.com';
           }
         }
         setCurrentUser(profile);

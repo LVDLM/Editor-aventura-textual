@@ -227,11 +227,27 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
   };
 
   const handleDeleteUserAccountByAdmin = async (targetUser: UserProfile) => {
-    if (!confirm(`⚠️ ATENCIÓN: ¿Seguro que deseas eliminar permanentemente al usuario "${targetUser.displayName}" (${targetUser.email}) y todas sus historias publicadas y borradores? Esta acción es irreversible.`)) return;
+    const userStories = adminProjects.filter(p => p.authorId === targetUser.uid);
+    const isMasterAdmin = (targetUser.email || '').toLowerCase().trim() === 'lavozdelosmuertos@gmail.com' && (userStories.length > 0 || targetUser.uid.startsWith('ANwT8'));
+
+    if (isMasterAdmin) {
+      alert('Esta es tu Cuenta Maestra Oficial de Administrador ("Urdimbre"). Está protegida por el sistema para evitar la pérdida accidental de tus historias y accesos.');
+      return;
+    }
+
+    if (userStories.length > 0) {
+      if (!confirm(`⚠️ ATENCIÓN: El usuario "${targetUser.displayName}" tiene ${userStories.length} historia(s) creada(s). Si continúas, se eliminará el usuario y todas sus historias en Firestore. ¿Deseas proceder?`)) {
+        return;
+      }
+    } else {
+      if (!confirm(`¿Eliminar la cuenta del usuario "${targetUser.displayName}" (${targetUser.email || targetUser.uid})?`)) {
+        return;
+      }
+    }
 
     try {
       await deleteUserByAdmin(targetUser.uid);
-      setMessage({ type: 'success', text: `Usuario "${targetUser.displayName}" y todos sus relatos han sido eliminados de Firestore.` });
+      setMessage({ type: 'success', text: `Usuario "${targetUser.displayName}" eliminado de Firestore.` });
       await fetchAdminUsers();
       await fetchAdminProjects();
     } catch (e) {
@@ -248,7 +264,7 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
       await fetchAdminProjects();
       setMessage({
         type: 'success',
-        text: `¡Unificación completada con éxito! Tu usuario principal (${res.primaryProfile?.displayName || 'Urdimbre'} - lavozdelosmuertos@gmail.com) es ahora el Administrador Único. Se unificaron ${res.updatedCount} registros y se reasignaron ${res.reassignedProjectsCount} historias.`
+        text: `¡Unificación y limpieza completada! Se han eliminado ${res.deletedCount} cuentas de administrador duplicadas de Firestore y se han mantenido intactas todas tus historias bajo tu Cuenta Maestra oficial: "${res.primaryProfile?.displayName || 'Urdimbre'}" (${res.primaryProfile?.email}) con ID [${res.primaryProfile?.uid.substring(0, 10)}...].`
       });
     } catch (e: any) {
       console.error(e);
@@ -747,27 +763,71 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
       {mainTab === 'users' && (
         <div className="space-y-6">
           {/* Action Bar: Consolidation & Cleanup */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-            <div className="flex items-center gap-3 text-xs">
-              <Shield className="w-5 h-5 text-amber-500 shrink-0" />
-              <div>
-                <p className={`font-bold ${isClean ? 'text-amber-950' : 'text-amber-200'}`}>
-                  Consolidación de Cuenta Principal (lavozdelosmuertos@gmail.com)
-                </p>
-                <p className={`text-[11px] ${isClean ? 'text-amber-800' : 'text-amber-300/80'}`}>
-                  Unifica todos los relatos de pruebas bajo tu usuario "Urdimbre" y asegura permisos de Administrador Único.
-                </p>
+          {(() => {
+            const masterAdminDoc = usersList.find(u => 
+              (u.email || '').toLowerCase().trim() === 'lavozdelosmuertos@gmail.com' &&
+              (adminProjects.filter(p => p.authorId === u.uid).length > 0 || u.uid.startsWith('ANwT8'))
+            );
+            const duplicateAdminProfiles = usersList.filter(u => {
+              const email = (u.email || '').toLowerCase().trim();
+              return email === 'lavozdelosmuertos@gmail.com' || (u.displayName === 'Urdimbre' && u.role === 'admin');
+            });
+            const duplicateAdminCount = duplicateAdminProfiles.length;
+
+            if (duplicateAdminCount > 1) {
+              return (
+                <div className="p-4 rounded-2xl bg-amber-500/15 border-2 border-amber-500/50 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+                  <div className="flex items-center gap-3 text-xs">
+                    <ShieldAlert className="w-6 h-6 text-amber-500 shrink-0" />
+                    <div>
+                      <p className={`font-bold text-sm ${isClean ? 'text-amber-950' : 'text-amber-200'}`}>
+                        ⚠️ Se han detectado {duplicateAdminCount} registros de Administrador en Firestore
+                      </p>
+                      <p className={`text-[11px] mt-0.5 leading-relaxed ${isClean ? 'text-amber-800' : 'text-amber-300/80'}`}>
+                        Se acumularon durante pruebas en el entorno de desarrollo. Al pulsar este botón se eliminarán los <strong>{duplicateAdminCount - 1} registros vacíos</strong> de Firestore y se mantendrán 100% intactas tus <strong>{masterAdminDoc ? adminProjects.filter(p => p.authorId === masterAdminDoc.uid).length : 6} historias</strong> bajo tu Cuenta Maestra única.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleConsolidateAdminProfiles}
+                    className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-lg shrink-0 active:scale-95"
+                    title="Eliminar duplicados vacíos y consolidar historias en la cuenta maestra"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Unificar y Eliminar {duplicateAdminCount - 1} Duplicados</span>
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${
+                isClean ? 'bg-emerald-50 border-emerald-300 text-emerald-900' : 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+              }`}>
+                <div className="flex items-center gap-3 text-xs">
+                  <Shield className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <div>
+                    <p className="font-bold">
+                      Cuenta Maestra de Administrador Unificada y Limpia
+                    </p>
+                    <p className="text-[11px] opacity-80">
+                      Tu usuario único "Urdimbre" (lavozdelosmuertos@gmail.com) está activo sin registros duplicados en Firestore.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleConsolidateAdminProfiles}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                    isClean ? 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/10'
+                  }`}
+                  title="Reverificar estado en Firestore"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Reverificar Estado</span>
+                </button>
               </div>
-            </div>
-            <button
-              onClick={handleConsolidateAdminProfiles}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-sm shrink-0"
-              title="Unificar cuentas duplicadas y reasignar historias a Urdimbre"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Unificar Cuentas de Admin</span>
-            </button>
-          </div>
+            );
+          })()}
 
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -890,12 +950,17 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
               {filteredUsers.map((user) => {
                 const userStories = adminProjects.filter(p => p.authorId === user.uid);
                 const isUserAdmin = user.role === 'admin';
+                const isUrdimbreEmail = (user.email || '').toLowerCase().trim() === 'lavozdelosmuertos@gmail.com';
+                const isMasterAdmin = isUserAdmin && isUrdimbreEmail && (userStories.length > 0 || user.uid.startsWith('ANwT8'));
+                const isDuplicateAdmin = !isMasterAdmin && isUrdimbreEmail;
 
                 return (
                   <div
                     key={user.uid}
                     className={`rounded-2xl p-4 sm:p-5 border transition-all flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 ${
-                      user.isSuspended
+                      isMasterAdmin
+                        ? isClean ? 'bg-amber-50/60 border-amber-300 shadow-sm' : 'bg-amber-950/20 border-amber-500/40 shadow-xl'
+                        : user.isSuspended
                         ? isClean ? 'bg-rose-50 border-rose-300' : 'bg-rose-950/20 border-rose-500/30'
                         : isClean
                         ? 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
@@ -934,6 +999,20 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                           }`}>
                             {isUserAdmin ? 'Administrador' : 'Autor'}
                           </span>
+
+                          {/* Master Admin Indicator */}
+                          {isMasterAdmin && (
+                            <span className="text-[10px] bg-amber-500 text-slate-950 font-black px-2 py-0.5 rounded shadow-sm flex items-center gap-1 uppercase">
+                              <Sparkles className="w-3 h-3" /> Cuenta Maestra Oficial
+                            </span>
+                          )}
+
+                          {/* Duplicate Indicator */}
+                          {isDuplicateAdmin && (
+                            <span className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-mono font-bold uppercase">
+                              Duplicado de Pruebas (0 historias)
+                            </span>
+                          )}
 
                           {/* Status Badge */}
                           {user.isSuspended ? (
@@ -1043,13 +1122,22 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                       </button>
 
                       {/* Delete Account */}
-                      <button
-                        onClick={() => handleDeleteUserAccountByAdmin(user)}
-                        className="p-2 bg-slate-950 hover:bg-rose-950 text-slate-400 hover:text-rose-400 rounded-xl text-xs cursor-pointer border border-white/5 transition-colors"
-                        title="Eliminar usuario e historias en Firestore"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {isMasterAdmin ? (
+                        <div
+                          className="p-2 bg-amber-500/10 text-amber-500 rounded-xl text-xs border border-amber-500/30 cursor-not-allowed"
+                          title="Cuenta Maestra Oficial protegida contra eliminación"
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleDeleteUserAccountByAdmin(user)}
+                          className="p-2 bg-slate-950 hover:bg-rose-950 text-slate-400 hover:text-rose-400 rounded-xl text-xs cursor-pointer border border-white/5 transition-colors"
+                          title="Eliminar usuario en Firestore"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

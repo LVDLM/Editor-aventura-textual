@@ -113,18 +113,78 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   return null;
 }
 
+/**
+ * Retrieves the primary/master admin user profile for lavozdelosmuertos@gmail.com (e.g., 'Urdimbre' with 6 stories)
+ */
+export async function getMasterAdminProfile(): Promise<UserProfile | null> {
+  try {
+    const q = query(collection(db, 'users'), where('email', '==', 'lavozdelosmuertos@gmail.com'));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      // Fallback: check all users
+      const allUsers = await getAllUsersForAdmin();
+      const match = allUsers.find(u => (u.email || '').toLowerCase().includes('lavozdelosmuertos') || u.displayName === 'Urdimbre');
+      return match || null;
+    }
+
+    const matchingUsers: UserProfile[] = [];
+    snap.forEach((d) => matchingUsers.push({ uid: d.id, ...d.data() } as UserProfile));
+
+    if (matchingUsers.length === 1) return matchingUsers[0];
+
+    // If multiple documents exist in Firestore, prioritize the master account that has stories (or starts with ANwT8)
+    const allProjects = await getAllProjectsForAdmin();
+    let bestUser = matchingUsers[0];
+    let maxStories = -1;
+
+    for (const u of matchingUsers) {
+      const storyCount = allProjects.filter((p) => p.authorId === u.uid).length;
+      if (storyCount > maxStories || (storyCount === maxStories && u.uid.startsWith('ANwT8'))) {
+        maxStories = storyCount;
+        bestUser = u;
+      }
+    }
+    return bestUser;
+  } catch (e) {
+    console.error('Error fetching master admin profile:', e);
+    return null;
+  }
+}
+
 export async function createOrUpdateUserProfile(
   uid: string, 
   email: string, 
   displayName: string, 
   role: UserRole = 'author'
 ): Promise<UserProfile> {
-  const existing = await getUserProfile(uid);
   const normalizedEmail = (email || auth.currentUser?.email || '').toLowerCase().trim();
   const isAdminEmail = ADMIN_EMAILS.some((adminE) => {
     const normAdmin = adminE.toLowerCase().trim();
     return normAdmin === normalizedEmail || normalizedEmail.includes('lavozdelosmuertos');
   });
+
+  // If this is the administrator identity, ensure we NEVER spawn duplicate documents for transient/test UIDs
+  if (isAdminEmail) {
+    const master = await getMasterAdminProfile();
+    if (master) {
+      if (master.uid === uid) {
+        // We are logged in as the master UID: update master doc cleanly
+        const updatedMaster: UserProfile = {
+          ...master,
+          role: 'admin',
+          displayName: master.displayName || 'Urdimbre',
+          email: 'lavozdelosmuertos@gmail.com',
+        };
+        await setDoc(doc(db, 'users', uid), updatedMaster, { merge: true });
+        return updatedMaster;
+      }
+      // If current session is a temporary/test UID, do NOT create a new document in 'users'!
+      // Return the persistent master profile to avoid cluttering Firestore.
+      return master;
+    }
+  }
+
+  const existing = await getUserProfile(uid);
 
   let finalRole: UserRole = role;
   if (isAdminEmail || role === 'admin') {
@@ -439,14 +499,6 @@ export async function getUserProjects(
 
         if (isMine && !seenIds.has(p.id)) {
           seenIds.add(p.id);
-          // Auto-migrate authorId to current active authorId if different (except static seed demo)
-          if (p.authorId !== authorId && !p.id.startsWith('sample_')) {
-            try {
-              updateDoc(doc(db, 'projects', p.id), { authorId, authorEmail: userEmail || p.authorEmail });
-            } catch (e) {
-              console.warn('Auto-syncing authorId for admin project:', e);
-            }
-          }
           list.push(p);
         }
       }
@@ -766,122 +818,118 @@ export async function reassignAllProjectsFromAuthorByAdmin(
  * Upgrades the main user profile for lavozdelosmuertos@gmail.com (e.g., 'Urdimbre') to 'admin'
  * and reassigns any projects from temporary/anonymous admin profiles to the primary user profile.
  */
-export async function consolidateAdminProfilesInFirestore(primaryUid?: string): Promise<{
+export async function consolidateAdminProfilesInFirestore(activeSessionUid?: string): Promise<{
   updatedCount: number;
   reassignedProjectsCount: number;
+  deletedCount: number;
   primaryProfile: UserProfile | null;
 }> {
   try {
     const allUsers = await getAllUsersForAdmin();
+    const allProjects = await getAllProjectsForAdmin();
     const adminEmail = 'lavozdelosmuertos@gmail.com';
     const targetEmailLower = adminEmail.toLowerCase();
 
-    // Find all user documents matching lavozdelosmuertos@gmail.com or admin emails
+    // Find all user documents matching lavozdelosmuertos@gmail.com or admin emails or Urdimbre
     const matchingUsers = allUsers.filter((u) => {
       const uEmail = (u.email || '').toLowerCase().trim();
-      return uEmail === targetEmailLower || uEmail.includes('lavozdelosmuertos');
+      const uName = (u.displayName || '').toLowerCase().trim();
+      return uEmail === targetEmailLower || uEmail.includes('lavozdelosmuertos') || (uName === 'urdimbre' && u.role === 'admin');
     });
 
     if (matchingUsers.length === 0) {
-      return { updatedCount: 0, reassignedProjectsCount: 0, primaryProfile: null };
+      return { updatedCount: 0, reassignedProjectsCount: 0, deletedCount: 0, primaryProfile: null };
     }
 
-    // Determine primary user:
-    // 1. If primaryUid is provided (active authenticated session), MUST use it as the definitive primary profile!
-    // 2. Otherwise pick non-anonymous / real account (e.g. named "Urdimbre" or customized)
-    // 3. Fallback to the first matching user
-    let primaryUser: UserProfile | undefined;
-    if (primaryUid) {
-      primaryUser = matchingUsers.find((u) => u.uid === primaryUid);
-      if (!primaryUser) {
-        primaryUser = await createOrUpdateUserProfile(
-          primaryUid,
-          adminEmail,
-          'Urdimbre',
-          'admin'
-        );
+    // 1. IDENTIFY THE TRUE MASTER ACCOUNT:
+    // The master account is the account that holds the stories (e.g. ANwT8oJ2lQ... with 6 stories)
+    // or has the highest number of created stories.
+    let bestCount = -1;
+    let masterUser: UserProfile = matchingUsers[0];
+
+    for (const u of matchingUsers) {
+      const storiesCount = allProjects.filter((p) => p.authorId === u.uid).length;
+      if (storiesCount > bestCount) {
+        bestCount = storiesCount;
+        masterUser = u;
+      } else if (storiesCount === bestCount && u.uid.startsWith('ANwT8')) {
+        // Prioritize the known authentic master UID
+        masterUser = u;
       }
     }
 
-    if (!primaryUser) {
-      primaryUser =
-        matchingUsers.find(
-          (u) =>
-            u.displayName &&
-            u.displayName !== 'Administrador' &&
-            u.displayName !== 'Usuario Lector'
-        ) || matchingUsers[0];
+    // Ensure master account attributes are pristine
+    masterUser.role = 'admin';
+    masterUser.email = adminEmail;
+    masterUser.displayName = 'Urdimbre';
+
+    // Preserve custom uploaded avatar from any matching duplicate if master has none or only google avatar
+    if (!masterUser.photoURL || masterUser.photoURL.includes('googleusercontent.com')) {
+      const customAvatarDoc = matchingUsers.find(
+        (u) => u.photoURL && !u.photoURL.includes('googleusercontent.com')
+      );
+      if (customAvatarDoc?.photoURL) {
+        masterUser.photoURL = customAvatarDoc.photoURL;
+      }
     }
 
-    let updatedCount = 0;
+    // Save/update the master document in Firestore
+    await setDoc(doc(db, 'users', masterUser.uid), masterUser, { merge: true });
+
+    if (auth.currentUser && auth.currentUser.uid === masterUser.uid) {
+      try {
+        await updateProfile(auth.currentUser, { displayName: 'Urdimbre' });
+      } catch (e) {
+        console.warn('Could not update auth profile display name:', e);
+      }
+    }
+
     let reassignedProjectsCount = 0;
+    let deletedCount = 0;
 
-    if (primaryUser) {
-      // Ensure primary user profile has role 'admin' and displayName 'Urdimbre'
-      const isGenericName = !primaryUser.displayName || 
-        ['administrador', 'usuario', 'lector', 'lavozdelosmuertos', 'urdimbre (administrador)', 'lavozdelosmuertos (administrador)'].includes(primaryUser.displayName.toLowerCase().trim()) ||
-        primaryUser.displayName.toLowerCase().includes('administrador') ||
-        primaryUser.displayName.toLowerCase().includes('usuario');
-      const needsNameFix = isGenericName;
-      const needsRoleFix = primaryUser.role !== 'admin';
-
-      // Check if any matching duplicate has a custom uploaded avatar (e.g. data:image/ or not from google)
-      // while primaryUser has either no photo or has the google avatar
-      if (!primaryUser.photoURL || primaryUser.photoURL.includes('googleusercontent.com')) {
-        const customAvatarDoc = matchingUsers.find(
-          (u) => u.photoURL && !u.photoURL.includes('googleusercontent.com')
-        );
-        if (customAvatarDoc?.photoURL) {
-          primaryUser.photoURL = customAvatarDoc.photoURL;
-          await updateDoc(doc(db, 'users', primaryUser.uid), { photoURL: customAvatarDoc.photoURL });
-          updatedCount++;
-        }
+    // 2. PROCESS AND ELIMINATE DUPLICATE DOCUMENTS:
+    // For every user document that is NOT the master account:
+    // - Reassign any stories/projects it might have to the master account (NEVER LOSE STORIES)
+    // - DELETE the duplicate document from Firestore
+    for (const dup of matchingUsers) {
+      if (dup.uid === masterUser.uid) {
+        continue; // NEVER delete the master account!
       }
 
-      if (needsNameFix || needsRoleFix) {
-        primaryUser.displayName = 'Urdimbre';
-        primaryUser.role = 'admin';
-        const userRef = doc(db, 'users', primaryUser.uid);
-        await updateDoc(userRef, { displayName: 'Urdimbre', role: 'admin', email: adminEmail });
-        
-        if (auth.currentUser && auth.currentUser.uid === primaryUser.uid) {
-          try {
-            await updateProfile(auth.currentUser, { displayName: 'Urdimbre' });
-          } catch (e) {
-            console.warn('Could not update auth profile display name:', e);
-          }
-        }
-        updatedCount++;
-      }
-
-      // Reassign stories/projects authored by secondary duplicate profiles to primary user without mutating author pen names
-      for (const duplicateUser of matchingUsers) {
-        if (duplicateUser.uid !== primaryUser.uid) {
-          const count = await reassignAllProjectsFromAuthorByAdmin(duplicateUser.uid, {
-            uid: primaryUser.uid,
-            displayName: primaryUser.displayName || 'Urdimbre',
-            email: adminEmail,
+      // Reassign any projects authored by this duplicate
+      const dupProjects = allProjects.filter((p) => p.authorId === dup.uid);
+      for (const proj of dupProjects) {
+        try {
+          await updateDoc(doc(db, 'projects', proj.id), {
+            authorId: masterUser.uid,
+            authorName: 'Urdimbre',
+            authorEmail: adminEmail,
+            updatedAt: new Date().toISOString()
           });
-          reassignedProjectsCount += count;
-          // Keep duplicate user document intact with role 'author' or synced email rather than deleting it,
-          // to prevent session disconnection if user has another open browser session with that UID
-          try {
-            await updateDoc(doc(db, 'users', duplicateUser.uid), {
-              consolidatedTo: primaryUser.uid,
-              role: 'admin'
-            });
-            updatedCount++;
-          } catch (e) {
-            console.warn(`Could not update duplicate user doc ${duplicateUser.uid}:`, e);
-          }
+          reassignedProjectsCount++;
+        } catch (e) {
+          console.warn(`Error reassigning project ${proj.id}:`, e);
         }
+      }
+
+      // DELETE the duplicate document from Firestore
+      try {
+        await deleteDoc(doc(db, 'users', dup.uid));
+        deletedCount++;
+      } catch (e) {
+        console.warn(`Error deleting duplicate user ${dup.uid}:`, e);
       }
     }
 
-    return { updatedCount, reassignedProjectsCount, primaryProfile: primaryUser };
+    return {
+      updatedCount: matchingUsers.length,
+      reassignedProjectsCount,
+      deletedCount,
+      primaryProfile: masterUser,
+    };
   } catch (err) {
     console.error('Error consolidating admin profiles:', err);
-    return { updatedCount: 0, reassignedProjectsCount: 0, primaryProfile: null };
+    return { updatedCount: 0, reassignedProjectsCount: 0, deletedCount: 0, primaryProfile: null };
   }
 }
 
