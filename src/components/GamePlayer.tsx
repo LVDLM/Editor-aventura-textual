@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter, Scene } from '../types';
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
@@ -37,6 +37,7 @@ import {
   Volume2,
   VolumeX,
   Palette,
+  Highlighter,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -250,6 +251,30 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const isHeaderCollapsed = propIsHeaderCollapsed !== undefined ? propIsHeaderCollapsed : localIsHeaderCollapsed;
   const setIsHeaderCollapsed = propSetIsHeaderCollapsed || setLocalIsHeaderCollapsed;
 
+  // Ayuda visual: resaltar siempre las palabras interactivas, independientemente de la
+  // dificultad. Es una preferencia del dispositivo (no de la partida): por defecto se
+  // activa en pantallas táctiles, donde no hay cursor que revele las palabras clicables.
+  const [asistirResaltado, setAsistirResaltado] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('urdimbre_asistir_resaltado');
+      if (stored === 'true' || stored === 'false') return stored === 'true';
+      return window.matchMedia('(pointer: coarse)').matches;
+    } catch {
+      return false;
+    }
+  });
+  const toggleAsistirResaltado = () => {
+    setAsistirResaltado((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('urdimbre_asistir_resaltado', String(next));
+      } catch {
+        /* almacenamiento no disponible: se mantiene solo en memoria */
+      }
+      return next;
+    });
+  };
+
   // Direct click word context menu modal
   const [contextMenu, setContextMenu] = useState<{
     hotspotId: string;
@@ -297,8 +322,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const themeConfig = THEME_CONFIGS[currentTheme] || THEME_CONFIGS['sepia-parchment'];
   const isSepia = currentTheme === 'sepia-parchment';
   const currentScene = project.scenes.find((s) => s.id === gameState.currentSceneId) || project.scenes[0];
+  const isPortada = Boolean(
+    currentScene?.type === 'portada' ||
+    ((gameState.currentSceneId === project.initialSceneId || (!project.initialSceneId && project.scenes[0]?.id === currentScene?.id)) &&
+      currentScene?.type !== 'qte' && currentScene?.type !== 'final')
+  );
 
   const isQTEScene = (currentScene?.type === 'qte' || !!currentScene?.qteConfig) && !!currentScene?.qteConfig?.sequence?.length;
+
+  // Al cambiar de escena (o cargar la historia / una partida guardada) se vuelve al
+  // inicio: tanto la página como la tarjeta narrativa, que en modo cabecera
+  // colapsada en pantallas anchas es un contenedor con scroll propio.
+  const narrativeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    narrativeRef.current?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [gameState.currentSceneId]);
 
   useEffect(() => {
     setQteMistakeMsg(null);
@@ -1361,8 +1400,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (matchedHotspot) {
         const isUsed = usedHotspots.includes(matchedHotspot.id);
 
-        if (isHardMode || (isNormalMode && !isUsed)) {
-          // Hard mode or Normal mode before being used: render like standard text, clickable but without highlight or cursor hint
+        if (!asistirResaltado && (isHardMode || (isNormalMode && !isUsed))) {
+          // Hard mode or Normal mode before being used (and sin ayuda visual): render like standard text, clickable but without highlight or cursor hint
           return (
             <span
               key={idx}
@@ -1377,9 +1416,18 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           return (
             <span
               key={idx}
+              role="button"
+              tabIndex={0}
               onClick={(e) => handleWordClick(matchedHotspot, e)}
-              className={`${themeConfig.hotspotClass} ${themeConfig.hotspotHoverClass} inline cursor-pointer transition-colors duration-150`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleWordClick(matchedHotspot, e as unknown as React.MouseEvent);
+                }
+              }}
+              className={`${themeConfig.hotspotClass} ${themeConfig.hotspotHoverClass} inline cursor-pointer transition-colors duration-150 touch-manipulation py-1`}
               title={`Clic para interactuar con "${matchedHotspot.label || matchedHotspot.word}"`}
+              aria-label={`${part}: interactuar con ${matchedHotspot.label || matchedHotspot.word}`}
             >
               {part}
             </span>
@@ -1832,48 +1880,85 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         {/* Mobile & Desktop Header Controls when expanded */}
         {!isHeaderCollapsed && (
           <>
-            {/* Mobile Top Minimal Bar */}
-            <div className={`md:hidden flex items-center justify-between gap-2 p-2.5 rounded-2xl mb-2 shadow-lg border ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
-              {onOpenSaveLoad && (
-                <button
-                  onClick={onOpenSaveLoad}
-                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Bookmark className="w-3.5 h-3.5 text-emerald-300" />
-                  <span>Guardar Partida</span>
-                </button>
-              )}
-
-              <div className="flex items-center gap-1.5">
-                {toggleSound && (
-                  <button
-                    onClick={toggleSound}
-                    className={`p-2 rounded-xl border cursor-pointer transition-colors ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
-                    title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
+            {/* Mobile Top Minimal Bar - Shown ONLY on Portada (Cover scene) */}
+            {isPortada && (
+              <div className={`md:hidden flex items-center justify-between gap-2 p-2.5 rounded-2xl mb-2 shadow-lg border ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
+                {/* Visual Style Selector Button (Tema) matching user mockup */}
+                <div className="relative flex items-center shrink-0">
+                  <div
+                    className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                   >
-                    {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-500" /> : <VolumeX className={`w-4 h-4 ${themeConfig.textMutedClass}`} />}
+                    <Bookmark className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Tema</span>
+                    <ChevronDown className="w-3 h-3 text-emerald-200 ml-0.5 opacity-80" />
+                  </div>
+                  <select
+                    value={currentTheme}
+                    onChange={(e) => {
+                      if (updateProject) {
+                        updateProject((prev) => ({ ...prev, theme: e.target.value as any }));
+                      }
+                    }}
+                    aria-label="Seleccionar tema visual"
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  >
+                    <option value="sepia-parchment" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>📜 Pergamino Sepia</option>
+                    <option value="classic-retro" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>🕹️ LucasArts Retro</option>
+                    <option value="modern-dark" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>🌙 Oscuro Elegante</option>
+                    <option value="cyber-terminal" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>💻 Terminal Cyber</option>
+                    <option value="emerald-vintage" className={isSepia ? 'bg-[#ebdcb9] text-[#3b2d1d]' : 'bg-slate-900 text-white'}>🌲 Esmeralda Vintage</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  {/* Destacar palabras interactivas (Highlighter) */}
+                  <button
+                    onClick={toggleAsistirResaltado}
+                    aria-pressed={asistirResaltado}
+                    aria-label="Destacar palabras interactivas"
+                    title={asistirResaltado ? 'Resaltado de palabras activado' : 'Destacar palabras interactivas'}
+                    className={`p-2 rounded-xl border cursor-pointer transition-colors ${
+                      asistirResaltado
+                        ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400 shadow`
+                        : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
+                    }`}
+                  >
+                    <Highlighter className="w-4 h-4" />
                   </button>
-                )}
-                <button
-                  onClick={() => setShowDetailsModal(true)}
-                  className={`p-2 rounded-xl border cursor-pointer transition-colors ${
-                    isSepia
-                      ? 'bg-[#822b16]/15 border-[#822b16]/40 text-[#822b16] hover:bg-[#822b16]/25'
-                      : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
-                  }`}
-                  title="Detalles y Créditos"
-                >
-                  <Info className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={onReset}
-                  className={`p-2 rounded-xl border cursor-pointer transition-colors ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
-                  title="Reiniciar"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
+
+                  {toggleSound && (
+                    <button
+                      onClick={toggleSound}
+                      className={`p-2 rounded-xl border cursor-pointer transition-colors ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                      title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
+                      aria-label={soundEnabled ? 'Silenciar sonido' : 'Activar sonido'}
+                    >
+                      {soundEnabled ? <Volume2 className="w-4 h-4 text-amber-500" /> : <VolumeX className={`w-4 h-4 ${themeConfig.textMutedClass}`} />}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowDetailsModal(true)}
+                    className={`p-2 rounded-xl border cursor-pointer transition-colors ${
+                      isSepia
+                        ? 'bg-[#822b16]/15 border-[#822b16]/40 text-[#822b16] hover:bg-[#822b16]/25'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:text-amber-300'
+                    }`}
+                    title="Detalles y Créditos"
+                    aria-label="Detalles y créditos"
+                  >
+                    <Info className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={onReset}
+                    className={`p-2 rounded-xl border cursor-pointer transition-colors ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                    title="Reiniciar historia"
+                    aria-label="Reiniciar historia"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* PC Scene Header with Difficulty Selector */}
             <div className={`hidden md:flex flex-wrap items-center justify-between gap-3 border-b pb-3 ${themeConfig.cardBorderClass}`}>
@@ -1983,8 +2068,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </>
         )}
 
-        {/* Sentence Builder Bar (LucasArts Style Command Bar) */}
-        <div className={`p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} flex items-center justify-between gap-3 shadow-sm`}>
+        {/* Sentence Builder Bar (LucasArts Style Command Bar) - Hidden on mobile, visible on PC */}
+        <div className={`hidden md:flex p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} items-center justify-between gap-3 shadow-sm`}>
           <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide flex-wrap">
             <span className={`text-xs font-semibold uppercase tracking-wider ${themeConfig.accentClass}`}>Acción:</span>
             <span className={themeConfig.actionBoxTextClass}>
@@ -2005,19 +2090,37 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             )}
           </div>
 
-          {(activeVerb || selectedItemObj) && (
+          <div className="flex items-center gap-2 shrink-0">
+            {(activeVerb || selectedItemObj) && (
+              <button
+                onClick={handleClearCommand}
+                className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+              >
+                Cancelar
+              </button>
+            )}
+            {/* Ayuda visual: resalta las palabras interactivas en cualquier dificultad */}
             <button
-              onClick={handleClearCommand}
-              className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+              onClick={toggleAsistirResaltado}
+              aria-pressed={asistirResaltado}
+              aria-label="Resaltar palabras interactivas"
+              title={asistirResaltado ? 'Resaltado de palabras activado' : 'Resaltar palabras interactivas'}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer touch-manipulation ${
+                asistirResaltado
+                  ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400`
+                  : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
+              }`}
             >
-              Cancelar
+              <Highlighter className="w-4 h-4" />
+              <span className="hidden sm:inline">Resaltar</span>
             </button>
-          )}
+          </div>
         </div>
 
         {/* Main Narrative Card (~60% height in focus mode) */}
-        <div className={`p-5 sm:p-7 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-xl relative overflow-hidden transition-all ${
-          isHeaderCollapsed ? 'max-h-[58vh] min-h-[260px] overflow-y-auto' : ''
+        {/* En móvil no se usa scroll anidado: la tarjeta crece y scrollea la página */}
+        <div ref={narrativeRef} className={`p-5 sm:p-7 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-xl relative overflow-hidden transition-all ${
+          isHeaderCollapsed ? 'md:max-h-[58dvh] md:min-h-[260px] md:overflow-y-auto' : ''
         }`}>
           {/* Subtle grid pattern background */}
           <div
@@ -2569,49 +2672,69 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       </div>
 
       {/* Interactive Word Direct Click Context Popover Menu */}
-      {contextMenu && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
-          onClick={() => setContextMenu(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            onClick={(e) => e.stopPropagation()}
-            className={`w-[calc(100vw-2rem)] max-w-sm border-2 rounded-2xl shadow-2xl p-4 space-y-3 cursor-default ${themeConfig.cardBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}
-          >
-            <div className={`flex items-center justify-between border-b pb-2 ${themeConfig.cardBorderClass}`}>
-              <span className={`text-sm font-extrabold ${themeConfig.accentClass}`}>
-                ¿Qué quieres hacer con "{contextMenu.word}"?
-              </span>
-              <button
-                onClick={() => setContextMenu(null)}
-                className={`p-1 rounded-lg transition-colors ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {contextMenu && (() => {
+        const ctxHotspot = currentScene?.hotspots.find((h) => h.id === contextMenu.hotspotId);
 
-            <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
-              {projectVerbs.map((v) => {
-                const hs = currentScene?.hotspots.find((h) => h.id === contextMenu.hotspotId);
-                return (
+        // En modo Fácil solo se ofrecen los verbos que ese objeto realmente admite
+        // (más "mirar", que siempre está disponible). En Normal y Difícil se muestran
+        // todos para no dar pistas. Si el filtro dejara el menú vacío, se muestran todos.
+        let ctxVerbs = projectVerbs;
+        if (ctxHotspot && (gameState.difficulty || 'facil') === 'facil') {
+          const verbsWithAction = new Set(
+            (ctxHotspot.actions || [])
+              .filter((a) => checkConditions(a.visibleIfFlags, a.hiddenIfFlags))
+              .map((a) => a.verb)
+          );
+          const filtered = projectVerbs.filter((v) => verbsWithAction.has(v.id as VerbType) || v.id === 'mirar');
+          if (filtered.length > 0) ctxVerbs = filtered;
+        }
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 cursor-pointer"
+            onClick={() => setContextMenu(null)}
+          >
+            {/* Hoja inferior en móvil (al alcance del pulgar); ventana centrada desde sm */}
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Acciones para ${contextMenu.word}`}
+              className={`w-full sm:max-w-sm border-2 border-b-0 sm:border-b-2 rounded-t-2xl sm:rounded-2xl shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 cursor-default ${themeConfig.cardBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}
+            >
+              <div className={`flex items-center justify-between border-b pb-2 ${themeConfig.cardBorderClass}`}>
+                <span className={`text-sm font-extrabold ${themeConfig.accentClass}`}>
+                  ¿Qué quieres hacer con "{contextMenu.word}"?
+                </span>
+                <button
+                  onClick={() => setContextMenu(null)}
+                  aria-label="Cerrar"
+                  className={`p-2 -m-1 rounded-lg transition-colors ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
+                {ctxVerbs.map((v) => (
                   <button
                     key={v.id}
                     onClick={() => {
-                      if (hs) handleExecuteAction(hs, v.id);
+                      if (ctxHotspot) handleExecuteAction(ctxHotspot, v.id);
                     }}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                    className={`flex items-center gap-2 px-3 min-h-12 py-2.5 rounded-xl text-sm sm:text-xs font-semibold border transition-all cursor-pointer touch-manipulation ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
                   >
                     {getVerbIcon(v.iconName)}
                     <span>{v.label}</span>
                   </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        </div>
-      )}
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        );
+      })()}
 
       {/* Details and Credits Modal */}
       <AnimatePresence>

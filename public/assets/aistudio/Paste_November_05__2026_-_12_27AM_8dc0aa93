@@ -1,0 +1,462 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 628294c..5a30352 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -87,6 +87,11 @@ export default function App() {
+     checkUrlGame();
+   }, []);
+ 
++  // Al cambiar de vista (Biblioteca → historia, etc.) se empieza siempre arriba
++  useEffect(() => {
++    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
++  }, [currentView]);
++
+   // Synchronize URL search parameter when playing a game or navigating views
+   useEffect(() => {
+     const params = new URLSearchParams(window.location.search);
+diff --git a/src/components/GamePlayer.tsx b/src/components/GamePlayer.tsx
+index aa788c1..f545a92 100644
+--- a/src/components/GamePlayer.tsx
++++ b/src/components/GamePlayer.tsx
+@@ -1,4 +1,4 @@
+-import React, { useState, useEffect } from 'react';
++import React, { useState, useEffect, useRef } from 'react';
+ import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData, AppendedTextEntry, DialogueOption, DialogueBlock, GameCharacter, Scene } from '../types';
+ import { THEME_CONFIGS } from '../utils/themeStyles';
+ import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
+@@ -37,6 +37,7 @@ import {
+   Volume2,
+   VolumeX,
+   Palette,
++  Highlighter,
+ } from 'lucide-react';
+ import { motion, AnimatePresence } from 'motion/react';
+ 
+@@ -250,6 +251,30 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+   const isHeaderCollapsed = propIsHeaderCollapsed !== undefined ? propIsHeaderCollapsed : localIsHeaderCollapsed;
+   const setIsHeaderCollapsed = propSetIsHeaderCollapsed || setLocalIsHeaderCollapsed;
+ 
++  // Ayuda visual: resaltar siempre las palabras interactivas, independientemente de la
++  // dificultad. Es una preferencia del dispositivo (no de la partida): por defecto se
++  // activa en pantallas táctiles, donde no hay cursor que revele las palabras clicables.
++  const [asistirResaltado, setAsistirResaltado] = useState<boolean>(() => {
++    try {
++      const stored = localStorage.getItem('urdimbre_asistir_resaltado');
++      if (stored === 'true' || stored === 'false') return stored === 'true';
++      return window.matchMedia('(pointer: coarse)').matches;
++    } catch {
++      return false;
++    }
++  });
++  const toggleAsistirResaltado = () => {
++    setAsistirResaltado((prev) => {
++      const next = !prev;
++      try {
++        localStorage.setItem('urdimbre_asistir_resaltado', String(next));
++      } catch {
++        /* almacenamiento no disponible: se mantiene solo en memoria */
++      }
++      return next;
++    });
++  };
++
+   // Direct click word context menu modal
+   const [contextMenu, setContextMenu] = useState<{
+     hotspotId: string;
+@@ -300,6 +325,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+ 
+   const isQTEScene = (currentScene?.type === 'qte' || !!currentScene?.qteConfig) && !!currentScene?.qteConfig?.sequence?.length;
+ 
++  // Al cambiar de escena (o cargar la historia / una partida guardada) se vuelve al
++  // inicio: tanto la página como la tarjeta narrativa, que en modo cabecera
++  // colapsada en pantallas anchas es un contenedor con scroll propio.
++  const narrativeRef = useRef<HTMLDivElement>(null);
++  useEffect(() => {
++    narrativeRef.current?.scrollTo({ top: 0 });
++    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
++  }, [gameState.currentSceneId]);
++
+   useEffect(() => {
+     setQteMistakeMsg(null);
+     if (currentScene?.sfx) {
+@@ -1361,8 +1395,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       if (matchedHotspot) {
+         const isUsed = usedHotspots.includes(matchedHotspot.id);
+ 
+-        if (isHardMode || (isNormalMode && !isUsed)) {
+-          // Hard mode or Normal mode before being used: render like standard text, clickable but without highlight or cursor hint
++        if (!asistirResaltado && (isHardMode || (isNormalMode && !isUsed))) {
++          // Hard mode or Normal mode before being used (and sin ayuda visual): render like standard text, clickable but without highlight or cursor hint
+           return (
+             <span
+               key={idx}
+@@ -1377,9 +1411,18 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+           return (
+             <span
+               key={idx}
++              role="button"
++              tabIndex={0}
+               onClick={(e) => handleWordClick(matchedHotspot, e)}
+-              className={`${themeConfig.hotspotClass} ${themeConfig.hotspotHoverClass} inline cursor-pointer transition-colors duration-150`}
++              onKeyDown={(e) => {
++                if (e.key === 'Enter' || e.key === ' ') {
++                  e.preventDefault();
++                  handleWordClick(matchedHotspot, e as unknown as React.MouseEvent);
++                }
++              }}
++              className={`${themeConfig.hotspotClass} ${themeConfig.hotspotHoverClass} inline cursor-pointer transition-colors duration-150 touch-manipulation py-1`}
+               title={`Clic para interactuar con "${matchedHotspot.label || matchedHotspot.word}"`}
++              aria-label={`${part}: interactuar con ${matchedHotspot.label || matchedHotspot.word}`}
+             >
+               {part}
+             </span>
+@@ -2005,19 +2048,37 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+             )}
+           </div>
+ 
+-          {(activeVerb || selectedItemObj) && (
++          <div className="flex items-center gap-2 shrink-0">
++            {(activeVerb || selectedItemObj) && (
++              <button
++                onClick={handleClearCommand}
++                className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
++              >
++                Cancelar
++              </button>
++            )}
++            {/* Ayuda visual: resalta las palabras interactivas en cualquier dificultad */}
+             <button
+-              onClick={handleClearCommand}
+-              className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
++              onClick={toggleAsistirResaltado}
++              aria-pressed={asistirResaltado}
++              aria-label="Resaltar palabras interactivas"
++              title={asistirResaltado ? 'Resaltado de palabras activado' : 'Resaltar palabras interactivas'}
++              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer touch-manipulation ${
++                asistirResaltado
++                  ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400`
++                  : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
++              }`}
+             >
+-              Cancelar
++              <Highlighter className="w-4 h-4" />
++              <span className="hidden sm:inline">Resaltar</span>
+             </button>
+-          )}
++          </div>
+         </div>
+ 
+         {/* Main Narrative Card (~60% height in focus mode) */}
+-        <div className={`p-5 sm:p-7 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-xl relative overflow-hidden transition-all ${
+-          isHeaderCollapsed ? 'max-h-[58vh] min-h-[260px] overflow-y-auto' : ''
++        {/* En móvil no se usa scroll anidado: la tarjeta crece y scrollea la página */}
++        <div ref={narrativeRef} className={`p-5 sm:p-7 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-xl relative overflow-hidden transition-all ${
++          isHeaderCollapsed ? 'md:max-h-[58dvh] md:min-h-[260px] md:overflow-y-auto' : ''
+         }`}>
+           {/* Subtle grid pattern background */}
+           <div
+@@ -2569,49 +2630,69 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       </div>
+ 
+       {/* Interactive Word Direct Click Context Popover Menu */}
+-      {contextMenu && (
+-        <div
+-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+-          onClick={() => setContextMenu(null)}
+-        >
+-          <motion.div
+-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+-            animate={{ opacity: 1, scale: 1, y: 0 }}
+-            onClick={(e) => e.stopPropagation()}
+-            className={`w-[calc(100vw-2rem)] max-w-sm border-2 rounded-2xl shadow-2xl p-4 space-y-3 cursor-default ${themeConfig.cardBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}
++      {contextMenu && (() => {
++        const ctxHotspot = currentScene?.hotspots.find((h) => h.id === contextMenu.hotspotId);
++
++        // En modo Fácil solo se ofrecen los verbos que ese objeto realmente admite
++        // (más "mirar", que siempre está disponible). En Normal y Difícil se muestran
++        // todos para no dar pistas. Si el filtro dejara el menú vacío, se muestran todos.
++        let ctxVerbs = projectVerbs;
++        if (ctxHotspot && (gameState.difficulty || 'facil') === 'facil') {
++          const verbsWithAction = new Set(
++            (ctxHotspot.actions || [])
++              .filter((a) => checkConditions(a.visibleIfFlags, a.hiddenIfFlags))
++              .map((a) => a.verb)
++          );
++          const filtered = projectVerbs.filter((v) => verbsWithAction.has(v.id as VerbType) || v.id === 'mirar');
++          if (filtered.length > 0) ctxVerbs = filtered;
++        }
++
++        return (
++          <div
++            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 cursor-pointer"
++            onClick={() => setContextMenu(null)}
+           >
+-            <div className={`flex items-center justify-between border-b pb-2 ${themeConfig.cardBorderClass}`}>
+-              <span className={`text-sm font-extrabold ${themeConfig.accentClass}`}>
+-                ¿Qué quieres hacer con "{contextMenu.word}"?
+-              </span>
+-              <button
+-                onClick={() => setContextMenu(null)}
+-                className={`p-1 rounded-lg transition-colors ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
+-              >
+-                <X className="w-4 h-4" />
+-              </button>
+-            </div>
++            {/* Hoja inferior en móvil (al alcance del pulgar); ventana centrada desde sm */}
++            <motion.div
++              initial={{ opacity: 0, y: 40 }}
++              animate={{ opacity: 1, y: 0 }}
++              onClick={(e) => e.stopPropagation()}
++              role="dialog"
++              aria-modal="true"
++              aria-label={`Acciones para ${contextMenu.word}`}
++              className={`w-full sm:max-w-sm border-2 border-b-0 sm:border-b-2 rounded-t-2xl sm:rounded-2xl shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 cursor-default ${themeConfig.cardBgClass} ${themeConfig.cardBorderClass} ${themeConfig.textMainClass}`}
++            >
++              <div className={`flex items-center justify-between border-b pb-2 ${themeConfig.cardBorderClass}`}>
++                <span className={`text-sm font-extrabold ${themeConfig.accentClass}`}>
++                  ¿Qué quieres hacer con "{contextMenu.word}"?
++                </span>
++                <button
++                  onClick={() => setContextMenu(null)}
++                  aria-label="Cerrar"
++                  className={`p-2 -m-1 rounded-lg transition-colors ${themeConfig.textMutedClass} ${themeConfig.buttonHoverClass}`}
++                >
++                  <X className="w-5 h-5" />
++                </button>
++              </div>
+ 
+-            <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
+-              {projectVerbs.map((v) => {
+-                const hs = currentScene?.hotspots.find((h) => h.id === contextMenu.hotspotId);
+-                return (
++              <div className="grid grid-cols-2 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
++                {ctxVerbs.map((v) => (
+                   <button
+                     key={v.id}
+                     onClick={() => {
+-                      if (hs) handleExecuteAction(hs, v.id);
++                      if (ctxHotspot) handleExecuteAction(ctxHotspot, v.id);
+                     }}
+-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
++                    className={`flex items-center gap-2 px-3 min-h-12 py-2.5 rounded-xl text-sm sm:text-xs font-semibold border transition-all cursor-pointer touch-manipulation ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                   >
+                     {getVerbIcon(v.iconName)}
+                     <span>{v.label}</span>
+                   </button>
+-                );
+-              })}
+-            </div>
+-          </motion.div>
+-        </div>
+-      )}
++                ))}
++              </div>
++            </motion.div>
++          </div>
++        );
++      })()}
+ 
+       {/* Details and Credits Modal */}
+       <AnimatePresence>
+diff --git a/src/components/Navbar.tsx b/src/components/Navbar.tsx
+index ccf3523..354cddb 100644
+--- a/src/components/Navbar.tsx
++++ b/src/components/Navbar.tsx
+@@ -133,6 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({
+               onClick={() => setIsHeaderCollapsed(false)}
+               className="flex items-center gap-1.5 px-3 py-1 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 text-[#A4332A] dark:text-[#C9A24B] border border-[#A4332A]/30 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm"
+               title="Mostrar menú de navegación"
++              aria-label="Mostrar menú"
+             >
+               <ChevronDown className="w-4 h-4 text-[#A4332A] animate-pulse" />
+               <span className="hidden sm:inline">Mostrar Menú</span>
+@@ -163,7 +164,8 @@ export const Navbar: React.FC<NavbarProps> = ({
+               className="w-full h-full object-contain"
+             />
+           </button>
+-          <div>
++          {/* En móvil se oculta el bloque de título para que quepan todos los controles sin scroll lateral */}
++          <div className="hidden md:block">
+             <h1 className="text-sm sm:text-base font-serif font-bold tracking-tight flex items-center gap-2 leading-tight">
+               <span className={`cursor-pointer transition-colors whitespace-nowrap ${isClean ? 'text-[#2A2118] hover:text-[#A4332A]' : 'text-[#F4EFE3] hover:text-[#C9A24B]'}`} onClick={() => setCurrentView('catalog')}>
+                 Urdimbre: Aventuras textuales
+@@ -186,7 +188,9 @@ export const Navbar: React.FC<NavbarProps> = ({
+                 onOpenAuth();
+               }
+             }}
+-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer whitespace-nowrap ${
++            aria-label={currentUser ? `Perfil de ${currentUser.displayName}` : 'Iniciar sesión'}
++            title={currentUser ? `Perfil de ${currentUser.displayName}` : 'Iniciar sesión'}
++            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer whitespace-nowrap ${
+               currentUser
+                 ? currentView === 'profile'
+                   ? 'bg-[#A4332A] border-[#8B2A22] text-white shadow-sm font-bold'
+@@ -207,12 +211,12 @@ export const Navbar: React.FC<NavbarProps> = ({
+                 ) : (
+                   <User className="w-3.5 h-3.5 text-[#C9A24B]" />
+                 )}
+-                <span className="truncate max-w-[110px]">{currentUser.displayName}</span>
++                <span className="hidden lg:inline truncate max-w-[110px]">{currentUser.displayName}</span>
+               </>
+             ) : (
+               <>
+                 <User className="w-3.5 h-3.5" />
+-                <span>Iniciar Sesión</span>
++                <span className="hidden lg:inline">Iniciar Sesión</span>
+               </>
+             )}
+           </button>
+@@ -227,11 +231,16 @@ export const Navbar: React.FC<NavbarProps> = ({
+                   setCurrentView('admin');
+                 }
+               }}
+-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm whitespace-nowrap ${
++              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm whitespace-nowrap ${
+                 currentView === 'admin'
+                   ? 'bg-[#A4332A] border-[#8B2A22] text-white shadow-sm'
+                   : 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:border-[#A4332A]'
+               }`}
++              aria-label={
++                currentView === 'admin'
++                  ? 'Volver a la Biblioteca Pública'
++                  : 'Abrir Panel de Control de Administración'
++              }
+               title={
+                 currentView === 'admin'
+                   ? 'Volver a la Biblioteca Pública'
+@@ -241,12 +250,12 @@ export const Navbar: React.FC<NavbarProps> = ({
+               {currentView === 'admin' ? (
+                 <>
+                   <BookOpen className="w-3.5 h-3.5 text-white" />
+-                  <span>Ver Biblioteca</span>
++                  <span className="hidden lg:inline">Ver Biblioteca</span>
+                 </>
+               ) : (
+                 <>
+                   <Shield className="w-3.5 h-3.5 text-[#A4332A]" />
+-                  <span>Panel Admin</span>
++                  <span className="hidden lg:inline">Panel Admin</span>
+                 </>
+               )}
+             </button>
+@@ -256,11 +265,12 @@ export const Navbar: React.FC<NavbarProps> = ({
+           {currentView === 'play' && (
+             <button
+               onClick={onOpenSaveLoad}
+-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm whitespace-nowrap"
++              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm whitespace-nowrap"
+               title="Guardar o cargar tu progreso en la partida actual"
++              aria-label="Guardar o cargar partida"
+             >
+               <Bookmark className="w-3.5 h-3.5 text-amber-200" />
+-              <span>Guardar/Cargar Partida</span>
++              <span className="hidden lg:inline">Guardar/Cargar Partida</span>
+             </button>
+           )}
+ 
+@@ -269,11 +279,12 @@ export const Navbar: React.FC<NavbarProps> = ({
+             <>
+               <button
+                 onClick={onOpenExport}
+-                className="flex items-center gap-2 px-3.5 py-1.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
++                className="flex items-center gap-2 px-2.5 sm:px-3.5 py-2 sm:py-1.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                 title={`Guardar proyecto en la nube o descargar archivo. Autoguardado local activo${lastAutoSaveTime ? ` (${lastAutoSaveTime})` : ''}.`}
++                aria-label="Guardar proyecto"
+               >
+                 <FolderDown className="w-4 h-4 text-amber-200 shrink-0" />
+-                <div className="flex flex-col text-left leading-tight">
++                <div className="hidden lg:flex flex-col text-left leading-tight">
+                   <span className="font-bold">Guardar Proyecto</span>
+                   <span className="text-[9px] text-emerald-200/90 font-normal flex items-center gap-1">
+                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+@@ -284,11 +295,12 @@ export const Navbar: React.FC<NavbarProps> = ({
+ 
+               <button
+                 onClick={() => setCurrentView('play')}
+-                className="flex items-center gap-1.5 px-3 py-2 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm whitespace-nowrap"
++                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm whitespace-nowrap"
+                 title="Probar y jugar esta historia ahora mismo"
++                aria-label="Probar juego"
+               >
+                 <Play className="w-3.5 h-3.5 fill-white" />
+-                <span>Probar Juego</span>
++                <span className="hidden lg:inline">Probar Juego</span>
+               </button>
+             </>
+           )}
+@@ -300,6 +312,7 @@ export const Navbar: React.FC<NavbarProps> = ({
+               isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#6B5C46] hover:text-[#2A2118]' : 'bg-[#1F1913] border-[#42362B] text-[#D1C7B7] hover:text-white'
+             }`}
+             title="Guía y Ayuda"
++            aria-label="Guía y ayuda"
+           >
+             <HelpCircle className="w-4 h-4" />
+           </button>
+@@ -308,11 +321,12 @@ export const Navbar: React.FC<NavbarProps> = ({
+           {setIsHeaderCollapsed && (
+             <button
+               onClick={() => setIsHeaderCollapsed(true)}
+-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 border border-[#A4332A]/30 text-[#A4332A] rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm whitespace-nowrap ml-0.5"
++              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 border border-[#A4332A]/30 text-[#A4332A] rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm whitespace-nowrap ml-0.5"
+               title="Ocultar menú para lectura inmersiva a pantalla completa"
++              aria-label="Ocultar menú"
+             >
+               <ChevronUp className="w-4 h-4 text-[#A4332A]" />
+-              <span className="hidden sm:inline">Ocultar Menú</span>
++              <span className="hidden lg:inline">Ocultar Menú</span>
+             </button>
+           )}
+         </div>
+@@ -323,20 +337,23 @@ export const Navbar: React.FC<NavbarProps> = ({
+         }`}>
+           <button
+             onClick={() => setCurrentView('catalog')}
+-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
++            aria-label="Biblioteca"
++            title="Biblioteca"
++            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+               currentView === 'catalog'
+                 ? 'bg-[#A4332A] text-white shadow-sm font-bold'
+                 : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
+             }`}
+           >
+             <BookOpen className="w-3.5 h-3.5" />
+-            <span>Biblioteca</span>
++            <span className="hidden lg:inline">Biblioteca</span>
+           </button>
+ 
+           {canShowEditor && (
+             <button
+               onClick={() => setCurrentView('edit')}
+-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
++              aria-label="Editor"
++              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                 currentView === 'edit'
+                   ? 'bg-[#A4332A] text-white shadow-sm font-bold'
+                   : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
+@@ -348,20 +365,22 @@ export const Navbar: React.FC<NavbarProps> = ({
+               }
+             >
+               <Edit3 className="w-3.5 h-3.5" />
+-              <span>Editor</span>
++              <span className="hidden lg:inline">Editor</span>
+             </button>
+           )}
+ 
+           <button
+             onClick={() => setCurrentView('workspace')}
+-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
++            aria-label="Mis proyectos"
++            title="Mis proyectos"
++            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+               currentView === 'workspace'
+                 ? 'bg-[#A4332A] text-white shadow-sm font-bold'
+                 : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
+             }`}
+           >
+             <Layers className="w-3.5 h-3.5" />
+-            <span>Mis Proyectos</span>
++            <span className="hidden lg:inline">Mis Proyectos</span>
+           </button>
+         </div>
+       </div>

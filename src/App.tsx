@@ -87,6 +87,11 @@ export default function App() {
     checkUrlGame();
   }, []);
 
+  // Al cambiar de vista (Biblioteca → historia, etc.) se empieza siempre arriba
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [currentView]);
+
   // Synchronize URL search parameter when playing a game or navigating views
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

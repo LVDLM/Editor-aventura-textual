@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle, BookOpen, Shield, User, Layers, ShieldCheck, ChevronDown, ChevronUp, Sun, Moon } from 'lucide-react';
+import { Play, Edit3, HelpCircle, Volume2, VolumeX, FolderOpen, Bookmark, FolderDown, PlusCircle, BookOpen, Shield, User, Layers, ShieldCheck, ChevronDown, ChevronUp, Sun, Moon, Palette } from 'lucide-react';
 import { EngineTheme, UserProfile } from '../types';
 
 export type AppView = 'catalog' | 'play' | 'edit' | 'workspace' | 'admin' | 'profile';
@@ -74,14 +74,40 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Left: Save Game Button (when playing/editing) or Current Title */}
         <div className="flex items-center gap-2">
           {currentView === 'play' ? (
-            <button
-              onClick={onOpenSaveLoad}
-              className="flex items-center gap-1.5 px-3 py-1 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
-              title="Guardar o cargar tu partida en progreso"
-            >
-              <Bookmark className="w-3.5 h-3.5 text-amber-200" />
-              <span>Guardar Partida</span>
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={onOpenSaveLoad}
+                className="flex items-center gap-1.5 px-3 py-1 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer shrink-0"
+                title="Guardar o cargar tu partida en progreso"
+              >
+                <Bookmark className="w-3.5 h-3.5 text-amber-200" />
+                <span>Guardar Partida</span>
+              </button>
+              <div className="relative flex items-center">
+                <div
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border cursor-pointer ${
+                    isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#382E25] border-[#42362B] text-[#F4EFE3]'
+                  }`}
+                  title="Cambiar aspecto visual / tema de lectura"
+                >
+                  <Palette className="w-3.5 h-3.5 text-[#C9A24B] shrink-0" />
+                  <span className="hidden sm:inline font-medium">Tema</span>
+                  <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+                </div>
+                <select
+                  value={theme || 'sepia-parchment'}
+                  onChange={(e) => setTheme(e.target.value as EngineTheme)}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  aria-label="Seleccionar tema visual"
+                >
+                  <option value="sepia-parchment">📜 Pergamino Sepia</option>
+                  <option value="classic-retro">🕹️ LucasArts Retro</option>
+                  <option value="modern-dark">🌙 Oscuro Elegante</option>
+                  <option value="cyber-terminal">💻 Terminal Cyber</option>
+                  <option value="emerald-vintage">🌲 Esmeralda Vintage</option>
+                </select>
+              </div>
+            </div>
           ) : currentView === 'edit' ? (
             <div className="flex items-center gap-2 shrink-0">
               <button
@@ -133,6 +159,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setIsHeaderCollapsed(false)}
               className="flex items-center gap-1.5 px-3 py-1 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 text-[#A4332A] dark:text-[#C9A24B] border border-[#A4332A]/30 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-sm"
               title="Mostrar menú de navegación"
+              aria-label="Mostrar menú"
             >
               <ChevronDown className="w-4 h-4 text-[#A4332A] animate-pulse" />
               <span className="hidden sm:inline">Mostrar Menú</span>
@@ -163,7 +190,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="w-full h-full object-contain"
             />
           </button>
-          <div>
+          {/* En móvil se oculta el bloque de título para que quepan todos los controles sin scroll lateral */}
+          <div className="hidden md:block">
             <h1 className="text-sm sm:text-base font-serif font-bold tracking-tight flex items-center gap-2 leading-tight">
               <span className={`cursor-pointer transition-colors whitespace-nowrap ${isClean ? 'text-[#2A2118] hover:text-[#A4332A]' : 'text-[#F4EFE3] hover:text-[#C9A24B]'}`} onClick={() => setCurrentView('catalog')}>
                 Urdimbre: Aventuras textuales
@@ -186,7 +214,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onOpenAuth();
               }
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer whitespace-nowrap ${
+            aria-label={currentUser ? `Perfil de ${currentUser.displayName}` : 'Iniciar sesión'}
+            title={currentUser ? `Perfil de ${currentUser.displayName}` : 'Iniciar sesión'}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer whitespace-nowrap ${
               currentUser
                 ? currentView === 'profile'
                   ? 'bg-[#A4332A] border-[#8B2A22] text-white shadow-sm font-bold'
@@ -207,12 +237,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ) : (
                   <User className="w-3.5 h-3.5 text-[#C9A24B]" />
                 )}
-                <span className="truncate max-w-[110px]">{currentUser.displayName}</span>
+                <span className="hidden lg:inline truncate max-w-[110px]">{currentUser.displayName}</span>
               </>
             ) : (
               <>
                 <User className="w-3.5 h-3.5" />
-                <span>Iniciar Sesión</span>
+                <span className="hidden lg:inline">Iniciar Sesión</span>
               </>
             )}
           </button>
@@ -227,11 +257,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setCurrentView('admin');
                 }
               }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm whitespace-nowrap ${
                 currentView === 'admin'
                   ? 'bg-[#A4332A] border-[#8B2A22] text-white shadow-sm'
                   : 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:border-[#A4332A]'
               }`}
+              aria-label={
+                currentView === 'admin'
+                  ? 'Volver a la Biblioteca Pública'
+                  : 'Abrir Panel de Control de Administración'
+              }
               title={
                 currentView === 'admin'
                   ? 'Volver a la Biblioteca Pública'
@@ -241,27 +276,63 @@ export const Navbar: React.FC<NavbarProps> = ({
               {currentView === 'admin' ? (
                 <>
                   <BookOpen className="w-3.5 h-3.5 text-white" />
-                  <span>Ver Biblioteca</span>
+                  <span className="hidden lg:inline">Ver Biblioteca</span>
                 </>
               ) : (
                 <>
                   <Shield className="w-3.5 h-3.5 text-[#A4332A]" />
-                  <span>Panel Admin</span>
+                  <span className="hidden lg:inline">Panel Admin</span>
                 </>
               )}
             </button>
           )}
 
-          {/* Player Progress Save/Load (ONLY visible when playing the game) */}
+          {/* Player Progress Save/Load & Visual Theme Selector (ONLY visible when playing the game) */}
           {currentView === 'play' && (
-            <button
-              onClick={onOpenSaveLoad}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm whitespace-nowrap"
-              title="Guardar o cargar tu progreso en la partida actual"
-            >
-              <Bookmark className="w-3.5 h-3.5 text-amber-200" />
-              <span>Guardar/Cargar Partida</span>
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={onOpenSaveLoad}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm whitespace-nowrap"
+                title="Guardar o cargar tu progreso en la partida actual"
+                aria-label="Guardar o cargar partida"
+              >
+                <Bookmark className="w-3.5 h-3.5 text-amber-200" />
+                <span className="hidden lg:inline">Guardar/Cargar Partida</span>
+              </button>
+
+              <div className="relative flex items-center">
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm whitespace-nowrap ${
+                    isClean
+                      ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:border-[#A4332A]'
+                      : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] hover:border-[#C9A24B]'
+                  }`}
+                  title="Cambiar aspecto visual / tema de lectura"
+                >
+                  <Palette className="w-3.5 h-3.5 text-[#C9A24B] shrink-0" />
+                  <span className="hidden sm:inline">Tema:</span>
+                  <span className="font-bold">
+                    {theme === 'classic-retro' ? 'Retro' :
+                     theme === 'modern-dark' ? 'Oscuro' :
+                     theme === 'cyber-terminal' ? 'Cyber' :
+                     theme === 'emerald-vintage' ? 'Esmeralda' : 'Pergamino'}
+                  </span>
+                  <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+                </div>
+                <select
+                  value={theme || 'sepia-parchment'}
+                  onChange={(e) => setTheme(e.target.value as EngineTheme)}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  aria-label="Seleccionar tema visual"
+                >
+                  <option value="sepia-parchment">📜 Pergamino Sepia</option>
+                  <option value="classic-retro">🕹️ LucasArts Retro</option>
+                  <option value="modern-dark">🌙 Oscuro Elegante</option>
+                  <option value="cyber-terminal">💻 Terminal Cyber</option>
+                  <option value="emerald-vintage">🌲 Esmeralda Vintage</option>
+                </select>
+              </div>
+            </div>
           )}
 
           {/* Project Save and Play Buttons (ONLY visible when in Editor) */}
@@ -269,11 +340,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             <>
               <button
                 onClick={onOpenExport}
-                className="flex items-center gap-2 px-3.5 py-1.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                className="flex items-center gap-2 px-2.5 sm:px-3.5 py-2 sm:py-1.5 bg-[#A4332A] hover:bg-[#8B2A22] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
                 title={`Guardar proyecto en la nube o descargar archivo. Autoguardado local activo${lastAutoSaveTime ? ` (${lastAutoSaveTime})` : ''}.`}
+                aria-label="Guardar proyecto"
               >
                 <FolderDown className="w-4 h-4 text-amber-200 shrink-0" />
-                <div className="flex flex-col text-left leading-tight">
+                <div className="hidden lg:flex flex-col text-left leading-tight">
                   <span className="font-bold">Guardar Proyecto</span>
                   <span className="text-[9px] text-emerald-200/90 font-normal flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -284,11 +356,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={() => setCurrentView('play')}
-                className="flex items-center gap-1.5 px-3 py-2 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm whitespace-nowrap"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-[#3B6D11] hover:bg-[#2F570E] text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm whitespace-nowrap"
                 title="Probar y jugar esta historia ahora mismo"
+                aria-label="Probar juego"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
-                <span>Probar Juego</span>
+                <span className="hidden lg:inline">Probar Juego</span>
               </button>
             </>
           )}
@@ -300,6 +373,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#6B5C46] hover:text-[#2A2118]' : 'bg-[#1F1913] border-[#42362B] text-[#D1C7B7] hover:text-white'
             }`}
             title="Guía y Ayuda"
+            aria-label="Guía y ayuda"
           >
             <HelpCircle className="w-4 h-4" />
           </button>
@@ -308,11 +382,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           {setIsHeaderCollapsed && (
             <button
               onClick={() => setIsHeaderCollapsed(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 border border-[#A4332A]/30 text-[#A4332A] rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm whitespace-nowrap ml-0.5"
+              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-[#A4332A]/10 hover:bg-[#A4332A]/20 border border-[#A4332A]/30 text-[#A4332A] rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-sm whitespace-nowrap ml-0.5"
               title="Ocultar menú para lectura inmersiva a pantalla completa"
+              aria-label="Ocultar menú"
             >
               <ChevronUp className="w-4 h-4 text-[#A4332A]" />
-              <span className="hidden sm:inline">Ocultar Menú</span>
+              <span className="hidden lg:inline">Ocultar Menú</span>
             </button>
           )}
         </div>
@@ -323,20 +398,23 @@ export const Navbar: React.FC<NavbarProps> = ({
         }`}>
           <button
             onClick={() => setCurrentView('catalog')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            aria-label="Biblioteca"
+            title="Biblioteca"
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               currentView === 'catalog'
                 ? 'bg-[#A4332A] text-white shadow-sm font-bold'
                 : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span>Biblioteca</span>
+            <span className="hidden lg:inline">Biblioteca</span>
           </button>
 
           {canShowEditor && (
             <button
               onClick={() => setCurrentView('edit')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              aria-label="Editor"
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 currentView === 'edit'
                   ? 'bg-[#A4332A] text-white shadow-sm font-bold'
                   : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
@@ -348,20 +426,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               }
             >
               <Edit3 className="w-3.5 h-3.5" />
-              <span>Editor</span>
+              <span className="hidden lg:inline">Editor</span>
             </button>
           )}
 
           <button
             onClick={() => setCurrentView('workspace')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            aria-label="Mis proyectos"
+            title="Mis proyectos"
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               currentView === 'workspace'
                 ? 'bg-[#A4332A] text-white shadow-sm font-bold'
                 : isClean ? 'text-[#6B5C46] hover:text-[#2A2118]' : 'text-[#D1C7B7] hover:text-white'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Mis Proyectos</span>
+            <span className="hidden lg:inline">Mis Proyectos</span>
           </button>
         </div>
       </div>
