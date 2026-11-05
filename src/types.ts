@@ -71,13 +71,32 @@ export interface SynthSoundConfig {
   arpeggioSpeed?: number; // interval in seconds between notes
 }
 
+export interface AudioProcessingConfig {
+  /** Playback speed multiplier. Values above/below 1 change duration and pitch. */
+  playbackRate?: number;
+  /** Additional pitch shift in semitones. */
+  pitchSemitones?: number;
+  /** Linear output gain applied only to the sample preview/playback. */
+  gain?: number;
+  /** Low-pass cutoff in Hz; values >= 19000 bypass the filter. */
+  lowpassHz?: number;
+  /** Echo wet mix from 0 (off) to 0.7. */
+  echoMix?: number;
+  /** Echo delay in seconds. */
+  echoDelaySeconds?: number;
+  /** Non-destructive trim from the beginning, in seconds. */
+  trimStartSeconds?: number;
+  /** Non-destructive trim from the end, in seconds. */
+  trimEndSeconds?: number;
+}
+
 export interface SoundDefinition {
   id: string; // Unique ID (e.g. 'fanfare', 'custom_sword_clash')
   name: string; // User-friendly name
   description?: string;
   category: SoundCategory;
   sourceType: SoundSourceType;
-  url?: string; // External or uploaded audio file (mp3, wav, ogg)
+  url?: string; // External or uploaded audio file (mp3, wav, ogg)\n  audioProcessing?: AudioProcessingConfig; // Non-destructive settings for URL/file samples
   synthConfig?: SynthSoundConfig;
   isGlobal?: boolean; // True if official platform sound
   isDefault?: boolean; // True if default built-in preset
