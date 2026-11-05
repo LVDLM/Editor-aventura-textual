@@ -27,6 +27,12 @@ interface NavbarProps {
   webAspect?: 'clean' | 'classic';
   onAspectChange?: (aspect: 'clean' | 'classic') => void;
   lastAutoSaveTime?: string;
+  asistirResaltado?: boolean;
+  toggleAsistirResaltado?: () => void;
+  difficulty?: 'facil' | 'normal' | 'dificil';
+  setDifficulty?: (difficulty: 'facil' | 'normal' | 'dificil') => void;
+  onOpenDetailsModal?: () => void;
+  onResetGame?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -52,6 +58,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   webAspect = 'clean',
   onAspectChange,
   lastAutoSaveTime = '',
+  asistirResaltado = false,
+  toggleAsistirResaltado,
+  difficulty = 'normal',
+  setDifficulty,
+  onOpenDetailsModal,
+  onResetGame,
 }) => {
   const isClean = webAspect === 'clean';
 
@@ -85,14 +97,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
               <div className="relative flex items-center">
                 <div
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border cursor-pointer ${
+                  className={`flex items-center gap-1 p-1.5 sm:px-2 sm:py-1 rounded-lg text-xs font-semibold border cursor-pointer ${
                     isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#382E25] border-[#42362B] text-[#F4EFE3]'
                   }`}
                   title="Cambiar aspecto visual / tema de lectura"
                 >
                   <Palette className="w-3.5 h-3.5 text-[#C9A24B] shrink-0" />
-                  <span className="hidden sm:inline font-medium">Tema</span>
-                  <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+                  <span className="hidden lg:inline font-medium">Tema</span>
+                  <ChevronDown className="hidden lg:inline w-3 h-3 opacity-60 ml-0.5" />
                 </div>
                 <select
                   value={theme || 'sepia-parchment'}
@@ -176,7 +188,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         ? 'bg-[#F4EFE3]/95 border-[#E5DCB8] text-[#2A2118] backdrop-blur-md'
         : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3]'
     }`}>
-      <div className="w-full max-w-[1920px] mx-auto flex items-center justify-between gap-2 xl:gap-4 overflow-x-auto no-scrollbar">
+      <div className="w-full max-w-[1920px] mx-auto flex items-center justify-between gap-2 xl:gap-4 overflow-x-hidden md:overflow-x-visible">
         {/* Brand & App Title */}
         <div className="flex items-center gap-3 shrink-0">
           <button
@@ -302,7 +314,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <div className="relative flex items-center">
                 <div
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 p-2 lg:px-3 lg:py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-sm whitespace-nowrap ${
                     isClean
                       ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:border-[#A4332A]'
                       : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] hover:border-[#C9A24B]'
@@ -310,14 +322,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   title="Cambiar aspecto visual / tema de lectura"
                 >
                   <Palette className="w-3.5 h-3.5 text-[#C9A24B] shrink-0" />
-                  <span className="hidden sm:inline">Tema:</span>
-                  <span className="font-bold">
+                  <span className="hidden lg:inline font-bold">
                     {theme === 'classic-retro' ? 'Retro' :
                      theme === 'modern-dark' ? 'Oscuro' :
                      theme === 'cyber-terminal' ? 'Cyber' :
                      theme === 'emerald-vintage' ? 'Esmeralda' : 'Pergamino'}
                   </span>
-                  <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+                  <ChevronDown className="hidden lg:inline w-3 h-3 opacity-60 ml-0.5" />
                 </div>
                 <select
                   value={theme || 'sepia-parchment'}
@@ -332,6 +343,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <option value="emerald-vintage">🌲 Esmeralda Vintage</option>
                 </select>
               </div>
+
+              {/* Audio toggle in expanded navbar during play */}
+              <button
+                type="button"
+                onClick={toggleSound}
+                className={`p-2 rounded-xl border transition-colors cursor-pointer flex items-center justify-center shrink-0 ${
+                  isClean
+                    ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                    : 'bg-[#1F1913] hover:bg-[#382E25] text-[#F4EFE3] border-[#42362B]'
+                }`}
+                title={soundEnabled ? 'Sonido Activado' : 'Sonido Desactivado'}
+                aria-label={soundEnabled ? 'Silenciar sonido' : 'Activar sonido'}
+              >
+                {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-[#C9A24B]" /> : <VolumeX className="w-3.5 h-3.5 text-[#6B5C46]" />}
+              </button>
             </div>
           )}
 
@@ -392,8 +418,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Right: Platform Navigation Tabs */}
-        <div className={`flex items-center rounded-xl p-1 border shrink-0 ${
+        {/* Right: Platform Navigation Tabs - Hidden on mobile during reading mode */}
+        <div className={`${currentView === 'play' ? 'hidden md:flex' : 'flex'} items-center rounded-xl p-1 border shrink-0 ${
           isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
         }`}>
           <button

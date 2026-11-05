@@ -135,7 +135,29 @@ export default function App() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+
+  // Ayuda visual: resaltar palabras interactivas
+  const [asistirResaltado, setAsistirResaltado] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('urdimbre_asistir_resaltado');
+      if (stored === 'true' || stored === 'false') return stored === 'true';
+      return window.matchMedia('(pointer: coarse)').matches;
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleAsistirResaltado = () => {
+    setAsistirResaltado((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('urdimbre_asistir_resaltado', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Listen for Firebase Auth state changes
   useEffect(() => {
@@ -401,6 +423,12 @@ export default function App() {
           !!(currentUser && (project.author === currentUser.displayName || project.authorId === currentUser.uid))
         }
         lastAutoSaveTime={lastAutoSaveTime}
+        asistirResaltado={asistirResaltado}
+        toggleAsistirResaltado={toggleAsistirResaltado}
+        difficulty={gameState.difficulty}
+        setDifficulty={(d) => setGameState((prev) => ({ ...prev, difficulty: d }))}
+        onOpenDetailsModal={() => setShowDetailsModal(true)}
+        onResetGame={handleResetGame}
       />
 
       {/* Main View Router */}
@@ -445,6 +473,10 @@ export default function App() {
             setIsHeaderCollapsed={setIsHeaderCollapsed}
             soundEnabled={soundEnabled}
             toggleSound={() => setSoundState(!soundEnabled)}
+            asistirResaltado={asistirResaltado}
+            toggleAsistirResaltado={toggleAsistirResaltado}
+            showDetailsModal={showDetailsModal}
+            setShowDetailsModal={setShowDetailsModal}
           />
         )}
 

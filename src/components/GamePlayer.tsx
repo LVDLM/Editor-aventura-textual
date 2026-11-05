@@ -61,6 +61,10 @@ interface GamePlayerProps {
   soundEnabled?: boolean;
   toggleSound?: () => void;
   isSceneTesting?: boolean;
+  asistirResaltado?: boolean;
+  toggleAsistirResaltado?: () => void;
+  showDetailsModal?: boolean;
+  setShowDetailsModal?: (show: boolean) => void;
 }
 
 const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
@@ -189,6 +193,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   soundEnabled = true,
   toggleSound,
   isSceneTesting = false,
+  asistirResaltado: propAsistirResaltado,
+  toggleAsistirResaltado: propToggleAsistirResaltado,
+  showDetailsModal: propShowDetailsModal,
+  setShowDetailsModal: propSetShowDetailsModal,
 }) => {
   const projectVerbs = getProjectVerbs(project);
   const [activeVerb, setActiveVerb] = useState<VerbType | null>(null);
@@ -245,16 +253,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   };
   
   // Details & Credits modal state
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [localShowDetailsModal, setLocalShowDetailsModal] = useState(false);
+  const showDetailsModal = propShowDetailsModal !== undefined ? propShowDetailsModal : localShowDetailsModal;
+  const setShowDetailsModal = propSetShowDetailsModal || setLocalShowDetailsModal;
+
   // Collapsible Header State
   const [localIsHeaderCollapsed, setLocalIsHeaderCollapsed] = useState(false);
   const isHeaderCollapsed = propIsHeaderCollapsed !== undefined ? propIsHeaderCollapsed : localIsHeaderCollapsed;
   const setIsHeaderCollapsed = propSetIsHeaderCollapsed || setLocalIsHeaderCollapsed;
 
-  // Ayuda visual: resaltar siempre las palabras interactivas, independientemente de la
-  // dificultad. Es una preferencia del dispositivo (no de la partida): por defecto se
-  // activa en pantallas táctiles, donde no hay cursor que revele las palabras clicables.
-  const [asistirResaltado, setAsistirResaltado] = useState<boolean>(() => {
+  // Ayuda visual: resaltar siempre las palabras interactivas
+  const [localAsistirResaltado, setLocalAsistirResaltado] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem('urdimbre_asistir_resaltado');
       if (stored === 'true' || stored === 'false') return stored === 'true';
@@ -263,17 +272,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       return false;
     }
   });
-  const toggleAsistirResaltado = () => {
-    setAsistirResaltado((prev) => {
+
+  const asistirResaltado = propAsistirResaltado !== undefined ? propAsistirResaltado : localAsistirResaltado;
+  const toggleAsistirResaltado = propToggleAsistirResaltado || (() => {
+    setLocalAsistirResaltado((prev) => {
       const next = !prev;
       try {
         localStorage.setItem('urdimbre_asistir_resaltado', String(next));
       } catch {
-        /* almacenamiento no disponible: se mantiene solo en memoria */
+        /* almacenamiento no disponible */
       }
       return next;
     });
-  };
+  });
 
   // Direct click word context menu modal
   const [contextMenu, setContextMenu] = useState<{
@@ -1888,7 +1899,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <div
                     className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Bookmark className="w-3.5 h-3.5 text-emerald-300" />
+                    <Palette className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                     <span>Tema</span>
                     <ChevronDown className="w-3 h-3 text-emerald-200 ml-0.5 opacity-80" />
                   </div>
@@ -2068,8 +2079,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </>
         )}
 
-        {/* Sentence Builder Bar (LucasArts Style Command Bar) - Hidden on mobile, visible on PC */}
-        <div className={`hidden md:flex p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} items-center justify-between gap-3 shadow-sm`}>
+        {/* Sentence Builder Bar (LucasArts Style Command Bar) - Shown on mobile only when active verb/item selected */}
+        <div className={`${(activeVerb || selectedItemObj) ? 'flex' : 'hidden md:flex'} p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} items-center justify-between gap-3 shadow-sm`}>
           <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide flex-wrap">
             <span className={`text-xs font-semibold uppercase tracking-wider ${themeConfig.accentClass}`}>Acción:</span>
             <span className={themeConfig.actionBoxTextClass}>
