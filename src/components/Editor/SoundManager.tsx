@@ -216,6 +216,24 @@ const SYNTH_TEMPLATES: { name: string; config: SynthSoundConfig }[] = [
     },
   },
   {
+    name: 'Grito animal',
+    config: {
+      synthesisProfile: 'animal_cry',
+      oscType: 'sawtooth',
+      startFreq: 520,
+      endFreq: 185,
+      rampType: 'exponential',
+      duration: 1.15,
+      volume: 0.34,
+      filterType: 'bandpass',
+      filterFreq: 950,
+      filterQ: 1.8,
+      lfoFreq: 4.7,
+      lfoGain: 9,
+      noiseMix: 0.18,
+    },
+  },
+  {
     name: 'Pasar Hoja',
     config: {
       oscType: 'noise',
