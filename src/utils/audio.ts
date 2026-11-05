@@ -1144,6 +1144,7 @@ function playDecodedAudio(
   processing: import('../types').AudioProcessingConfig = {}
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    let echoFeedback: GainNode | null = null;
     try {
       const source = ctx.createBufferSource();
       const filter = ctx.createBiquadFilter();
@@ -1159,8 +1160,9 @@ function playDecodedAudio(
       source.playbackRate.setValueAtTime(playbackRate, ctx.currentTime);
       source.detune.setValueAtTime(pitchSemitones * 100, ctx.currentTime);
 
+      const cutoff = processing.lowpassHz ?? 20000;
+      const filterEnabled = cutoff < 19000;
       filter.type = 'lowpass';
-      const cutoff = processing.lowpassHz ?? 19000;
       filter.frequency.setValueAtTime(Math.max(80, Math.min(20000, cutoff)), ctx.currentTime);
       filter.Q.setValueAtTime(0.707, ctx.currentTime);
 
@@ -1170,14 +1172,16 @@ function playDecodedAudio(
         ctx.currentTime
       );
 
-      source.connect(filter);
-      filter.connect(dryGain);
+      const processedNode: AudioNode = filterEnabled ? filter : source;
+      if (filterEnabled) source.connect(filter);
+      processedNode.connect(dryGain);
       dryGain.connect(masterGain);
 
       const echoMix = Math.max(0, Math.min(0.7, processing.echoMix ?? 0));
       if (echoMix > 0) {
         const delay = ctx.createDelay(2);
         const feedback = ctx.createGain();
+        echoFeedback = feedback;
         const wet = ctx.createGain();
         delay.delayTime.setValueAtTime(
           Math.max(0.05, Math.min(1.5, processing.echoDelaySeconds ?? 0.28)),
@@ -1185,7 +1189,7 @@ function playDecodedAudio(
         );
         feedback.gain.setValueAtTime(0.22, ctx.currentTime);
         wet.gain.setValueAtTime(echoMix, ctx.currentTime);
-        filter.connect(delay);
+        processedNode.connect(delay);
         delay.connect(wet);
         delay.connect(feedback);
         feedback.connect(delay);
@@ -1195,6 +1199,7 @@ function playDecodedAudio(
       masterGain.connect(ctx.destination);
       source.onended = () => {
         activeBufferSources.delete(source);
+        if (echoFeedback) echoFeedback.gain.setValueAtTime(0, ctx.currentTime);
         resolve();
       };
       activeBufferSources.add(source);
