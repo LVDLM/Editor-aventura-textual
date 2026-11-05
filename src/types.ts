@@ -53,6 +53,7 @@ export type InstrumentType =
   | 'drum';
 
 export interface SynthSoundConfig {
+  synthesisProfile?: 'animal_cry'; // Dedicated organic vocalization synthesis model
   oscType: 'sine' | 'triangle' | 'square' | 'sawtooth' | 'noise' | 'fm_synth' | 'arpeggio' | 'laser';
   instrument?: InstrumentType;
   startFreq: number; // Hz (20 to 5000)
