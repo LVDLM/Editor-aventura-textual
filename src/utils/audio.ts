@@ -543,6 +543,91 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
   const startF = Math.max(20, config.startFreq || 440);
 
   // ==========================================
+  // ORGANIC ANIMAL VOCALIZATION PROFILE
+  // ==========================================
+  if (config.synthesisProfile === 'animal_cry') {
+    // A layered, non-musical cry: unstable vocal pitch, two moving formants
+    // and a short breath/noise component instead of a single static oscillator.
+    const pitch = ctx.createOscillator();
+    const body = ctx.createOscillator();
+    const pitchGain = ctx.createGain();
+    const bodyGain = ctx.createGain();
+    const formantA = ctx.createBiquadFilter();
+    const formantB = ctx.createBiquadFilter();
+    const mix = ctx.createGain();
+
+    pitch.type = 'sawtooth';
+    body.type = 'triangle';
+    pitch.frequency.setValueAtTime(startF, now);
+    body.frequency.setValueAtTime(startF * 0.503, now);
+    const endF = Math.max(65, config.endFreq || startF * 0.42);
+    pitch.frequency.exponentialRampToValueAtTime(endF, now + dur * 0.82);
+    body.frequency.exponentialRampToValueAtTime(Math.max(35, endF * 0.5), now + dur * 0.82);
+
+    // Slightly irregular-feeling pitch movement keeps the cry from sounding like a siren.
+    const vibrato = ctx.createOscillator();
+    const vibratoGain = ctx.createGain();
+    vibrato.type = 'sine';
+    vibrato.frequency.setValueAtTime(4.7, now);
+    vibratoGain.gain.setValueAtTime(Math.max(3, startF * 0.018), now);
+    vibrato.connect(vibratoGain);
+    vibratoGain.connect(pitch.frequency);
+    vibrato.start(now);
+    vibrato.stop(now + dur + 0.03);
+
+    formantA.type = 'bandpass';
+    formantA.Q.setValueAtTime(2.2, now);
+    formantA.frequency.setValueAtTime(780, now);
+    formantA.frequency.linearRampToValueAtTime(1180, now + dur * 0.55);
+    formantA.frequency.linearRampToValueAtTime(920, now + dur);
+
+    formantB.type = 'bandpass';
+    formantB.Q.setValueAtTime(1.6, now);
+    formantB.frequency.setValueAtTime(1450, now);
+    formantB.frequency.linearRampToValueAtTime(2050, now + dur * 0.7);
+    formantB.frequency.linearRampToValueAtTime(1550, now + dur);
+
+    pitchGain.gain.setValueAtTime(vol * 0.52, now);
+    bodyGain.gain.setValueAtTime(vol * 0.34, now);
+    mix.gain.setValueAtTime(0, now);
+    mix.gain.linearRampToValueAtTime(1, now + Math.min(0.075, dur * 0.18));
+    mix.gain.setValueAtTime(0.82, now + dur * 0.68);
+    mix.gain.linearRampToValueAtTime(0.001, now + dur);
+
+    pitch.connect(formantA);
+    body.connect(formantB);
+    formantA.connect(pitchGain);
+    formantB.connect(bodyGain);
+    pitchGain.connect(mix);
+    bodyGain.connect(mix);
+    mix.connect(ctx.destination);
+
+    pitch.start(now);
+    body.start(now);
+    pitch.stop(now + dur + 0.04);
+    body.stop(now + dur + 0.04);
+
+    // A little filtered breath gives the attack and tail an airy, animal quality.
+    const breath = ctx.createBufferSource();
+    breath.buffer = createNoiseBuffer(ctx, dur);
+    const breathFilter = ctx.createBiquadFilter();
+    const breathGain = ctx.createGain();
+    breathFilter.type = 'bandpass';
+    breathFilter.frequency.setValueAtTime(1850, now);
+    breathFilter.frequency.linearRampToValueAtTime(1250, now + dur);
+    breathFilter.Q.setValueAtTime(0.8, now);
+    breathGain.gain.setValueAtTime(vol * 0.12, now);
+    breathGain.gain.linearRampToValueAtTime(vol * 0.2, now + dur * 0.12);
+    breathGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    breath.connect(breathFilter);
+    breathFilter.connect(breathGain);
+    breathGain.connect(ctx.destination);
+    breath.start(now);
+    breath.stop(now + dur + 0.04);
+    return;
+  }
+
+  // ==========================================
   // INSTRUMENT TIMBRE MODELING
   // ==========================================
   if (config.instrument && config.instrument !== 'custom') {
