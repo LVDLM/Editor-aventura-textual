@@ -1131,10 +1131,6 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                         <Music className="w-3.5 h-3.5 text-amber-500" />
                         <span>Selector de Instrumento y Timbre Acústico:</span>
                       </label>
-                      <div className="flex items-center gap-1.5 ml-auto">
-                        <button type="button" onClick={handleTestActiveForm} disabled={isPlayingTesting} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#A4332A] text-white hover:bg-[#872820]' : 'bg-amber-600 text-black hover:bg-amber-500'} disabled:opacity-50`}><Play className="w-3 h-3 fill-current" /> Probar</button>
-                        <button type="button" onClick={handleStopPreview} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-200'}`}><Square className="w-3 h-3 fill-current" /> Parar</button>
-                      </div>
                       <span className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
                         (Modelado físico y síntesis armónica)
                       </span>
