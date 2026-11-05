@@ -31,7 +31,8 @@ import {
   DEFAULT_SOUND_LIBRARY,
   getAudioContext,
   playSynthWithConfig,
-  playUrlAudio,
+  previewSoundDefinition,
+  stopAllAudio,
   INSTRUMENT_OPTIONS,
 } from '../../utils/audio';
 import {
@@ -343,51 +344,44 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
 
   // Sound Playback Handler
   const handlePlaySound = async (sound: SoundDefinition) => {
+    stopAllAudio();
     try {
       setPlayingSoundId(sound.id);
       setIsPlayingTesting(true);
-
-      if (sound.sourceType === 'url' && sound.url) {
-        await playUrlAudio(sound.url, 0.7);
-      } else if (sound.synthConfig) {
-        const ctx = getAudioContext();
-        if (ctx) {
-          playSynthWithConfig(ctx, sound.synthConfig);
-        }
-      }
+      await previewSoundDefinition(sound);
     } catch (e) {
       console.warn('Playback error:', e);
     } finally {
-      setTimeout(() => {
-        setPlayingSoundId(null);
-        setIsPlayingTesting(false);
-      }, (sound.synthConfig?.duration || 0.5) * 1000 + 100);
+      setPlayingSoundId(null);
+      setIsPlayingTesting(false);
     }
+  };
+
+  const handleStopPreview = () => {
+    stopAllAudio();
+    setPlayingSoundId(null);
+    setIsPlayingTesting(false);
   };
 
   // Sound Testing inside Form
   const handleTestActiveForm = async () => {
     if (!activeSoundForm) return;
+    handleStopPreview();
     try {
       setIsPlayingTesting(true);
       if (activeSoundForm.sourceType === 'url' && activeSoundForm.url) {
         setUrlTestingStatus('testing');
         setUrlErrorMessage('');
-        await playUrlAudio(activeSoundForm.url, activeSoundForm.synthConfig?.volume || 0.6);
+        await previewSoundDefinition(activeSoundForm);
         setUrlTestingStatus('success');
-      } else if (activeSoundForm.synthConfig) {
-        const ctx = getAudioContext();
-        if (ctx) {
-          playSynthWithConfig(ctx, activeSoundForm.synthConfig);
-        }
+      } else {
+        await previewSoundDefinition(activeSoundForm);
       }
     } catch (err: any) {
       setUrlTestingStatus('error');
-      setUrlErrorMessage(err?.message || 'No se pudo reproducir el enlace de audio.');
+      setUrlErrorMessage(err?.message || 'No se pudo reproducir el sonido.');
     } finally {
-      setTimeout(() => {
-        setIsPlayingTesting(false);
-      }, (activeSoundForm.synthConfig?.duration || 0.6) * 1000 + 100);
+      setIsPlayingTesting(false);
     }
   };
 
@@ -1137,6 +1131,10 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                         <Music className="w-3.5 h-3.5 text-amber-500" />
                         <span>Selector de Instrumento y Timbre Acústico:</span>
                       </label>
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <button type="button" onClick={handleTestActiveForm} disabled={isPlayingTesting} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#A4332A] text-white hover:bg-[#872820]' : 'bg-amber-600 text-black hover:bg-amber-500'} disabled:opacity-50`}><Play className="w-3 h-3 fill-current" /> Probar</button>
+                        <button type="button" onClick={handleStopPreview} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-200'}`}><Square className="w-3 h-3 fill-current" /> Parar</button>
+                      </div>
                       <span className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
                         (Modelado físico y síntesis armónica)
                       </span>
@@ -1213,6 +1211,10 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                       <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
                         Forma de Onda del Oscilador:
                       </label>
+                      <div className="flex items-center justify-end gap-1.5 mb-2">
+                        <button type="button" onClick={handleTestActiveForm} disabled={isPlayingTesting} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#A4332A] text-white' : 'bg-amber-600 text-black'} disabled:opacity-50`}><Play className="w-3 h-3 fill-current" /> Escuchar cambios</button>
+                        <button type="button" onClick={handleStopPreview} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-200'}`}><Square className="w-3 h-3 fill-current" /> Parar</button>
+                      </div>
                       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                         {[
                           { id: 'sine', label: 'Senoidal' },
