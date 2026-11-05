@@ -10,7 +10,9 @@ let audioCtx: AudioContext | null = null;
 let soundEnabled = true;
 const activeAudioElements = new Set<HTMLAudioElement>();
 const activeSynthSources = new Set<AudioScheduledSourceNode>();
+const activeBufferSources = new Set<AudioBufferSourceNode>();
 const urlAudioCache = new Map<string, HTMLAudioElement>();
+const decodedAudioCache = new Map<string, Promise<AudioBuffer>>();
 
 function startTrackedSource(source: AudioScheduledSourceNode, when?: number) {
   activeSynthSources.add(source);
@@ -56,6 +58,11 @@ export function stopAllAudio() {
     }
   });
   activeAudioElements.clear();
+
+  activeBufferSources.forEach((source) => {
+    try { source.stop(); } catch { /* Already stopped. */ }
+    activeBufferSources.delete(source);
+  });
 
   activeSynthSources.forEach((source) => {
     try {
@@ -1114,8 +1121,112 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
 /**
  * Plays an audio source via external URL (mp3/wav/ogg)
  */
-export function playUrlAudio(url: string, volume = 0.5): Promise<void> {
-  if (!soundEnabled || !url) return Promise.resolve();
+async function loadDecodedAudio(url: string, ctx: AudioContext): Promise<AudioBuffer> {
+  let cached = decodedAudioCache.get(url);
+  if (!cached) {
+    cached = fetch(url, { mode: 'cors', credentials: 'omit' })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status} al cargar el audio`);
+        return response.arrayBuffer();
+      })
+      .then((data) => ctx.decodeAudioData(data.slice(0)));
+    decodedAudioCache.set(url, cached);
+    cached.catch(() => decodedAudioCache.delete(url));
+  }
+  return cached;
+}
+
+/** Plays decoded samples through the same Web Audio graph regardless of URL or upload origin. */
+function playDecodedAudio(
+  ctx: AudioContext,
+  buffer: AudioBuffer,
+  volume: number,
+  processing: import('../types').AudioProcessingConfig = {}
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const source = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const dryGain = ctx.createGain();
+      const masterGain = ctx.createGain();
+      const playbackRate = Math.max(0.25, Math.min(4, processing.playbackRate ?? 1));
+      const pitchSemitones = Math.max(-24, Math.min(24, processing.pitchSemitones ?? 0));
+      const trimStart = Math.max(0, Math.min(buffer.duration - 0.02, processing.trimStartSeconds ?? 0));
+      const trimEnd = Math.max(0, Math.min(buffer.duration - trimStart - 0.02, processing.trimEndSeconds ?? 0));
+      const playDuration = Math.max(0.02, buffer.duration - trimStart - trimEnd);
+
+      source.buffer = buffer;
+      source.playbackRate.setValueAtTime(playbackRate, ctx.currentTime);
+      source.detune.setValueAtTime(pitchSemitones * 100, ctx.currentTime);
+
+      filter.type = 'lowpass';
+      const cutoff = processing.lowpassHz ?? 19000;
+      filter.frequency.setValueAtTime(Math.max(80, Math.min(20000, cutoff)), ctx.currentTime);
+      filter.Q.setValueAtTime(0.707, ctx.currentTime);
+
+      dryGain.gain.setValueAtTime(1, ctx.currentTime);
+      masterGain.gain.setValueAtTime(
+        Math.max(0, Math.min(2, processing.gain ?? 1)) * Math.max(0, Math.min(1, volume)),
+        ctx.currentTime
+      );
+
+      source.connect(filter);
+      filter.connect(dryGain);
+      dryGain.connect(masterGain);
+
+      const echoMix = Math.max(0, Math.min(0.7, processing.echoMix ?? 0));
+      if (echoMix > 0) {
+        const delay = ctx.createDelay(2);
+        const feedback = ctx.createGain();
+        const wet = ctx.createGain();
+        delay.delayTime.setValueAtTime(
+          Math.max(0.05, Math.min(1.5, processing.echoDelaySeconds ?? 0.28)),
+          ctx.currentTime
+        );
+        feedback.gain.setValueAtTime(0.22, ctx.currentTime);
+        wet.gain.setValueAtTime(echoMix, ctx.currentTime);
+        filter.connect(delay);
+        delay.connect(wet);
+        delay.connect(feedback);
+        feedback.connect(delay);
+        wet.connect(masterGain);
+      }
+
+      masterGain.connect(ctx.destination);
+      source.onended = () => {
+        activeBufferSources.delete(source);
+        resolve();
+      };
+      activeBufferSources.add(source);
+      source.start(ctx.currentTime, trimStart, playDuration);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Plays an external/uploaded audio source. CORS-enabled sources use AudioBuffer processing;
+ * sources that do not permit fetch/decode retain the legacy HTMLAudioElement playback path.
+ */
+export async function playUrlAudio(
+  url: string,
+  volume = 0.5,
+  processing: import('../types').AudioProcessingConfig = {}
+): Promise<void> {
+  if (!soundEnabled || !url) return;
+  const ctx = getAudioContext();
+  if (ctx) {
+    try {
+      await ctx.resume();
+      const buffer = await loadDecodedAudio(url, ctx);
+      await playDecodedAudio(ctx, buffer, volume, processing);
+      return;
+    } catch (error) {
+      // Cross-origin hosts may allow <audio> playback while blocking fetch/decode.
+      console.warn('AudioBuffer no disponible; se usará reproducción directa:', error);
+    }
+  }
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -1134,7 +1245,7 @@ export function playUrlAudio(url: string, volume = 0.5): Promise<void> {
         urlAudioCache.set(url, audio);
       }
 
-      audio.volume = Math.max(0, Math.min(1, volume));
+      audio.volume = Math.max(0, Math.min(1, volume * (processing.gain ?? 1)));
       audio.currentTime = 0;
       activeAudioElements.add(audio);
       audio.onended = finish;
@@ -1145,7 +1256,6 @@ export function playUrlAudio(url: string, volume = 0.5): Promise<void> {
         activeAudioElements.delete(audio!);
         reject(new Error(`No se pudo cargar el audio: ${url}`));
       };
-
       audio.play().catch((error) => {
         if (settled) return;
         settled = true;
@@ -1166,7 +1276,7 @@ export function previewSoundDefinition(sound: SoundDefinition): Promise<void> {
   if (!sound || !soundEnabled) return Promise.resolve();
 
   if (sound.sourceType === 'url' && sound.url) {
-    return playUrlAudio(sound.url, 0.7);
+    return playUrlAudio(sound.url, 0.7, sound.audioProcessing);
   }
 
   if (sound.synthConfig) {
