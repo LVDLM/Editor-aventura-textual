@@ -96,7 +96,8 @@ export interface SoundDefinition {
   description?: string;
   category: SoundCategory;
   sourceType: SoundSourceType;
-  url?: string; // External or uploaded audio file (mp3, wav, ogg)\n  audioProcessing?: AudioProcessingConfig; // Non-destructive settings for URL/file samples
+  url?: string; // External or uploaded audio file (mp3, wav, ogg)
+  audioProcessing?: AudioProcessingConfig; // Non-destructive settings for URL/file samples
   synthConfig?: SynthSoundConfig;
   isGlobal?: boolean; // True if official platform sound
   isDefault?: boolean; // True if default built-in preset
