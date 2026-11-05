@@ -1,0 +1,1435 @@
+diff --git a/src/components/Editor/SoundManager.tsx b/src/components/Editor/SoundManager.tsx
+index 1c1b2a7..310fd0e 100644
+--- a/src/components/Editor/SoundManager.tsx
++++ b/src/components/Editor/SoundManager.tsx
+@@ -40,6 +40,8 @@ import {
+   saveGlobalSoundLibraryToFirestore,
+   resetGlobalSoundLibraryInFirestore,
+ } from '../../lib/firebase';
++import { VoicePanel } from './VoicePanel';
++import { DEFAULT_VOICE } from '../../utils/voicePresets';
+ 
+ interface SoundManagerProps {
+   project: GameProject;
+@@ -546,6 +548,27 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+     }
+   };
+ 
++  // Cambiar entre motor oscilador/instrumento y motor Voz / Criatura
++  const handleSelectEngine = (engine: 'osc' | 'voice') => {
++    if (!activeSoundForm) return;
++    const curr = activeSoundForm.synthConfig || { oscType: 'sawtooth' as const, startFreq: 440, duration: 1, volume: 0.3 };
++    const isVoice = curr.synthesisProfile === 'voice';
++    if ((engine === 'voice') === isVoice) return;
++    const next: SynthSoundConfig =
++      engine === 'voice'
++        ? {
++            ...curr,
++            synthesisProfile: 'voice',
++            oscType: 'sawtooth',
++            instrument: 'custom',
++            startFreq: Math.min(Math.max(curr.startFreq || 300, 60), 2000),
++            duration: Math.max(curr.duration || 1, 0.8),
++            voice: { ...DEFAULT_VOICE, ...(curr.voice || {}) },
++          }
++        : { ...curr, synthesisProfile: undefined, voice: undefined };
++    setActiveSoundForm({ ...activeSoundForm, synthConfig: next });
++  };
++
+   // Handle instrument change
+   const handleSelectInstrument = (instId: InstrumentType) => {
+     if (!activeSoundForm) return;
+@@ -559,6 +582,8 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+ 
+     const nextConfig: SynthSoundConfig = {
+       ...curr,
++      synthesisProfile: undefined,
++      voice: undefined,
+       instrument: instId,
+       startFreq: option && instId !== 'custom' ? option.defaultFreq : curr.startFreq,
+       duration: option && instId !== 'custom' ? option.defaultDur : curr.duration,
+@@ -1120,6 +1145,54 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+               {/* ==================== SYNTHESIZER MODE ==================== */}
+               {activeSoundForm.sourceType === 'synth' && (
+                 <div className="space-y-5">
++                  {/* Motor de síntesis */}
++                  <div className="flex flex-wrap gap-2" role="group" aria-label="Motor de síntesis">
++                    {[
++                      { id: 'osc', label: 'Oscilador / Instrumento', desc: 'Pitidos, notas, efectos electrónicos' },
++                      { id: 'voice', label: 'Voz / Criatura', desc: 'Gritos, aullidos, gruñidos, respiración' },
++                    ].map((m) => {
++                      const active = (m.id === 'voice') === (activeSoundForm.synthConfig?.synthesisProfile === 'voice');
++                      return (
++                        <button
++                          key={m.id}
++                          type="button"
++                          aria-pressed={active}
++                          onClick={() => handleSelectEngine(m.id as 'osc' | 'voice')}
++                          className={`flex-1 min-w-[150px] p-2.5 rounded-xl border text-left transition-all cursor-pointer touch-manipulation ${
++                            active
++                              ? isClean
++                                ? 'bg-[#A4332A] text-white border-[#872820] shadow-sm'
++                                : 'bg-amber-600 text-white border-amber-500 shadow-sm'
++                              : isClean
++                              ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:bg-[#EBE3CD]'
++                              : 'bg-[#2C241C] border-[#42362B] text-slate-300 hover:text-white'
++                          }`}
++                        >
++                          <span className="block text-xs font-bold">{m.label}</span>
++                          <span className={`block text-[10px] mt-0.5 ${active ? 'text-white/80' : isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>{m.desc}</span>
++                        </button>
++                      );
++                    })}
++                  </div>
++
++                  {activeSoundForm.synthConfig?.synthesisProfile === 'voice' && (
++                    <VoicePanel
++                      config={activeSoundForm.synthConfig}
++                      isClean={isClean}
++                      isPlaying={isPlayingTesting}
++                      onChange={(next) => setActiveSoundForm({ ...activeSoundForm, synthConfig: next })}
++                      onChangeAndPlay={(next) => {
++                        setActiveSoundForm({ ...activeSoundForm, synthConfig: next });
++                        const ctx = getAudioContext();
++                        if (ctx) playSynthWithConfig(ctx, next);
++                      }}
++                      onPreview={handleTestActiveForm}
++                      onStop={handleStopPreview}
++                    />
++                  )}
++
++                  {activeSoundForm.synthConfig?.synthesisProfile !== 'voice' && (
++                  <>
+                   {/* Instrument Selector */}
+                   <div
+                     className={`p-4 rounded-2xl border space-y-3 ${
+@@ -1512,6 +1585,8 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+                       </div>
+                     )}
+                   </div>
++                  </>
++                  )}
+                 </div>
+               )}
+ 
+diff --git a/src/components/Editor/VoicePanel.tsx b/src/components/Editor/VoicePanel.tsx
+new file mode 100644
+index 0000000..05508c4
+--- /dev/null
++++ b/src/components/Editor/VoicePanel.tsx
+@@ -0,0 +1,489 @@
++import React from 'react';
++import { Play, Square, Shuffle, Mic } from 'lucide-react';
++import { SynthSoundConfig, VoiceConfig } from '../../types';
++import { VOICE_PRESETS, VOICE_ENGINE_DEFAULTS } from '../../utils/voicePresets';
++
++interface VoicePanelProps {
++  config: SynthSoundConfig;
++  onChange: (next: SynthSoundConfig) => void;
++  /** Aplica una configuración y la reproduce al momento (plantillas, vocales...) */
++  onChangeAndPlay: (next: SynthSoundConfig) => void;
++  onPreview: () => void;
++  onStop: () => void;
++  isPlaying: boolean;
++  isClean: boolean;
++}
++
++// ---- Formas rápidas ----
++const CONTOUR_SHAPES: { id: string; label: string; pts: number[] }[] = [
++  { id: 'arc', label: 'Arco', pts: [0.9, 1.25, 1.4, 1.2, 0.9] },
++  { id: 'rise', label: 'Sube', pts: [0.8, 1.35] },
++  { id: 'fall', label: 'Baja', pts: [1.35, 0.8] },
++  { id: 'cry', label: 'Grito (sube rápido, cae lento)', pts: [0.75, 1.4, 1.3, 1.1, 0.9, 0.75] },
++  { id: 'howl', label: 'Aullido', pts: [0.8, 1.2, 1.35, 1.3, 1.1, 0.8] },
++  { id: 'dip', label: 'Cae y sube', pts: [1.2, 0.85, 1.1] },
++  { id: 'flat', label: 'Plano', pts: [1, 1] },
++];
++
++const ENVELOPE_SHAPES: { id: string; label: string; pts: number[] }[] = [
++  { id: 'hit', label: 'Golpe', pts: [0, 1, 0.65, 0.3, 0.1, 0] },
++  { id: 'sustain', label: 'Sostenido', pts: [0, 0.85, 1, 0.9, 0.55, 0] },
++  { id: 'swell', label: 'Crescendo', pts: [0, 0.15, 0.4, 0.75, 1, 0] },
++  { id: 'double', label: 'Doble', pts: [0, 1, 0.6, 0.05, 0.9, 0.6, 0] },
++  { id: 'breath', label: 'Respiración', pts: [0, 0.8, 0.7, 0.1, 0, 0.1, 0.9, 1, 0.5, 0] },
++];
++
++const VOWELS: { id: string; label: string; f: [number, number, number] }[] = [
++  { id: 'a', label: 'A', f: [800, 1200, 2600] },
++  { id: 'e', label: 'E', f: [500, 1900, 2600] },
++  { id: 'i', label: 'I', f: [300, 2300, 3000] },
++  { id: 'o', label: 'O', f: [500, 900, 2500] },
++  { id: 'u', label: 'U', f: [350, 800, 2400] },
++];
++
++const sameArray = (a?: number[], b?: number[]) =>
++  !!a && !!b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.001);
++
++// ---- Piezas visuales (a nivel de módulo para no perder el foco al arrastrar) ----
++const Slider: React.FC<{
++  label: string;
++  value: number;
++  min: number;
++  max: number;
++  step: number;
++  format: (v: number) => string;
++  onChange: (v: number) => void;
++  hint?: string;
++  left?: string;
++  right?: string;
++  isClean: boolean;
++}> = ({ label, value, min, max, step, format, onChange, hint, left, right, isClean }) => (
++  <div className="space-y-1">
++    <div className="flex justify-between text-xs font-bold gap-2">
++      <span className={isClean ? 'text-[#2A2118]' : 'text-slate-300'}>{label}</span>
++      <span className={`font-mono shrink-0 ${isClean ? 'text-[#872820]' : 'text-amber-400'}`}>{format(value)}</span>
++    </div>
++    <input
++      type="range"
++      min={min}
++      max={max}
++      step={step}
++      value={value}
++      aria-label={label}
++      onChange={(e) => onChange(parseFloat(e.target.value))}
++      className="w-full accent-amber-600"
++    />
++    {(left || right) && (
++      <div className={`flex justify-between text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
++        <span>{left}</span>
++        <span>{right}</span>
++      </div>
++    )}
++    {hint && <p className={`text-[10px] leading-snug ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>{hint}</p>}
++  </div>
++);
++
++const Chip: React.FC<{ active: boolean; onClick: () => void; isClean: boolean; children: React.ReactNode; title?: string }> = ({
++  active,
++  onClick,
++  isClean,
++  children,
++  title,
++}) => (
++  <button
++    type="button"
++    onClick={onClick}
++    title={title}
++    aria-pressed={active}
++    className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer touch-manipulation ${
++      active
++        ? isClean
++          ? 'bg-[#A4332A] text-white border-[#872820] shadow-sm'
++          : 'bg-amber-500 text-black border-amber-400 shadow-sm'
++        : isClean
++        ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:bg-[#EBE3CD]'
++        : 'bg-[#2C241C] border-[#42362B] text-slate-300 hover:text-white'
++    }`}
++  >
++    {children}
++  </button>
++);
++
++/** Dibujo mínimo de una curva (puntos equiespaciados en el tiempo) */
++const MiniCurve: React.FC<{ pts: number[]; log?: boolean; depth?: number; isClean: boolean; label: string }> = ({
++  pts,
++  log,
++  depth = 1,
++  isClean,
++  label,
++}) => {
++  const vals = pts.map((p) => (log ? depth * Math.log2(Math.max(0.05, p)) : p));
++  const lo = log ? Math.min(...vals, -0.6) : 0;
++  const hi = log ? Math.max(...vals, 0.6) : 1.05;
++  const W = 120;
++  const H = 34;
++  const path = vals
++    .map((v, i) => {
++      const x = (i / Math.max(1, vals.length - 1)) * W;
++      const y = H - 3 - ((v - lo) / (hi - lo)) * (H - 6);
++      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
++    })
++    .join(' ');
++  return (
++    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label} className="w-full h-9">
++      <rect x="0" y="0" width={W} height={H} rx="6" fill={isClean ? '#FFFDF6' : '#2C241C'} stroke={isClean ? '#E5DCB8' : '#42362B'} />
++      <path d={path} fill="none" stroke={isClean ? '#A4332A' : '#F59E0B'} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
++    </svg>
++  );
++};
++
++export const VoicePanel: React.FC<VoicePanelProps> = ({
++  config,
++  onChange,
++  onChangeAndPlay,
++  onPreview,
++  onStop,
++  isPlaying,
++  isClean,
++}) => {
++  const voice: VoiceConfig = { ...VOICE_ENGINE_DEFAULTS, ...(config.voice || {}) };
++  const num = (k: keyof typeof VOICE_ENGINE_DEFAULTS) => (voice[k] as number) ?? VOICE_ENGINE_DEFAULTS[k];
++
++  const setVoice = (patch: Partial<VoiceConfig>) => onChange({ ...config, voice: { ...(config.voice || {}), ...patch } });
++  const setVoicePlay = (patch: Partial<VoiceConfig>) =>
++    onChangeAndPlay({ ...config, voice: { ...(config.voice || {}), ...patch } });
++
++  const contour = voice.contour && voice.contour.length ? voice.contour : [1, 1];
++  const envelope = voice.envelope && voice.envelope.length > 1 ? voice.envelope : [0, 0.85, 1, 0.8, 0];
++  const activeShape = CONTOUR_SHAPES.find((s) => sameArray(s.pts, contour));
++  const activeEnv = ENVELOPE_SHAPES.find((s) => sameArray(s.pts, envelope));
++
++  const staticFormants =
++    voice.formants && voice.formants.length >= 3 && voice.formants.slice(0, 3).every((f) => f.freqs.length === 1);
++  const activeVowel = staticFormants
++    ? VOWELS.find((vw) => vw.f.every((fr, i) => Math.abs((voice.formants as any)[i].freqs[0] - fr) < 1))
++    : undefined;
++
++  const txt = isClean ? 'text-[#2A2118]' : 'text-slate-300';
++  const sectionTitle = `text-[11px] font-black uppercase tracking-wide ${isClean ? 'text-[#872820]' : 'text-amber-400'}`;
++  const divider = `pt-3 border-t ${isClean ? 'border-[#E5DCB8]' : 'border-white/10'}`;
++
++  return (
++    <div
++      className={`p-4 rounded-2xl border space-y-4 ${isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'}`}
++    >
++      <div className="flex items-start justify-between gap-3 flex-wrap">
++        <div className="space-y-0.5">
++          <h5 className={`text-xs font-bold flex items-center gap-1.5 ${isClean ? 'text-[#2A2118]' : 'text-amber-300'}`}>
++            <Mic className="w-3.5 h-3.5 text-amber-500" />
++            Voz / Criatura
++          </h5>
++          <p className={`text-[11px] leading-snug max-w-md ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
++            Voz con resonancias, aire y vibración irregulares, como un ser vivo. Empieza por una criatura y retoca.
++          </p>
++        </div>
++        <div className="flex items-center gap-1.5">
++          <button
++            type="button"
++            onClick={onPreview}
++            disabled={isPlaying}
++            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 disabled:opacity-50 ${
++              isClean ? 'bg-[#A4332A] text-white' : 'bg-amber-600 text-black'
++            }`}
++          >
++            <Play className="w-3 h-3 fill-current" /> Escuchar
++          </button>
++          <button
++            type="button"
++            onClick={onStop}
++            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 ${
++              isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-200'
++            }`}
++          >
++            <Square className="w-3 h-3 fill-current" /> Parar
++          </button>
++          <button
++            type="button"
++            onClick={() => setVoicePlay({ seed: Math.floor(Math.random() * 99999) + 1 })}
++            title="Mismo tipo de sonido con otras micro-variaciones aleatorias"
++            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 border ${
++              isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-slate-200'
++            }`}
++          >
++            <Shuffle className="w-3 h-3" /> Otra versión
++          </button>
++        </div>
++      </div>
++
++      {/* Criaturas */}
++      <div className="space-y-2">
++        <span className={sectionTitle}>Criaturas</span>
++        <div className="flex flex-wrap gap-1.5">
++          {VOICE_PRESETS.map((p) => (
++            <Chip
++              key={p.id}
++              isClean={isClean}
++              active={false}
++              title={p.description}
++              onClick={() => onChangeAndPlay({ ...p.config, voice: { ...p.config.voice } })}
++            >
++              {p.name}
++            </Chip>
++          ))}
++        </div>
++      </div>
++
++      {/* Tono y duración */}
++      <div className={`space-y-3 ${divider}`}>
++        <span className={sectionTitle}>Tono y duración</span>
++        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
++          <Slider
++            isClean={isClean}
++            label="Nota base"
++            value={config.startFreq || 400}
++            min={40}
++            max={2500}
++            step={5}
++            format={(v) => `${Math.round(v)} Hz`}
++            onChange={(v) => onChange({ ...config, startFreq: v })}
++            left="Grave"
++            right="Aguda"
++          />
++          <Slider
++            isClean={isClean}
++            label="Duración"
++            value={config.duration || 1}
++            min={0.2}
++            max={5}
++            step={0.05}
++            format={(v) => `${v.toFixed(2)} s`}
++            onChange={(v) => onChange({ ...config, duration: v })}
++          />
++          <Slider
++            isClean={isClean}
++            label="Volumen"
++            value={config.volume ?? 0.3}
++            min={0.05}
++            max={1}
++            step={0.05}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => onChange({ ...config, volume: v })}
++          />
++        </div>
++      </div>
++
++      {/* Forma del tono */}
++      <div className={`space-y-2 ${divider}`}>
++        <div className="flex items-center justify-between gap-2">
++          <span className={sectionTitle}>Melodía del grito</span>
++          <span className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
++            {activeShape ? activeShape.label : 'Personalizada'}
++          </span>
++        </div>
++        <MiniCurve pts={contour} log depth={num('contourDepth')} isClean={isClean} label="Contorno del tono" />
++        <div className="flex flex-wrap gap-1.5">
++          {CONTOUR_SHAPES.map((s) => (
++            <Chip key={s.id} isClean={isClean} active={activeShape?.id === s.id} onClick={() => setVoicePlay({ contour: s.pts })}>
++              {s.label.split(' (')[0]}
++            </Chip>
++          ))}
++        </div>
++        <Slider
++          isClean={isClean}
++          label="Intensidad de la melodía"
++          value={num('contourDepth')}
++          min={0}
++          max={2.5}
++          step={0.05}
++          format={(v) => `${Math.round(v * 100)}%`}
++          onChange={(v) => setVoice({ contourDepth: v })}
++          left="Monótona"
++          right="Exagerada"
++        />
++      </div>
++
++      {/* Cuerpo */}
++      <div className={`space-y-3 ${divider}`}>
++        <span className={sectionTitle}>Cuerpo y boca</span>
++        <div className="space-y-1.5">
++          <div className="flex items-center justify-between gap-2">
++            <span className={`text-xs font-bold ${txt}`}>Vocal</span>
++            <span className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
++              {activeVowel ? `Vocal ${activeVowel.label}` : 'Personalizada (se mueve en el tiempo)'}
++            </span>
++          </div>
++          <div className="flex flex-wrap gap-1.5">
++            {VOWELS.map((vw) => (
++              <Chip
++                key={vw.id}
++                isClean={isClean}
++                active={activeVowel?.id === vw.id}
++                title="Aplica una vocal fija. Las criaturas de la lista suelen cambiar de vocal durante el sonido."
++                onClick={() =>
++                  setVoicePlay({
++                    formants: [
++                      { freqs: [vw.f[0]], q: 8, gain: 1 },
++                      { freqs: [vw.f[1]], q: 10, gain: 0.8 },
++                      { freqs: [vw.f[2]], q: 12, gain: 0.5 },
++                    ],
++                  })
++                }
++              >
++                {vw.label}
++              </Chip>
++            ))}
++          </div>
++        </div>
++        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
++          <Slider
++            isClean={isClean}
++            label="Tamaño de la criatura"
++            value={num('formantScale')}
++            min={0.5}
++            max={2}
++            step={0.05}
++            format={(v) => (v < 0.85 ? 'Enorme' : v < 1.15 ? 'Mediana' : v < 1.5 ? 'Pequeña' : 'Diminuta')}
++            onChange={(v) => setVoice({ formantScale: v })}
++            left="Enorme"
++            right="Diminuta"
++            hint="Cambia el timbre sin cambiar la nota: un cuerpo grande suena más hueco."
++          />
++          <Slider
++            isClean={isClean}
++            label="Aire / soplido"
++            value={num('breath')}
++            min={0}
++            max={1}
++            step={0.02}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => setVoice({ breath: v })}
++            left="Limpia"
++            right="Muy aireada"
++          />
++          <Slider
++            isClean={isClean}
++            label="Brillo"
++            value={num('brightness')}
++            min={0}
++            max={1}
++            step={0.02}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => setVoice({ brightness: v })}
++            left="Apagado"
++            right="Brillante"
++          />
++          <Slider
++            isClean={isClean}
++            label="Eco / espacio"
++            value={num('reverb')}
++            min={0}
++            max={1}
++            step={0.02}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => setVoice({ reverb: v })}
++            left="Seco"
++            right="Cueva"
++          />
++        </div>
++      </div>
++
++      {/* Carácter */}
++      <div className={`space-y-3 ${divider}`}>
++        <span className={sectionTitle}>Carácter</span>
++        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
++          <Slider
++            isClean={isClean}
++            label="Inestabilidad del tono"
++            value={num('jitter')}
++            min={0}
++            max={1}
++            step={0.02}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => setVoice({ jitter: v })}
++            left="Perfecta (mecánica)"
++            right="Temblorosa"
++            hint="Lo que más separa un ser vivo de un sintetizador: nada vibra de forma perfecta."
++          />
++          <Slider
++            isClean={isClean}
++            label="Aspereza / gruñido"
++            value={num('roughness')}
++            min={0}
++            max={1}
++            step={0.02}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => setVoice({ roughness: v })}
++            left="Suave"
++            right="Gutural"
++          />
++          <Slider
++            isClean={isClean}
++            label="Velocidad del gruñido"
++            value={num('roughnessRate')}
++            min={10}
++            max={100}
++            step={1}
++            format={(v) => `${Math.round(v)} Hz`}
++            onChange={(v) => setVoice({ roughnessRate: v })}
++            left="Lento (bestia)"
++            right="Rápido (graznido)"
++          />
++          <Slider
++            isClean={isClean}
++            label="Saturación"
++            value={num('drive')}
++            min={0}
++            max={1}
++            step={0.02}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => setVoice({ drive: v })}
++            left="Limpia"
++            right="Desgarrada"
++          />
++          <Slider
++            isClean={isClean}
++            label="Voz crujiente"
++            value={num('subharmonic')}
++            min={0}
++            max={1}
++            step={0.02}
++            format={(v) => `${Math.round(v * 100)}%`}
++            onChange={(v) => setVoice({ subharmonic: v })}
++            hint="Añade una octava grave irregular, como una voz quebrada."
++          />
++          <Slider
++            isClean={isClean}
++            label="Vibrato"
++            value={num('vibratoDepth')}
++            min={0}
++            max={100}
++            step={1}
++            format={(v) => `${Math.round(v)} cents`}
++            onChange={(v) => setVoice({ vibratoDepth: v })}
++            left="Sin vibrato"
++            right="Marcado"
++            hint="Entra poco a poco a mitad del sonido, como en un aullido."
++          />
++        </div>
++      </div>
++
++      {/* Volumen en el tiempo */}
++      <div className={`space-y-2 ${divider}`}>
++        <div className="flex items-center justify-between gap-2">
++          <span className={sectionTitle}>Volumen en el tiempo</span>
++          <span className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
++            {activeEnv ? activeEnv.label : 'Personalizada'}
++          </span>
++        </div>
++        <MiniCurve pts={envelope} isClean={isClean} label="Envolvente de volumen" />
++        <div className="flex flex-wrap gap-1.5">
++          {ENVELOPE_SHAPES.map((s) => (
++            <Chip key={s.id} isClean={isClean} active={activeEnv?.id === s.id} onClick={() => setVoicePlay({ envelope: s.pts })}>
++              {s.label}
++            </Chip>
++          ))}
++        </div>
++      </div>
++    </div>
++  );
++};
+diff --git a/src/types.ts b/src/types.ts
+index a9c985c..86b0dec 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -52,8 +52,41 @@ export type InstrumentType =
+   | 'music_box'
+   | 'drum';
+ 
++/** Zona de resonancia del "tracto vocal". `freqs` es una trayectoria en el tiempo (1 valor = fija). */
++export interface VoiceFormant {
++  freqs: number[]; // Hz
++  q?: number; // Selectividad (3 = ancha / 15 = muy marcada)
++  gain?: number; // 0 to 4
++}
++
++/** Parámetros del motor de voz orgánica (ver utils/voiceEngine.js). Todos opcionales. */
++export interface VoiceConfig {
++  contour?: number[]; // Multiplicadores de tono respecto a startFreq, equiespaciados en el tiempo
++  contourDepth?: number; // 0..2.5 intensidad del contorno (1 = tal cual, <1 más plano, >1 más exagerado)
++  envelope?: number[]; // Curva de volumen 0..1, equiespaciada en el tiempo
++  formants?: VoiceFormant[];
++  formantScale?: number; // 0.4 (criatura enorme) a 2.5 (muy pequeña)
++  breath?: number; // 0..1 aire / soplido
++  voicing?: number; // 0..1 (0 = solo aire, susurro)
++  roughness?: number; // 0..1 gruñido (modulación de amplitud)
++  roughnessRate?: number; // Hz 8..120
++  subharmonic?: number; // 0..1 voz crujiente (una octava más grave)
++  drive?: number; // 0..1 saturación
++  jitter?: number; // 0..1 inestabilidad de tono
++  shimmer?: number; // 0..1 inestabilidad de volumen
++  vibratoRate?: number; // Hz
++  vibratoDepth?: number; // cents
++  vibratoDelay?: number; // 0..0.95 fracción de la duración antes de que entre el vibrato
++  unison?: number; // cents de desafinación del 2º oscilador (grosor)
++  brightness?: number; // 0..1
++  reverb?: number; // 0..1
++  seed?: number; // semilla del azar (mismo valor = mismo sonido)
++}
++
+ export interface SynthSoundConfig {
+-  synthesisProfile?: 'animal_cry'; // Dedicated organic vocalization synthesis model
++  // 'voice': motor de voz orgánica configurable (voice). 'animal_cry': modelo fijo de maullido.
++  synthesisProfile?: 'animal_cry' | 'voice';
++  voice?: VoiceConfig;
+   oscType: 'sine' | 'triangle' | 'square' | 'sawtooth' | 'noise' | 'fm_synth' | 'arpeggio' | 'laser';
+   instrument?: InstrumentType;
+   startFreq: number; // Hz (20 to 5000)
+diff --git a/src/utils/audio.ts b/src/utils/audio.ts
+index 8a34b2c..103f6ec 100644
+--- a/src/utils/audio.ts
++++ b/src/utils/audio.ts
+@@ -1,4 +1,5 @@
+ import { SoundDefinition, SynthSoundConfig, GameProject, InstrumentType } from '../types';
++import { playVoiceSynth } from './voiceEngine.js';
+ 
+ /**
+  * Web Audio API procedural sound synthesizer & audio manager.
+@@ -559,6 +560,14 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
+   const vol = Math.max(0, Math.min(1, config.volume ?? 0.25));
+   const startF = Math.max(20, config.startFreq || 440);
+ 
++  // ==========================================
++  // CONFIGURABLE ORGANIC VOICE ENGINE (creatures, howls, screams, growls...)
++  // ==========================================
++  if (config.synthesisProfile === 'voice') {
++    playVoiceSynth(ctx, config, now, startTrackedSource);
++    return;
++  }
++
+   // ==========================================
+   // ORGANIC ANIMAL VOCALIZATION PROFILE
+   // ==========================================
+@@ -616,6 +625,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
+     voiceFilter.connect(upperFormant);
+     upperFormant.connect(voiceGain);
+     voiceGain.connect(master);
++    master.connect(ctx.destination); // faltaba: sin esta conexión solo se oía el soplo inicial
+     master.gain.setValueAtTime(vol * 0.62, now);
+ 
+     // "Mew" onset, slight middle break, then the falling "ow" tail.
+@@ -749,8 +759,9 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
+         const lfoG = ctx.createGain();
+         lfo.frequency.setValueAtTime(5.5, now);
+         lfoG.gain.setValueAtTime(6, now);
+-        lfo.connect(osc1.frequency);
+-        lfo.connect(osc2.frequency);
++        lfo.connect(lfoG);
++        lfoG.connect(osc1.frequency);
++        lfoG.connect(osc2.frequency);
+         startTrackedSource(lfo, now);
+         lfo.stop(now + dur + 0.05);
+ 
+@@ -1062,7 +1073,10 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
+     const lfoGain = ctx.createGain();
+     lfo.frequency.setValueAtTime(config.lfoFreq, now);
+     lfoGain.gain.setValueAtTime(config.lfoGain, now);
+-    lfo.connect(osc.frequency);
++    // La profundidad (lfoGain, en Hz) debe pasar por el nodo de ganancia; antes el LFO
++    // se conectaba directo y modulaba solo ±1 Hz, por lo que el control no tenía efecto.
++    lfo.connect(lfoGain);
++    lfoGain.connect(osc.frequency);
+     startTrackedSource(lfo, now);
+     lfo.stop(now + dur + 0.05);
+   }
+diff --git a/src/utils/htmlExporter.ts b/src/utils/htmlExporter.ts
+index 157a8ef..09bde75 100644
+--- a/src/utils/htmlExporter.ts
++++ b/src/utils/htmlExporter.ts
+@@ -1,4 +1,9 @@
+ import { GameProject } from '../types';
++// El motor de voz se incrusta tal cual en el juego exportado: así el sonido del editor
++// y el del HTML/ZIP salen del mismo código (sin copia que pueda desincronizarse).
++import voiceEngineSource from './voiceEngine.js?raw';
++
++const VOICE_ENGINE_EMBED = voiceEngineSource.replace(/^export\s+/gm, '');
+ 
+ /**
+  * Generates a self-contained single-file HTML game that requires no external dependencies or servers.
+@@ -426,6 +431,10 @@ ${jsonProject}
+     let selectedInventoryItem = null;
+ 
+     let audioCtx = null;
++
++    // ---- Motor de voz orgánica (mismo código que usa el editor) ----
++${VOICE_ENGINE_EMBED}
++
+     function playSound(type) {
+       if (!type || type === 'none') return;
+       try {
+@@ -454,6 +463,11 @@ ${jsonProject}
+           const vol = Math.max(0, Math.min(1, sc.volume !== undefined ? sc.volume : 0.25));
+           const startF = Math.max(20, sc.startFreq || 440);
+ 
++          if (sc.synthesisProfile === 'voice') {
++            playVoiceSynth(audioCtx, sc, now);
++            return;
++          }
++
+           if (sc.instrument === 'piano') {
+             [1, 2, 3, 4].forEach((m, idx) => {
+               const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+diff --git a/src/utils/raw-imports.d.ts b/src/utils/raw-imports.d.ts
+new file mode 100644
+index 0000000..29778cf
+--- /dev/null
++++ b/src/utils/raw-imports.d.ts
+@@ -0,0 +1,5 @@
++// Permite importar archivos como texto con el sufijo `?raw` (lo resuelve Vite).
++declare module '*?raw' {
++  const content: string;
++  export default content;
++}
+diff --git a/src/utils/voiceEngine.js b/src/utils/voiceEngine.js
+new file mode 100644
+index 0000000..2b2fc67
+--- /dev/null
++++ b/src/utils/voiceEngine.js
+@@ -0,0 +1,314 @@
++/**
++ * Motor de VOZ ORGÁNICA (criaturas, aullidos, alaridos, gruñidos...).
++ *
++ * IMPORTANTE: este archivo es JavaScript plano y autocontenido (sin imports ni
++ * dependencias externas) a propósito: el exportador HTML lo incrusta tal cual
++ * (import con `?raw`), de modo que el sonido del editor y el del juego exportado
++ * salen de EXACTAMENTE el mismo código.
++ *
++ * Por qué suena "orgánico" y no a juguete mecánico:
++ *  1. Fuente rica en armónicos (diente de sierra) filtrada por FORMANTES
++ *     (resonancias del tracto vocal) que además pueden moverse en el tiempo.
++ *  2. Contorno de tono libre (curva con varios puntos) + vibrato que entra
++ *     gradualmente + JITTER (micro-variaciones aleatorias, nunca periódicas).
++ *  3. Aliento (ruido) que pasa por los mismos formantes que la voz.
++ *  4. Aspereza: modulación de amplitud (gruñido), subarmónico (voz "crujiente")
++ *     y saturación.
++ *  5. Envolvente de amplitud con curva propia (ataque, cuerpo sostenido, cola),
++ *     en vez del típico "golpe + decaimiento" de un sintetizador de juguete.
++ *  6. Reverberación opcional para dar espacio.
++ *
++ * Es determinista: con la misma configuración (y `voice.seed`) suena siempre igual.
++ *
++ * @param {BaseAudioContext} ctx
++ * @param {object} config  SynthSoundConfig (usa startFreq, endFreq, duration, volume, voice)
++ * @param {number} [startTime]  instante de inicio (por defecto ctx.currentTime)
++ * @param {(node: AudioScheduledSourceNode, when: number) => void} [startSource]
++ *        función para arrancar los nodos fuente (permite que el reproductor los registre)
++ * @param {AudioNode} [destination]  por defecto ctx.destination
++ * @returns {number} duración total en segundos (incluida la cola de reverberación)
++ */
++export function playVoiceSynth(ctx, config, startTime, startSource, destination) {
++  const v = config.voice || {};
++  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
++  const num = (x, d) => (typeof x === 'number' && isFinite(x) ? x : d);
++
++  const now = startTime === undefined ? ctx.currentTime : startTime;
++  const dur = clamp(num(config.duration, 1), 0.1, 6);
++  const vol = clamp(num(config.volume, 0.3), 0, 1);
++  const f0 = clamp(num(config.startFreq, 400), 30, 4000);
++  const out = destination || ctx.destination;
++  const begin = startSource || ((node, when) => node.start(when));
++
++  // ---- Aleatoriedad determinista (mulberry32 + Box-Muller) ----
++  let seed = (num(v.seed, 1234) >>> 0) || 1;
++  const rnd = () => {
++    seed = (seed + 0x6d2b79f5) >>> 0;
++    let t = seed;
++    t = Math.imul(t ^ (t >>> 15), t | 1);
++    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
++    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
++  };
++  const gauss = () => Math.sqrt(-2 * Math.log(Math.max(1e-9, rnd()))) * Math.cos(2 * Math.PI * rnd());
++
++  // ---- Curvas de control muestreadas (200 puntos/s) ----
++  const RATE = 200;
++  const N = Math.max(16, Math.min(1500, Math.round(dur * RATE)));
++
++  // Interpolación suave (Catmull-Rom) por una lista de puntos equiespaciados en el tiempo
++  const sampleCurve = (pts, x) => {
++    const n = pts.length;
++    if (n === 1) return pts[0];
++    const p = clamp(x, 0, 1) * (n - 1);
++    const i = Math.min(n - 2, Math.floor(p));
++    const t = p - i;
++    const p0 = pts[Math.max(0, i - 1)];
++    const p1 = pts[i];
++    const p2 = pts[i + 1];
++    const p3 = pts[Math.min(n - 1, i + 2)];
++    return (
++      0.5 *
++      (2 * p1 +
++        (-p0 + p2) * t +
++        (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t +
++        (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t)
++    );
++  };
++  const buildCurve = (pts, fn) => {
++    const arr = new Float32Array(N);
++    for (let i = 0; i < N; i++) {
++      const x = i / (N - 1);
++      arr[i] = fn(sampleCurve(pts, x), x);
++    }
++    return arr;
++  };
++
++  // ---- Contorno de tono ----
++  // `contour`: multiplicadores respecto a startFreq (equiespaciados en el tiempo).
++  // Si no se da, se usa startFreq -> endFreq.
++  let contour = Array.isArray(v.contour) && v.contour.length >= 1 ? v.contour : null;
++  if (!contour) contour = [1, config.endFreq ? config.endFreq / f0 : 1];
++  // contourDepth exagera (>1) o aplana (<1) la forma del contorno sin cambiar la nota base
++  const contourDepth = clamp(num(v.contourDepth, 1), 0, 2.5);
++  const logContour = contour.map((m) => contourDepth * Math.log2(Math.max(0.05, num(m, 1))));
++
++  const vibRate = clamp(num(v.vibratoRate, 5.5), 0.5, 14);
++  const vibDepth = clamp(num(v.vibratoDepth, 0), 0, 200); // cents
++  const vibDelay = clamp(num(v.vibratoDelay, 0.3), 0, 0.95); // fracción de la duración
++  const jitter = clamp(num(v.jitter, 0), 0, 1);
++
++  // Ruido suavizado (paso bajo de un solo polo) normalizado a desviación típica 1
++  const smoothNoise = (cutoffHz) => {
++    const a = Math.exp((-2 * Math.PI * cutoffHz) / RATE);
++    const norm = Math.sqrt((1 + a) / (1 - a));
++    let y = 0;
++    return () => {
++      y = a * y + (1 - a) * gauss();
++      return y * norm;
++    };
++  };
++  const fastJit = smoothNoise(30);
++  const slowJit = smoothNoise(2.5);
++  const rateWander = smoothNoise(1.5);
++
++  let vibPhase = rnd() * Math.PI * 2;
++  const freqCurve = new Float32Array(N);
++  for (let i = 0; i < N; i++) {
++    const x = i / (N - 1);
++    const base = f0 * Math.pow(2, sampleCurve(logContour, x));
++    vibPhase += (2 * Math.PI * vibRate * (1 + 0.08 * rateWander())) / RATE;
++    const fade = vibDelay >= 0.95 ? 0 : clamp((x - vibDelay) / Math.max(0.05, 0.35 * (1 - vibDelay)), 0, 1);
++    const cents = vibDepth * Math.sin(vibPhase) * fade + jitter * (28 * fastJit() + 35 * slowJit());
++    freqCurve[i] = clamp(base * Math.pow(2, cents / 1200), 20, 9000);
++  }
++
++  // ---- Envolvente de amplitud ----
++  const envPts = Array.isArray(v.envelope) && v.envelope.length >= 2 ? v.envelope : [0, 0.85, 1, 0.9, 0.55, 0];
++  const shimmer = clamp(num(v.shimmer, 0), 0, 1);
++  const shimmerNoise = smoothNoise(12);
++  const envCurve = buildCurve(envPts, (y, x) => {
++    let e = clamp(y, 0, 1.2);
++    if (shimmer > 0) e *= 1 + shimmer * 0.22 * shimmerNoise();
++    return x >= 0.999 ? 0 : clamp(e, 0, 1.4);
++  });
++  envCurve[0] = Math.min(envCurve[0], 0.0001);
++
++  // ---- Cadena de audio ----
++  const master = ctx.createGain();
++  master.gain.value = vol * 0.9;
++
++  // Reverberación opcional (respuesta al impulso sintética: ruido con caída exponencial)
++  const reverb = clamp(num(v.reverb, 0), 0, 1);
++  let tail = 0.05;
++  if (reverb > 0.01) {
++    const irSecs = 0.35 + 1.5 * reverb;
++    const irLen = Math.max(1, Math.floor(ctx.sampleRate * irSecs));
++    const ir = ctx.createBuffer(2, irLen, ctx.sampleRate);
++    for (let ch = 0; ch < 2; ch++) {
++      const d = ir.getChannelData(ch);
++      for (let i = 0; i < irLen; i++) d[i] = (rnd() * 2 - 1) * Math.pow(1 - i / irLen, 2.6);
++    }
++    const conv = ctx.createConvolver();
++    conv.buffer = ir;
++    const wet = ctx.createGain();
++    const dry = ctx.createGain();
++    wet.gain.value = 0.9 * reverb;
++    dry.gain.value = 1 - 0.35 * reverb;
++    master.connect(dry);
++    dry.connect(out);
++    master.connect(conv);
++    conv.connect(wet);
++    wet.connect(out);
++    tail = irSecs;
++  } else {
++    master.connect(out);
++  }
++
++  const envGain = ctx.createGain();
++  envGain.gain.setValueCurveAtTime(envCurve, now, dur);
++  envGain.connect(master);
++
++  // Paso bajo final: quita el "zumbido" digital de los armónicos más agudos
++  const brightness = clamp(num(v.brightness, 0.55), 0, 1);
++  const finalLP = ctx.createBiquadFilter();
++  finalLP.type = 'lowpass';
++  finalLP.frequency.value = 900 * Math.pow(2, brightness * 4); // 900 Hz .. 14 kHz
++  finalLP.Q.value = 0.5;
++  finalLP.connect(envGain);
++
++  // Saturación (rugosidad / grito desgarrado)
++  const drive = clamp(num(v.drive, 0), 0, 1);
++  let tailNode = finalLP;
++  if (drive > 0.01) {
++    const shaper = ctx.createWaveShaper();
++    const k = 1 + drive * 10;
++    const curveLen = 2048;
++    const sc = new Float32Array(curveLen);
++    for (let i = 0; i < curveLen; i++) {
++      const x = (i * 2) / (curveLen - 1) - 1;
++      sc[i] = Math.tanh(k * x) / Math.tanh(k);
++    }
++    shaper.curve = sc;
++    shaper.oversample = '2x';
++    const pre = ctx.createGain();
++    pre.gain.value = 1 + drive * 1.5;
++    pre.connect(shaper);
++    shaper.connect(finalLP);
++    tailNode = pre;
++  }
++
++  // Aspereza / gruñido: modulación de amplitud rápida (20-90 Hz)
++  const rough = clamp(num(v.roughness, 0), 0, 1);
++  let voiceOut = tailNode;
++  if (rough > 0.01) {
++    const am = ctx.createGain();
++    am.gain.value = 1 - rough * 0.5;
++    const lfo = ctx.createOscillator();
++    lfo.type = 'triangle';
++    lfo.frequency.value = clamp(num(v.roughnessRate, 35), 8, 120);
++    const lfoDepth = ctx.createGain();
++    lfoDepth.gain.value = rough * 0.5;
++    lfo.connect(lfoDepth);
++    lfoDepth.connect(am.gain);
++    am.connect(tailNode);
++    begin(lfo, now);
++    lfo.stop(now + dur + 0.05);
++    voiceOut = am;
++  }
++
++  // Banco de formantes en paralelo + camino directo (cuerpo grave de la voz)
++  const bankOut = ctx.createGain();
++  bankOut.gain.value = 3.2;
++  bankOut.connect(voiceOut);
++  const bodyDirect = ctx.createGain();
++  bodyDirect.gain.value = 0.55;
++  const bodyLP = ctx.createBiquadFilter();
++  bodyLP.type = 'lowpass';
++  bodyLP.frequency.value = 500 * Math.pow(2, brightness * 3); // 500 Hz .. 4 kHz
++  bodyDirect.connect(bodyLP);
++  bodyLP.connect(voiceOut);
++
++  const bankIn = ctx.createGain();
++  const formants =
++    Array.isArray(v.formants) && v.formants.length
++      ? v.formants
++      : [
++          { freqs: [700], q: 8, gain: 1 },
++          { freqs: [1200], q: 10, gain: 0.8 },
++          { freqs: [2600], q: 12, gain: 0.5 },
++        ];
++  const fScale = clamp(num(v.formantScale, 1), 0.4, 2.5);
++  formants.forEach((fm) => {
++    const bp = ctx.createBiquadFilter();
++    bp.type = 'bandpass';
++    bp.Q.value = clamp(num(fm.q, 8), 0.7, 40);
++    const freqs = (Array.isArray(fm.freqs) && fm.freqs.length ? fm.freqs : [1000]).map((f) =>
++      clamp(num(f, 1000) * fScale, 60, 9000)
++    );
++    if (freqs.length === 1) {
++      bp.frequency.value = freqs[0];
++    } else {
++      bp.frequency.setValueCurveAtTime(buildCurve(freqs, (y) => y), now, dur);
++    }
++    const g = ctx.createGain();
++    g.gain.value = clamp(num(fm.gain, 1), 0, 4);
++    bankIn.connect(bp);
++    bp.connect(g);
++    g.connect(bankOut);
++  });
++
++  // Fuente de voz: diente de sierra (+ segundo oscilador desafinado + subarmónico)
++  const voicing = clamp(num(v.voicing, 1), 0, 1);
++  const addOsc = (mult, detuneCents, level) => {
++    if (level <= 0.001) return;
++    const o = ctx.createOscillator();
++    o.type = 'sawtooth';
++    const arr = new Float32Array(N);
++    for (let i = 0; i < N; i++) arr[i] = clamp(freqCurve[i] * mult, 20, 12000);
++    o.frequency.setValueCurveAtTime(arr, now, dur);
++    o.detune.value = detuneCents;
++    const g = ctx.createGain();
++    g.gain.value = level * voicing * 0.5;
++    o.connect(g);
++    g.connect(bankIn);
++    g.connect(bodyDirect);
++    begin(o, now);
++    o.stop(now + dur + 0.05);
++  };
++  const unison = clamp(num(v.unison, 7), 0, 40); // cents
++  addOsc(1, 0, 1);
++  addOsc(1, unison, unison > 0 ? 0.55 : 0);
++  addOsc(0.5, 0, clamp(num(v.subharmonic, 0), 0, 1) * 0.9);
++
++  // Aliento: ruido blanco que atraviesa los mismos formantes
++  const breath = clamp(num(v.breath, 0), 0, 1);
++  if (breath > 0.005) {
++    const nLen = Math.max(1, Math.floor(ctx.sampleRate * (dur + 0.1)));
++    const nBuf = ctx.createBuffer(1, nLen, ctx.sampleRate);
++    const nd = nBuf.getChannelData(0);
++    for (let i = 0; i < nLen; i++) nd[i] = rnd() * 2 - 1;
++    const noise = ctx.createBufferSource();
++    noise.buffer = nBuf;
++    const hp = ctx.createBiquadFilter();
++    hp.type = 'highpass';
++    hp.frequency.value = 180;
++    const ng = ctx.createGain();
++    ng.gain.value = breath * 1.4;
++    noise.connect(hp);
++    hp.connect(ng);
++    ng.connect(bankIn);
++    // un poco de siseo sin filtrar para los gritos muy "aireados"
++    const hiss = ctx.createGain();
++    hiss.gain.value = breath * 0.12;
++    const hissHP = ctx.createBiquadFilter();
++    hissHP.type = 'highpass';
++    hissHP.frequency.value = 2800;
++    ng.connect(hiss);
++    hiss.connect(hissHP);
++    hissHP.connect(voiceOut);
++    begin(noise, now);
++    noise.stop(now + dur + 0.05);
++  }
++
++  return dur + tail;
++}
+diff --git a/src/utils/voicePresets.ts b/src/utils/voicePresets.ts
+new file mode 100644
+index 0000000..586679d
+--- /dev/null
++++ b/src/utils/voicePresets.ts
+@@ -0,0 +1,348 @@
++import { SynthSoundConfig, VoiceConfig } from '../types';
++
++/**
++ * Voz neutra: punto de partida cuando se cambia un sonido al motor "Voz / Criatura".
++ */
++export const DEFAULT_VOICE: VoiceConfig = {
++  contour: [1, 1.15, 1.05, 0.85],
++  envelope: [0, 0.85, 1, 0.8, 0],
++  formants: [
++    { freqs: [700], q: 8, gain: 1 },
++    { freqs: [1200], q: 10, gain: 0.8 },
++    { freqs: [2600], q: 12, gain: 0.5 },
++  ],
++  formantScale: 1,
++  breath: 0.12,
++  roughness: 0,
++  roughnessRate: 35,
++  subharmonic: 0,
++  drive: 0,
++  jitter: 0.25,
++  shimmer: 0.15,
++  vibratoRate: 5.5,
++  vibratoDepth: 0,
++  vibratoDelay: 0.3,
++  unison: 7,
++  brightness: 0.55,
++  reverb: 0.1,
++};
++
++/**
++ * Valores que usa el motor cuando un parámetro no está definido. El panel del editor
++ * los usa también como base para mostrar exactamente lo que se oye.
++ */
++export const VOICE_ENGINE_DEFAULTS: Required<Pick<VoiceConfig,
++  'contourDepth' | 'formantScale' | 'breath' | 'voicing' | 'roughness' | 'roughnessRate' |
++  'subharmonic' | 'drive' | 'jitter' | 'shimmer' | 'vibratoRate' | 'vibratoDepth' |
++  'vibratoDelay' | 'unison' | 'brightness' | 'reverb' | 'seed'>> = {
++  contourDepth: 1,
++  formantScale: 1,
++  breath: 0,
++  voicing: 1,
++  roughness: 0,
++  roughnessRate: 35,
++  subharmonic: 0,
++  drive: 0,
++  jitter: 0,
++  shimmer: 0,
++  vibratoRate: 5.5,
++  vibratoDepth: 0,
++  vibratoDelay: 0.3,
++  unison: 7,
++  brightness: 0.55,
++  reverb: 0,
++  seed: 1234,
++};
++
++export interface VoicePreset {
++  id: string;
++  name: string;
++  description: string;
++  config: SynthSoundConfig;
++}
++
++/**
++ * Criaturas listas para usar. Cada una es un punto de partida: se puede retocar
++ * con los controles de "Voz / Criatura" del editor.
++ */
++export const VOICE_PRESETS: VoicePreset[] = [
++  {
++    id: 'wolf_howl',
++    name: 'Aullido de lobo',
++    description: 'Sube lento, se sostiene con vibrato y cae. Vocal cerrada (u/o) y eco de campo abierto.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 380,
++      duration: 3.2,
++      volume: 0.34,
++      voice: {
++        contour: [1, 1.35, 1.6, 1.65, 1.6, 1.45, 1.2, 0.9],
++        envelope: [0, 0.5, 0.9, 1, 1, 0.9, 0.6, 0.25, 0],
++        formants: [
++          { freqs: [400, 450, 520, 480, 420], q: 7, gain: 1 },
++          { freqs: [850, 950, 1100, 1000, 900], q: 9, gain: 0.8 },
++          { freqs: [2400], q: 12, gain: 0.35 },
++        ],
++        formantScale: 1,
++        breath: 0.14,
++        jitter: 0.25,
++        shimmer: 0.2,
++        vibratoRate: 5.8,
++        vibratoDepth: 22,
++        vibratoDelay: 0.35,
++        unison: 6,
++        brightness: 0.5,
++        reverb: 0.45,
++      },
++    },
++  },
++  {
++    id: 'shriek',
++    name: 'Alarido agudo',
++    description: 'Grito desgarrado: tono alto, inestable, con aspereza y saturación.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 700,
++      duration: 1.3,
++      volume: 0.3,
++      voice: {
++        contour: [0.75, 1.3, 1.55, 1.5, 1.45, 1.35, 1.1, 0.8],
++        envelope: [0, 1, 1, 0.95, 0.9, 0.8, 0.5, 0],
++        formants: [
++          { freqs: [800, 950, 1000, 950, 800], q: 6, gain: 1 },
++          { freqs: [1500, 1900, 2200, 2100, 1800], q: 7, gain: 1 },
++          { freqs: [3300], q: 10, gain: 0.6 },
++        ],
++        formantScale: 1,
++        breath: 0.15,
++        jitter: 0.55,
++        shimmer: 0.35,
++        roughness: 0.35,
++        roughnessRate: 62,
++        subharmonic: 0.12,
++        drive: 0.35,
++        vibratoRate: 9,
++        vibratoDepth: 18,
++        vibratoDelay: 0.4,
++        unison: 12,
++        brightness: 0.7,
++        reverb: 0.25,
++      },
++    },
++  },
++  {
++    id: 'meow',
++    name: 'Maullido',
++    description: 'Gato: arco de tono con la vocal moviéndose de "i-e" a "a" y "o".',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 480,
++      duration: 0.95,
++      volume: 0.32,
++      voice: {
++        contour: [0.95, 1.15, 1.45, 1.6, 1.4, 1.2, 1.1, 0.9],
++        envelope: [0, 0.7, 1, 0.9, 0.75, 0.5, 0.2, 0],
++        formants: [
++          { freqs: [500, 650, 800, 750, 600, 520], q: 6, gain: 1 },
++          { freqs: [2300, 2000, 1700, 1400, 1200, 1000], q: 8, gain: 0.9 },
++          { freqs: [3300], q: 10, gain: 0.45 },
++        ],
++        formantScale: 1,
++        breath: 0.06,
++        jitter: 0.2,
++        shimmer: 0.15,
++        unison: 5,
++        brightness: 0.6,
++        reverb: 0.1,
++      },
++    },
++  },
++  {
++    id: 'roar',
++    name: 'Rugido de bestia',
++    description: 'Voz grave, muy áspera (modulación lenta), saturada y con aire.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 95,
++      duration: 1.8,
++      volume: 0.34,
++      voice: {
++        contour: [0.9, 1.25, 1.2, 1.05, 0.85, 0.6],
++        envelope: [0, 0.8, 1, 1, 0.85, 0.5, 0],
++        formants: [
++          { freqs: [650, 750, 800, 700], q: 5, gain: 1 },
++          { freqs: [1050, 1150, 1100, 950], q: 6, gain: 0.9 },
++          { freqs: [2300], q: 8, gain: 0.5 },
++        ],
++        formantScale: 0.9,
++        breath: 0.2,
++        jitter: 0.3,
++        shimmer: 0.35,
++        roughness: 0.6,
++        roughnessRate: 28,
++        subharmonic: 0.25,
++        drive: 0.4,
++        unison: 14,
++        brightness: 0.45,
++        reverb: 0.3,
++      },
++    },
++  },
++  {
++    id: 'growl',
++    name: 'Gruñido',
++    description: 'Perro o lobo amenazante: muy grave, vibración lenta y continua.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 85,
++      duration: 1.2,
++      volume: 0.34,
++      voice: {
++        contour: [1, 1.05, 0.95, 1, 0.9],
++        envelope: [0, 0.8, 1, 0.9, 0.9, 0.6, 0],
++        formants: [
++          { freqs: [450, 500, 450], q: 5, gain: 1 },
++          { freqs: [800, 900, 800], q: 6, gain: 0.9 },
++          { freqs: [2300], q: 8, gain: 0.3 },
++        ],
++        formantScale: 1,
++        breath: 0.18,
++        jitter: 0.35,
++        shimmer: 0.3,
++        roughness: 0.85,
++        roughnessRate: 22,
++        subharmonic: 0.5,
++        drive: 0.3,
++        unison: 10,
++        brightness: 0.35,
++        reverb: 0.1,
++      },
++    },
++  },
++  {
++    id: 'caw',
++    name: 'Graznido de cuervo',
++    description: 'Corto, áspero y con el tono cayendo. Úsalo dos veces seguidas para más efecto.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 430,
++      duration: 0.5,
++      volume: 0.32,
++      voice: {
++        contour: [1.15, 1.05, 0.9, 0.78],
++        envelope: [0, 1, 1, 0.8, 0],
++        formants: [
++          { freqs: [700], q: 5, gain: 1 },
++          { freqs: [1300, 1250, 1150], q: 6, gain: 0.9 },
++          { freqs: [2400], q: 8, gain: 0.6 },
++        ],
++        formantScale: 1,
++        breath: 0.15,
++        jitter: 0.45,
++        shimmer: 0.3,
++        roughness: 0.55,
++        roughnessRate: 58,
++        subharmonic: 0.1,
++        drive: 0.3,
++        unison: 15,
++        brightness: 0.7,
++        reverb: 0.12,
++      },
++    },
++  },
++  {
++    id: 'ghost_moan',
++    name: 'Lamento fantasmal',
++    description: 'Gemido largo y aireado, con vibrato lento y mucho eco. Ideal para terror.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 230,
++      duration: 3,
++      volume: 0.32,
++      voice: {
++        contour: [1, 1.1, 1.25, 1.15, 1, 0.85, 0.8],
++        envelope: [0, 0.35, 0.8, 1, 0.9, 0.5, 0],
++        formants: [
++          { freqs: [320, 420, 600, 450, 350], q: 6, gain: 1 },
++          { freqs: [800, 950, 1050, 900, 800], q: 8, gain: 0.8 },
++          { freqs: [2400], q: 5, gain: 0.35 },
++        ],
++        formantScale: 1,
++        breath: 0.32,
++        voicing: 0.95,
++        jitter: 0.3,
++        shimmer: 0.3,
++        vibratoRate: 4.6,
++        vibratoDepth: 40,
++        vibratoDelay: 0.3,
++        unison: 9,
++        brightness: 0.4,
++        reverb: 0.65,
++      },
++    },
++  },
++  {
++    id: 'monster_breath',
++    name: 'Respiración monstruosa',
++    description: 'Inspira y espira con ronquido grave. Casi todo aire, poca voz.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 70,
++      duration: 2.4,
++      volume: 0.36,
++      voice: {
++        contour: [1, 1],
++        envelope: [0, 0.8, 0.7, 0.1, 0, 0.1, 0.9, 1, 0.5, 0],
++        formants: [
++          { freqs: [500, 650], q: 3, gain: 1 },
++          { freqs: [1000], q: 4, gain: 0.8 },
++          { freqs: [2000], q: 5, gain: 0.5 },
++        ],
++        formantScale: 0.8,
++        voicing: 0.2,
++        breath: 1,
++        jitter: 0.4,
++        shimmer: 0.3,
++        roughness: 0.6,
++        roughnessRate: 18,
++        drive: 0.3,
++        brightness: 0.45,
++        reverb: 0.35,
++      },
++    },
++  },
++  {
++    id: 'squeak',
++    name: 'Chillido de roedor',
++    description: 'Muy agudo y breve, como una rata o un murciélago.',
++    config: {
++      synthesisProfile: 'voice',
++      oscType: 'sawtooth',
++      startFreq: 2200,
++      duration: 0.3,
++      volume: 0.28,
++      voice: {
++        contour: [0.9, 1.3, 1.1, 0.7],
++        envelope: [0, 1, 0.8, 0],
++        formants: [
++          { freqs: [2600], q: 6, gain: 1 },
++          { freqs: [4200], q: 8, gain: 0.6 },
++        ],
++        formantScale: 1,
++        breath: 0.1,
++        jitter: 0.3,
++        unison: 5,
++        brightness: 0.9,
++        reverb: 0.05,
++      },
++    },
++  },
++];

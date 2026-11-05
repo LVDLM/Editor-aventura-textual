@@ -1,4 +1,9 @@
 import { GameProject } from '../types';
+// El motor de voz se incrusta tal cual en el juego exportado: así el sonido del editor
+// y el del HTML/ZIP salen del mismo código (sin copia que pueda desincronizarse).
+import voiceEngineSource from './voiceEngine.js?raw';
+
+const VOICE_ENGINE_EMBED = voiceEngineSource.replace(/^export\s+/gm, '');
 
 /**
  * Generates a self-contained single-file HTML game that requires no external dependencies or servers.
@@ -426,6 +431,10 @@ ${jsonProject}
     let selectedInventoryItem = null;
 
     let audioCtx = null;
+
+    // ---- Motor de voz orgánica (mismo código que usa el editor) ----
+${VOICE_ENGINE_EMBED}
+
     function playSound(type) {
       if (!type || type === 'none') return;
       try {
@@ -453,6 +462,11 @@ ${jsonProject}
           const dur = Math.max(0.04, sc.duration || 0.2);
           const vol = Math.max(0, Math.min(1, sc.volume !== undefined ? sc.volume : 0.25));
           const startF = Math.max(20, sc.startFreq || 440);
+
+          if (sc.synthesisProfile === 'voice') {
+            playVoiceSynth(audioCtx, sc, now);
+            return;
+          }
 
           if (sc.instrument === 'piano') {
             [1, 2, 3, 4].forEach((m, idx) => {

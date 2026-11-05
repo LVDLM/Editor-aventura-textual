@@ -1,4 +1,5 @@
 import { SoundDefinition, SynthSoundConfig, GameProject, InstrumentType } from '../types';
+import { playVoiceSynth } from './voiceEngine.js';
 
 /**
  * Web Audio API procedural sound synthesizer & audio manager.
@@ -560,6 +561,14 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
   const startF = Math.max(20, config.startFreq || 440);
 
   // ==========================================
+  // CONFIGURABLE ORGANIC VOICE ENGINE (creatures, howls, screams, growls...)
+  // ==========================================
+  if (config.synthesisProfile === 'voice') {
+    playVoiceSynth(ctx, config, now, startTrackedSource);
+    return;
+  }
+
+  // ==========================================
   // ORGANIC ANIMAL VOCALIZATION PROFILE
   // ==========================================
   if (config.synthesisProfile === 'animal_cry') {
@@ -616,6 +625,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     voiceFilter.connect(upperFormant);
     upperFormant.connect(voiceGain);
     voiceGain.connect(master);
+    master.connect(ctx.destination); // faltaba: sin esta conexión solo se oía el soplo inicial
     master.gain.setValueAtTime(vol * 0.62, now);
 
     // "Mew" onset, slight middle break, then the falling "ow" tail.
@@ -749,8 +759,9 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         const lfoG = ctx.createGain();
         lfo.frequency.setValueAtTime(5.5, now);
         lfoG.gain.setValueAtTime(6, now);
-        lfo.connect(osc1.frequency);
-        lfo.connect(osc2.frequency);
+        lfo.connect(lfoG);
+        lfoG.connect(osc1.frequency);
+        lfoG.connect(osc2.frequency);
         startTrackedSource(lfo, now);
         lfo.stop(now + dur + 0.05);
 
@@ -1062,7 +1073,10 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     const lfoGain = ctx.createGain();
     lfo.frequency.setValueAtTime(config.lfoFreq, now);
     lfoGain.gain.setValueAtTime(config.lfoGain, now);
-    lfo.connect(osc.frequency);
+    // La profundidad (lfoGain, en Hz) debe pasar por el nodo de ganancia; antes el LFO
+    // se conectaba directo y modulaba solo ±1 Hz, por lo que el control no tenía efecto.
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
     startTrackedSource(lfo, now);
     lfo.stop(now + dur + 0.05);
   }

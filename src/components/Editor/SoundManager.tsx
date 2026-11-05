@@ -40,6 +40,8 @@ import {
   saveGlobalSoundLibraryToFirestore,
   resetGlobalSoundLibraryInFirestore,
 } from '../../lib/firebase';
+import { VoicePanel } from './VoicePanel';
+import { DEFAULT_VOICE } from '../../utils/voicePresets';
 
 interface SoundManagerProps {
   project: GameProject;
@@ -546,6 +548,27 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
     }
   };
 
+  // Cambiar entre motor oscilador/instrumento y motor Voz / Criatura
+  const handleSelectEngine = (engine: 'osc' | 'voice') => {
+    if (!activeSoundForm) return;
+    const curr = activeSoundForm.synthConfig || { oscType: 'sawtooth' as const, startFreq: 440, duration: 1, volume: 0.3 };
+    const isVoice = curr.synthesisProfile === 'voice';
+    if ((engine === 'voice') === isVoice) return;
+    const next: SynthSoundConfig =
+      engine === 'voice'
+        ? {
+            ...curr,
+            synthesisProfile: 'voice',
+            oscType: 'sawtooth',
+            instrument: 'custom',
+            startFreq: Math.min(Math.max(curr.startFreq || 300, 60), 2000),
+            duration: Math.max(curr.duration || 1, 0.8),
+            voice: { ...DEFAULT_VOICE, ...(curr.voice || {}) },
+          }
+        : { ...curr, synthesisProfile: undefined, voice: undefined };
+    setActiveSoundForm({ ...activeSoundForm, synthConfig: next });
+  };
+
   // Handle instrument change
   const handleSelectInstrument = (instId: InstrumentType) => {
     if (!activeSoundForm) return;
@@ -559,6 +582,8 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
 
     const nextConfig: SynthSoundConfig = {
       ...curr,
+      synthesisProfile: undefined,
+      voice: undefined,
       instrument: instId,
       startFreq: option && instId !== 'custom' ? option.defaultFreq : curr.startFreq,
       duration: option && instId !== 'custom' ? option.defaultDur : curr.duration,
@@ -1120,6 +1145,54 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
               {/* ==================== SYNTHESIZER MODE ==================== */}
               {activeSoundForm.sourceType === 'synth' && (
                 <div className="space-y-5">
+                  {/* Motor de síntesis */}
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="Motor de síntesis">
+                    {[
+                      { id: 'osc', label: 'Oscilador / Instrumento', desc: 'Pitidos, notas, efectos electrónicos' },
+                      { id: 'voice', label: 'Voz / Criatura', desc: 'Gritos, aullidos, gruñidos, respiración' },
+                    ].map((m) => {
+                      const active = (m.id === 'voice') === (activeSoundForm.synthConfig?.synthesisProfile === 'voice');
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => handleSelectEngine(m.id as 'osc' | 'voice')}
+                          className={`flex-1 min-w-[150px] p-2.5 rounded-xl border text-left transition-all cursor-pointer touch-manipulation ${
+                            active
+                              ? isClean
+                                ? 'bg-[#A4332A] text-white border-[#872820] shadow-sm'
+                                : 'bg-amber-600 text-white border-amber-500 shadow-sm'
+                              : isClean
+                              ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:bg-[#EBE3CD]'
+                              : 'bg-[#2C241C] border-[#42362B] text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <span className="block text-xs font-bold">{m.label}</span>
+                          <span className={`block text-[10px] mt-0.5 ${active ? 'text-white/80' : isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>{m.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeSoundForm.synthConfig?.synthesisProfile === 'voice' && (
+                    <VoicePanel
+                      config={activeSoundForm.synthConfig}
+                      isClean={isClean}
+                      isPlaying={isPlayingTesting}
+                      onChange={(next) => setActiveSoundForm({ ...activeSoundForm, synthConfig: next })}
+                      onChangeAndPlay={(next) => {
+                        setActiveSoundForm({ ...activeSoundForm, synthConfig: next });
+                        const ctx = getAudioContext();
+                        if (ctx) playSynthWithConfig(ctx, next);
+                      }}
+                      onPreview={handleTestActiveForm}
+                      onStop={handleStopPreview}
+                    />
+                  )}
+
+                  {activeSoundForm.synthConfig?.synthesisProfile !== 'voice' && (
+                  <>
                   {/* Instrument Selector */}
                   <div
                     className={`p-4 rounded-2xl border space-y-3 ${
@@ -1512,6 +1585,8 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                       </div>
                     )}
                   </div>
+                  </>
+                  )}
                 </div>
               )}
 

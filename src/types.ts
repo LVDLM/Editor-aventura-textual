@@ -52,8 +52,41 @@ export type InstrumentType =
   | 'music_box'
   | 'drum';
 
+/** Zona de resonancia del "tracto vocal". `freqs` es una trayectoria en el tiempo (1 valor = fija). */
+export interface VoiceFormant {
+  freqs: number[]; // Hz
+  q?: number; // Selectividad (3 = ancha / 15 = muy marcada)
+  gain?: number; // 0 to 4
+}
+
+/** Parámetros del motor de voz orgánica (ver utils/voiceEngine.js). Todos opcionales. */
+export interface VoiceConfig {
+  contour?: number[]; // Multiplicadores de tono respecto a startFreq, equiespaciados en el tiempo
+  contourDepth?: number; // 0..2.5 intensidad del contorno (1 = tal cual, <1 más plano, >1 más exagerado)
+  envelope?: number[]; // Curva de volumen 0..1, equiespaciada en el tiempo
+  formants?: VoiceFormant[];
+  formantScale?: number; // 0.4 (criatura enorme) a 2.5 (muy pequeña)
+  breath?: number; // 0..1 aire / soplido
+  voicing?: number; // 0..1 (0 = solo aire, susurro)
+  roughness?: number; // 0..1 gruñido (modulación de amplitud)
+  roughnessRate?: number; // Hz 8..120
+  subharmonic?: number; // 0..1 voz crujiente (una octava más grave)
+  drive?: number; // 0..1 saturación
+  jitter?: number; // 0..1 inestabilidad de tono
+  shimmer?: number; // 0..1 inestabilidad de volumen
+  vibratoRate?: number; // Hz
+  vibratoDepth?: number; // cents
+  vibratoDelay?: number; // 0..0.95 fracción de la duración antes de que entre el vibrato
+  unison?: number; // cents de desafinación del 2º oscilador (grosor)
+  brightness?: number; // 0..1
+  reverb?: number; // 0..1
+  seed?: number; // semilla del azar (mismo valor = mismo sonido)
+}
+
 export interface SynthSoundConfig {
-  synthesisProfile?: 'animal_cry'; // Dedicated organic vocalization synthesis model
+  // 'voice': motor de voz orgánica configurable (voice). 'animal_cry': modelo fijo de maullido.
+  synthesisProfile?: 'animal_cry' | 'voice';
+  voice?: VoiceConfig;
   oscType: 'sine' | 'triangle' | 'square' | 'sawtooth' | 'noise' | 'fm_synth' | 'arpeggio' | 'laser';
   instrument?: InstrumentType;
   startFreq: number; // Hz (20 to 5000)
