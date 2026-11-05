@@ -205,6 +205,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [modalFeedback, setModalFeedback] = useState<{
     type: 'action' | 'item' | 'gameover';
     title?: string;
+    showTitle?: boolean;
     verbIconName?: string;
     isAutosaved?: boolean;
     isGameOver?: boolean;
@@ -215,6 +216,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [modalQueue, setModalQueue] = useState<{
     type: 'action' | 'item' | 'gameover';
     title?: string;
+    showTitle?: boolean;
     verbIconName?: string;
     isAutosaved?: boolean;
     isGameOver?: boolean;
@@ -346,6 +348,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   // colapsada en pantallas anchas es un contenedor con scroll propio.
   const narrativeRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    setActiveVerb(null);
+    setSelectedInventoryItemId(null);
+    setContextMenu(null);
     narrativeRef.current?.scrollTo({ top: 0 });
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [gameState.currentSceneId]);
@@ -597,12 +602,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
             Object.entries(sc.addItems).forEach(([id, qty]) => {
               const count = Math.max(0, Math.floor(Number(qty) || 0));
-              for (let i = 0; i < count; i++) {
-                newInventory.push(id);
+              if (!newInventory.includes(id)) {
+                for (let i = 0; i < count; i++) {
+                  newInventory.push(id);
+                }
               }
             });
           } else if (sc?.addItemId) {
-            newInventory.push(sc.addItemId);
+            if (!newInventory.includes(sc.addItemId)) {
+              newInventory.push(sc.addItemId);
+            }
           }
 
           if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
@@ -750,12 +759,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
         Object.entries(sc.addItems).forEach(([id, qty]) => {
           const count = Math.max(0, Math.floor(Number(qty) || 0));
-          for (let i = 0; i < count; i++) {
-            newInventory.push(id);
+          if (!newInventory.includes(id)) {
+            for (let i = 0; i < count; i++) {
+              newInventory.push(id);
+            }
           }
         });
       } else if (sc?.addItemId) {
-        newInventory.push(sc.addItemId);
+        if (!newInventory.includes(sc.addItemId)) {
+          newInventory.push(sc.addItemId);
+        }
       }
 
       if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
@@ -1007,9 +1020,28 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     let messageToShow: string | null = null;
 
     if (rule) {
+      const sc = rule.stateChange;
+
+      // Identify items that this rule grants
+      const itemIdsFromRule: string[] = [];
+      if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+        Object.entries(sc.addItems).forEach(([id, qty]) => {
+          if (Number(qty) > 0) itemIdsFromRule.push(id);
+        });
+      } else if (sc?.addItemId) {
+        itemIdsFromRule.push(sc.addItemId);
+      }
+
+      const firstAddedItemId = itemIdsFromRule[0];
+      const itemObj = firstAddedItemId ? project.inventoryItems.find((i) => i.id === firstAddedItemId) : null;
+      const hasItemGains = itemIdsFromRule.length > 0;
+
+      // Check if ALL granted items are ALREADY in the player's inventory
+      const alreadyHasItems = hasItemGains && itemIdsFromRule.every((id) => (gameState.inventory || []).includes(id));
+
       if (rule.soundEffect && rule.soundEffect !== 'none') {
         playSound(rule.soundEffect);
-      } else if (rule.stateChange?.addItemId) {
+      } else if (rule.stateChange?.addItemId && !alreadyHasItems) {
         playSound('pickup');
       } else if (rule.stateChange?.goToSceneId) {
         playSound('door');
@@ -1017,18 +1049,26 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         playSound('select');
       }
 
-      // If action appends text to paragraph, display full paragraph directly in story (no response popup message)
-      if (rule.stateChange?.appendStoryText) {
+      if (alreadyHasItems) {
+        // Player already has the object(s) in inventory:
+        // Do not repeat the pickup modal or duplicate the item.
+        // Instead, display the object's description extracted from its item card.
+        const itemDesc = itemObj?.description?.trim();
+        if (itemDesc) {
+          messageToShow = itemDesc;
+        } else if (rule.responseMessage) {
+          messageToShow = rule.responseMessage;
+        } else {
+          messageToShow = `Ya tienes ${itemObj?.name || 'este objeto'} en tu inventario.`;
+        }
+      } else if (rule.stateChange?.appendStoryText) {
+        // If action appends text to paragraph, display full paragraph directly in story (no response popup message)
         messageToShow = null;
       } else if (rule.responseMessage) {
         messageToShow = rule.responseMessage;
       }
 
-      const sc = rule.stateChange;
-      const firstAddedItemId = (sc?.addItems && Object.keys(sc.addItems)[0]) || sc?.addItemId;
-      const itemObj = firstAddedItemId ? project.inventoryItems.find((i) => i.id === firstAddedItemId) : null;
-      const hasItemGains = !!((sc?.addItems && Object.keys(sc.addItems).length > 0) || sc?.addItemId);
-      const willPickupItem = hasItemGains;
+      const willPickupItem = hasItemGains && !alreadyHasItems;
       const isAutosaveTriggered = willPickupItem || !!sc?.goToSceneId;
       const isRuleGameOver = !!rule.isGameOver || !!rule.stateChange?.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.responseMessage || '');
 
@@ -1051,12 +1091,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
           Object.entries(sc.addItems).forEach(([id, qty]) => {
             const count = Math.max(0, Math.floor(Number(qty) || 0));
-            for (let i = 0; i < count; i++) {
-              newInventory.push(id);
+            // Prevent duplicate acquisitions if item is already in inventory
+            if (!newInventory.includes(id)) {
+              for (let i = 0; i < count; i++) {
+                newInventory.push(id);
+              }
             }
           });
         } else if (sc?.addItemId) {
-          newInventory.push(sc.addItemId);
+          if (!newInventory.includes(sc.addItemId)) {
+            newInventory.push(sc.addItemId);
+          }
         }
 
         if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
@@ -1104,7 +1149,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         const newHistory = [
           ...prev.history,
-          { id: Date.now().toString(), type: 'response', text: rule.responseMessage || 'Acción ejecutada' },
+          { id: Date.now().toString(), type: 'response', text: messageToShow || rule.responseMessage || 'Acción ejecutada' },
         ];
 
         // Trigger Autosave side-effects if item received or scene changed
@@ -1186,8 +1231,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       } else if (messageToShow) {
         setModalFeedback({
           type: 'action',
-          title: actionTitle,
-          verbIconName,
+          title: (alreadyHasItems && itemObj?.name) ? itemObj.name : actionTitle,
+          showTitle: alreadyHasItems,
+          verbIconName: (alreadyHasItems && !verbIconName) ? 'Eye' : verbIconName,
+          itemImageUrl: (alreadyHasItems && itemObj) ? (itemObj.imageFileData || itemObj.imageUrl) : undefined,
           message: messageToShow.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
         });
       }
@@ -1244,12 +1291,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         if (fsc?.addItems && Object.keys(fsc.addItems).length > 0) {
           Object.entries(fsc.addItems).forEach(([id, qty]) => {
             const count = Math.max(0, Math.floor(Number(qty) || 0));
-            for (let i = 0; i < count; i++) {
-              newInventory.push(id);
+            if (!newInventory.includes(id)) {
+              for (let i = 0; i < count; i++) {
+                newInventory.push(id);
+              }
             }
           });
         } else if (fsc?.addItemId) {
-          newInventory.push(fsc.addItemId);
+          if (!newInventory.includes(fsc.addItemId)) {
+            newInventory.push(fsc.addItemId);
+          }
         }
 
         if (fsc?.removeItems && Object.keys(fsc.removeItems).length > 0) {
@@ -1479,6 +1530,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       ? project.inventoryItems.find((i) => i.id === option.giveItemId)
       : null;
 
+    const dialogueItemIds: string[] = [];
+    if (option.giveItems && Object.keys(option.giveItems).length > 0) {
+      Object.entries(option.giveItems).forEach(([id, qty]) => {
+        if (Number(qty) > 0) dialogueItemIds.push(id);
+      });
+    } else if (option.giveItemId) {
+      dialogueItemIds.push(option.giveItemId);
+    }
+    const playerAlreadyHasDialogueItem = dialogueItemIds.length > 0 && dialogueItemIds.every((id) => (gameState.inventory || []).includes(id));
+
     // Item consuming (-Objeto)
     const consumeItemObj =
       option.requiredItemId && option.consumeRequiredItem
@@ -1494,17 +1555,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       responseText += `${character.name}: ${option.npcResponse}`;
     }
 
-    if (option.giveItems && Object.keys(option.giveItems).length > 0) {
-      const summary = Object.entries(option.giveItems)
-        .map(([id, qty]) => {
-          const item = project.inventoryItems.find((i) => i.id === id);
-          const name = item?.name || id;
-          return qty > 1 ? `${qty}x ${name}` : name;
-        })
-        .join(', ');
-      responseText += `\n\n[Recibido: ${summary}]`;
-    } else if (giveItemObj) {
-      responseText += `\n\n[Recibido: ${giveItemObj.name}]`;
+    if (!playerAlreadyHasDialogueItem) {
+      if (option.giveItems && Object.keys(option.giveItems).length > 0) {
+        const summary = Object.entries(option.giveItems)
+          .map(([id, qty]) => {
+            const item = project.inventoryItems.find((i) => i.id === id);
+            const name = item?.name || id;
+            return qty > 1 ? `${qty}x ${name}` : name;
+          })
+          .join(', ');
+        responseText += `\n\n[Recibido: ${summary}]`;
+      } else if (giveItemObj) {
+        responseText += `\n\n[Recibido: ${giveItemObj.name}]`;
+      }
     }
     if (consumeItemObj) {
       responseText += `\n\n[Entregado: ${consumeItemObj.name}]`;
@@ -1512,9 +1575,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     // Track items received during this dialogue session
     const currentReceived = activeDialogue?.receivedItemIds || [];
-    const itemsToAdd = option.giveItems && Object.keys(option.giveItems).length > 0
-      ? Object.keys(option.giveItems)
-      : (giveItemObj ? [giveItemObj.id] : []);
+    const itemsToAdd = !playerAlreadyHasDialogueItem
+      ? dialogueItemIds
+      : [];
     const updatedReceived = [...currentReceived, ...itemsToAdd];
 
     setGameState((prev: any) => {
@@ -1525,12 +1588,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (option.giveItems && Object.keys(option.giveItems).length > 0) {
         Object.entries(option.giveItems).forEach(([id, qty]) => {
           const count = Math.max(0, Math.floor(Number(qty) || 0));
-          for (let i = 0; i < count; i++) {
-            newInventory.push(id);
+          if (!newInventory.includes(id)) {
+            for (let i = 0; i < count; i++) {
+              newInventory.push(id);
+            }
           }
         });
       } else if (option.giveItemId) {
-        newInventory.push(option.giveItemId);
+        if (!newInventory.includes(option.giveItemId)) {
+          newInventory.push(option.giveItemId);
+        }
       }
 
       if (option.requiredItemId && option.consumeRequiredItem) {
@@ -1601,7 +1668,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       );
     }
 
-    if (giveItemObj || option.goToSceneId) {
+    if ((giveItemObj && !playerAlreadyHasDialogueItem) || option.goToSceneId) {
       setShowSaveNotification(true);
       setTimeout(() => setShowSaveNotification(false), 2500);
     }
@@ -2079,54 +2146,56 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </>
         )}
 
-        {/* Sentence Builder Bar (LucasArts Style Command Bar) - Shown on mobile only when active verb/item selected */}
-        <div className={`${(activeVerb || selectedItemObj) ? 'flex' : 'hidden md:flex'} p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} items-center justify-between gap-3 shadow-sm`}>
-          <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide flex-wrap">
-            <span className={`text-xs font-semibold uppercase tracking-wider ${themeConfig.accentClass}`}>Acción:</span>
-            <span className={themeConfig.actionBoxTextClass}>
-              {selectedItemObj && activeVerb === 'usar'
-                ? `Usar ${selectedItemObj.name} con`
-                : selectedItemObj && activeVerb === 'mirar'
-                ? `Mirar ${selectedItemObj.name}`
-                : selectedItemObj
-                ? `Usar ${selectedItemObj.name} con`
-                : activeVerb
-                ? (projectVerbs.find((v) => v.id === activeVerb)?.label.toUpperCase() || ALL_VERBS.find((v) => v.id === activeVerb)?.label.toUpperCase() || activeVerb.toUpperCase())
-                : 'SELECCIONAR ACCIÓN...'}
-            </span>
-            {!activeVerb && !selectedItemObj && (
-              <span className={`text-xs font-normal ${themeConfig.textMutedClass} italic hidden sm:inline`}>
-                (Haz clic en un verbo abajo o en una palabra destacada)
+        {/* Sentence Builder Bar (LucasArts Style Command Bar) - Hidden in final / game-over scenes */}
+        {!isSceneGameOver && (
+          <div className={`${(activeVerb || selectedItemObj) ? 'flex' : 'hidden md:flex'} p-3 rounded-xl border ${themeConfig.accentBorderClass} ${themeConfig.actionBoxBgClass} items-center justify-between gap-3 shadow-sm`}>
+            <div className="flex items-center gap-2 font-bold text-sm sm:text-base tracking-wide flex-wrap">
+              <span className={`text-xs font-semibold uppercase tracking-wider ${themeConfig.accentClass}`}>Acción:</span>
+              <span className={themeConfig.actionBoxTextClass}>
+                {selectedItemObj && activeVerb === 'usar'
+                  ? `Usar ${selectedItemObj.name} con`
+                  : selectedItemObj && activeVerb === 'mirar'
+                  ? `Mirar ${selectedItemObj.name}`
+                  : selectedItemObj
+                  ? `Usar ${selectedItemObj.name} con`
+                  : activeVerb
+                  ? (projectVerbs.find((v) => v.id === activeVerb)?.label.toUpperCase() || ALL_VERBS.find((v) => v.id === activeVerb)?.label.toUpperCase() || activeVerb.toUpperCase())
+                  : 'SELECCIONAR ACCIÓN...'}
               </span>
-            )}
-          </div>
+              {!activeVerb && !selectedItemObj && (
+                <span className={`text-xs font-normal ${themeConfig.textMutedClass} italic hidden sm:inline`}>
+                  (Haz clic en un verbo abajo o en una palabra destacada)
+                </span>
+              )}
+            </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {(activeVerb || selectedItemObj) && (
+            <div className="flex items-center gap-2 shrink-0">
+              {(activeVerb || selectedItemObj) && (
+                <button
+                  onClick={handleClearCommand}
+                  className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                >
+                  Cancelar
+                </button>
+              )}
+              {/* Ayuda visual: resalta las palabras interactivas en cualquier dificultad */}
               <button
-                onClick={handleClearCommand}
-                className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`}
+                onClick={toggleAsistirResaltado}
+                aria-pressed={asistirResaltado}
+                aria-label="Resaltar palabras interactivas"
+                title={asistirResaltado ? 'Resaltado de palabras activado' : 'Resaltar palabras interactivas'}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer touch-manipulation ${
+                  asistirResaltado
+                    ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400`
+                    : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
+                }`}
               >
-                Cancelar
+                <Highlighter className="w-4 h-4" />
+                <span className="hidden sm:inline">Resaltar</span>
               </button>
-            )}
-            {/* Ayuda visual: resalta las palabras interactivas en cualquier dificultad */}
-            <button
-              onClick={toggleAsistirResaltado}
-              aria-pressed={asistirResaltado}
-              aria-label="Resaltar palabras interactivas"
-              title={asistirResaltado ? 'Resaltado de palabras activado' : 'Resaltar palabras interactivas'}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer touch-manipulation ${
-                asistirResaltado
-                  ? `${themeConfig.verbActiveBg} ${themeConfig.verbActiveText} border-amber-400`
-                  : `${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass} ${themeConfig.buttonTextClass} ${themeConfig.buttonHoverClass}`
-              }`}
-            >
-              <Highlighter className="w-4 h-4" />
-              <span className="hidden sm:inline">Resaltar</span>
-            </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Main Narrative Card (~60% height in focus mode) */}
         {/* En móvil no se usa scroll anidado: la tarjeta crece y scrollea la página */}
@@ -2322,7 +2391,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       </div>
                     )}
 
-                    {modalFeedback.type !== 'action' && (
+                    {(modalFeedback.type !== 'action' || modalFeedback.showTitle) && (
                       <h3
                         className={`font-bold text-base ${
                           modalFeedback.type === 'gameover' || modalFeedback.isGameOver
@@ -2444,8 +2513,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           )}
         </AnimatePresence>
 
-        {/* Verbs Palette & Inventory Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Verbs Palette & Inventory Grid - Hidden in final / game-over scenes */}
+        {!isSceneGameOver && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           
           {/* SCUMM Verbs Panel (2 columns) */}
           <div className={`md:col-span-2 p-5 rounded-2xl border ${themeConfig.cardBorderClass} ${themeConfig.cardBgClass} shadow-lg`}>
@@ -2680,7 +2750,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             )}
           </div>
         </div>
-      </div>
+      )}
+    </div>
 
       {/* Interactive Word Direct Click Context Popover Menu */}
       {contextMenu && (() => {

@@ -362,7 +362,7 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
 
     <div class="response-box" id="response-box" style="display: none;"></div>
 
-    <div class="controls-grid">
+    <div class="controls-grid" id="controls-grid">
       <div class="verbs-panel">
         <div class="verbs-title">Acciones (Verbos)</div>
         <div class="verb-buttons">
@@ -832,6 +832,16 @@ ${jsonProject}
       renderInventory();
       updateSentenceBar();
 
+      const controlsGrid = document.getElementById('controls-grid');
+      const sentenceBar = document.getElementById('sentence-bar');
+      if (isGameOverState()) {
+        if (controlsGrid) controlsGrid.style.display = 'none';
+        if (sentenceBar) sentenceBar.style.display = 'none';
+      } else {
+        if (controlsGrid) controlsGrid.style.display = '';
+        if (sentenceBar) sentenceBar.style.display = '';
+      }
+
       const diffSelectEl = document.getElementById('difficulty-select');
       if (diffSelectEl) diffSelectEl.value = gameState.difficulty;
     }
@@ -1055,10 +1065,14 @@ ${jsonProject}
       if (sc.addItems && Object.keys(sc.addItems).length > 0) {
         for (var k in sc.addItems) {
           var n = Math.floor(Number(sc.addItems[k]) || 0);
-          for (var c = 0; c < n; c++) gameState.inventory.push(k);
+          if (gameState.inventory.indexOf(k) === -1) {
+            for (var c = 0; c < n; c++) gameState.inventory.push(k);
+          }
         }
       } else if (sc.addItemId) {
-        gameState.inventory.push(sc.addItemId);
+        if (gameState.inventory.indexOf(sc.addItemId) === -1) {
+          gameState.inventory.push(sc.addItemId);
+        }
       }
 
       if (sc.removeItems && Object.keys(sc.removeItems).length > 0) {
@@ -1223,19 +1237,53 @@ ${jsonProject}
       responseBox.style.display = 'block';
 
       if (rule) {
+        var sc = rule.stateChange;
+        var ruleItemIds = [];
+        if (sc && sc.addItems && Object.keys(sc.addItems).length > 0) {
+          for (var rk in sc.addItems) {
+            if (Number(sc.addItems[rk]) > 0) ruleItemIds.push(rk);
+          }
+        } else if (sc && sc.addItemId) {
+          ruleItemIds.push(sc.addItemId);
+        }
+        var alreadyHasItems = ruleItemIds.length > 0 && ruleItemIds.every(function(id) {
+          return gameState.inventory.indexOf(id) !== -1;
+        });
+
         if (rule.soundEffect && rule.soundEffect !== 'none') {
           playSound(rule.soundEffect);
-        } else if (rule.stateChange && rule.stateChange.addItemId) {
+        } else if (sc && sc.addItemId && !alreadyHasItems) {
           playSound('pickup');
-        } else if (rule.stateChange && rule.stateChange.goToSceneId) {
+        } else if (sc && sc.goToSceneId) {
           playSound('door');
         } else {
           playSound('click');
         }
 
-        let msg = stripGameOverTag(rule.responseMessage || '');
+        var firstItem = ruleItemIds.length > 0 ? PROJECT.inventoryItems.find(function(i) { return i.id === ruleItemIds[0]; }) : null;
+
+        let msg = '';
+        if (alreadyHasItems) {
+          if (firstItem && firstItem.description && firstItem.description.trim()) {
+            msg = firstItem.description.trim();
+          } else if (rule.responseMessage) {
+            msg = stripGameOverTag(rule.responseMessage);
+          } else {
+            msg = 'Ya tienes ' + (firstItem ? firstItem.name : 'este objeto') + ' en tu inventario.';
+          }
+        } else {
+          msg = stripGameOverTag(rule.responseMessage || '');
+        }
+
         let addedImgHtml = '';
         let itemImgSrc = '';
+
+        if (alreadyHasItems && firstItem) {
+          itemImgSrc = getImageSrc(firstItem);
+          if (itemImgSrc) {
+            addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(firstItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+          }
+        }
 
         const isRuleGameOver = !!rule.isGameOver || !!(rule.stateChange && rule.stateChange.isGameOver) || checkGameOverTag(rule.responseMessage || '');
         if (isRuleGameOver) {
@@ -1243,14 +1291,15 @@ ${jsonProject}
         }
 
         if (rule.stateChange) {
-          const sc = rule.stateChange;
           if (sc.setFlags) Object.assign(gameState.flags, sc.setFlags);
           if (sc.addItems && Object.keys(sc.addItems).length > 0) {
             for (var ak in sc.addItems) {
               var an = Math.floor(Number(sc.addItems[ak]) || 0);
-              for (var ac = 0; ac < an; ac++) gameState.inventory.push(ak);
+              if (gameState.inventory.indexOf(ak) === -1) {
+                for (var ac = 0; ac < an; ac++) gameState.inventory.push(ak);
+              }
               const addedItem = PROJECT.inventoryItems.find(i => i.id === ak);
-              if (addedItem && !itemImgSrc) {
+              if (addedItem && !itemImgSrc && !alreadyHasItems) {
                 itemImgSrc = getImageSrc(addedItem);
                 if (itemImgSrc) {
                   addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
@@ -1258,9 +1307,11 @@ ${jsonProject}
               }
             }
           } else if (sc.addItemId) {
-            gameState.inventory.push(sc.addItemId);
+            if (gameState.inventory.indexOf(sc.addItemId) === -1) {
+              gameState.inventory.push(sc.addItemId);
+            }
             const addedItem = PROJECT.inventoryItems.find(i => i.id === sc.addItemId);
-            if (addedItem) {
+            if (addedItem && !itemImgSrc && !alreadyHasItems) {
               itemImgSrc = getImageSrc(addedItem);
               if (itemImgSrc) {
                 addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
