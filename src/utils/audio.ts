@@ -9,7 +9,15 @@ import { SoundDefinition, SynthSoundConfig, GameProject, InstrumentType } from '
 let audioCtx: AudioContext | null = null;
 let soundEnabled = true;
 const activeAudioElements = new Set<HTMLAudioElement>();
+const activeSynthSources = new Set<AudioScheduledSourceNode>();
 const urlAudioCache = new Map<string, HTMLAudioElement>();
+
+function startTrackedSource(source: AudioScheduledSourceNode, when?: number) {
+  activeSynthSources.add(source);
+  source.addEventListener('ended', () => activeSynthSources.delete(source), { once: true });
+  if (when === undefined) source.start();
+  else source.start(when);
+}
 
 export function getAudioContext(): AudioContext | null {
   if (!soundEnabled) return null;
@@ -48,6 +56,15 @@ export function stopAllAudio() {
     }
   });
   activeAudioElements.clear();
+
+  activeSynthSources.forEach((source) => {
+    try {
+      source.stop();
+    } catch {
+      // The source may already have stopped.
+    }
+    activeSynthSources.delete(source);
+  });
 }
 
 /**
@@ -608,9 +625,9 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     ]);
     voiceGain.gain.setValueCurveAtTime(envelope, now, dur);
 
-    fundamental.start(now);
-    harmonic2.start(now);
-    harmonic3.start(now);
+    startTrackedSource(fundamental, now);
+    startTrackedSource(harmonic2, now);
+    startTrackedSource(harmonic3, now);
     fundamental.stop(now + dur + 0.03);
     harmonic2.stop(now + dur + 0.03);
     harmonic3.stop(now + dur + 0.03);
@@ -627,7 +644,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     breath.connect(breathFilter);
     breathFilter.connect(breathGain);
     breathGain.connect(ctx.destination);
-    breath.start(now);
+    startTrackedSource(breath, now);
     breath.stop(now + Math.min(0.17, dur * 0.23));
     return;
   }
@@ -654,7 +671,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
           g.gain.exponentialRampToValueAtTime(0.001, now + dur * decayMult);
           osc.connect(g);
           g.connect(ctx.destination);
-          osc.start(now);
+          startTrackedSource(osc, now);
           osc.stop(now + dur * decayMult + 0.02);
         });
         return;
@@ -678,7 +695,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
           g.gain.linearRampToValueAtTime(0.001, now + dur);
           osc.connect(g);
           g.connect(ctx.destination);
-          osc.start(now);
+          startTrackedSource(osc, now);
           osc.stop(now + dur + 0.02);
         });
         return;
@@ -694,7 +711,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         g.gain.exponentialRampToValueAtTime(0.001, now + dur);
         osc.connect(g);
         g.connect(ctx.destination);
-        osc.start(now);
+        startTrackedSource(osc, now);
         osc.stop(now + dur + 0.02);
 
         // Breath noise layer
@@ -711,7 +728,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         nSrc.connect(nFilt);
         nFilt.connect(nGain);
         nGain.connect(ctx.destination);
-        nSrc.start(now);
+        startTrackedSource(nSrc, now);
         nSrc.stop(now + dur + 0.02);
         return;
       }
@@ -734,7 +751,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         lfoG.gain.setValueAtTime(6, now);
         lfo.connect(osc1.frequency);
         lfo.connect(osc2.frequency);
-        lfo.start(now);
+        startTrackedSource(lfo, now);
         lfo.stop(now + dur + 0.05);
 
         filter.type = 'lowpass';
@@ -750,8 +767,8 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         filter.connect(g);
         g.connect(ctx.destination);
 
-        osc1.start(now);
-        osc2.start(now);
+        startTrackedSource(osc1, now);
+        startTrackedSource(osc2, now);
         osc1.stop(now + dur + 0.05);
         osc2.stop(now + dur + 0.05);
         return;
@@ -774,7 +791,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
           g.gain.exponentialRampToValueAtTime(0.0008, now + dur * pDecay);
           osc.connect(g);
           g.connect(ctx.destination);
-          osc.start(now);
+          startTrackedSource(osc, now);
           osc.stop(now + dur * pDecay + 0.02);
         });
         return;
@@ -805,8 +822,8 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         filter.connect(g);
         g.connect(ctx.destination);
 
-        osc.start(now);
-        sub.start(now);
+        startTrackedSource(osc, now);
+        startTrackedSource(sub, now);
         osc.stop(now + dur + 0.02);
         sub.stop(now + dur + 0.02);
         return;
@@ -822,7 +839,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         g.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.6);
         osc.connect(g);
         g.connect(ctx.destination);
-        osc.start(now);
+        startTrackedSource(osc, now);
         osc.stop(now + dur * 0.6 + 0.02);
 
         // Wood impact tap
@@ -838,7 +855,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         nSrc.connect(nF);
         nF.connect(nG);
         nG.connect(ctx.destination);
-        nSrc.start(now);
+        startTrackedSource(nSrc, now);
         nSrc.stop(now + 0.03);
         return;
       }
@@ -856,7 +873,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         g.gain.linearRampToValueAtTime(0.001, now + dur);
         osc.connect(g);
         g.connect(ctx.destination);
-        osc.start(now);
+        startTrackedSource(osc, now);
         osc.stop(now + dur + 0.02);
         return;
       }
@@ -880,7 +897,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         osc.connect(filter);
         filter.connect(g);
         g.connect(ctx.destination);
-        osc.start(now);
+        startTrackedSource(osc, now);
         osc.stop(now + dur + 0.02);
         return;
       }
@@ -899,8 +916,8 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         osc1.connect(g);
         osc2.connect(g);
         g.connect(ctx.destination);
-        osc1.start(now);
-        osc2.start(now);
+        startTrackedSource(osc1, now);
+        startTrackedSource(osc2, now);
         osc1.stop(now + dur + 0.02);
         osc2.stop(now + dur + 0.02);
         return;
@@ -916,7 +933,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         g.gain.exponentialRampToValueAtTime(0.0005, now + dur);
         osc.connect(g);
         g.connect(ctx.destination);
-        osc.start(now);
+        startTrackedSource(osc, now);
         osc.stop(now + dur + 0.02);
         return;
       }
@@ -931,7 +948,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         g.gain.exponentialRampToValueAtTime(0.001, now + dur);
         osc.connect(g);
         g.connect(ctx.destination);
-        osc.start(now);
+        startTrackedSource(osc, now);
         osc.stop(now + dur + 0.02);
 
         // Noise click
@@ -943,7 +960,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
         nG.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
         nSrc.connect(nG);
         nG.connect(ctx.destination);
-        nSrc.start(now);
+        startTrackedSource(nSrc, now);
         nSrc.stop(now + 0.06);
         return;
       }
@@ -973,7 +990,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
       noteOsc.connect(noteGain);
       noteGain.connect(ctx.destination);
 
-      noteOsc.start(noteTime);
+      startTrackedSource(noteOsc, noteTime);
       noteOsc.stop(noteTime + noteDur + 0.02);
     });
     return;
@@ -1010,7 +1027,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     }
 
     gain.connect(ctx.destination);
-    noiseSource.start(now);
+    startTrackedSource(noiseSource, now);
     noiseSource.stop(now + dur + 0.05);
     return;
   }
@@ -1046,7 +1063,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     lfo.frequency.setValueAtTime(config.lfoFreq, now);
     lfoGain.gain.setValueAtTime(config.lfoGain, now);
     lfo.connect(osc.frequency);
-    lfo.start(now);
+    startTrackedSource(lfo, now);
     lfo.stop(now + dur + 0.05);
   }
 
@@ -1069,7 +1086,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
   }
 
   mainGain.connect(ctx.destination);
-  osc.start(now);
+  startTrackedSource(osc, now);
   osc.stop(now + dur + 0.05);
 
   // Optional Noise Layer Mix (e.g. for impacts or gunshots)
@@ -1089,7 +1106,7 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     noiseSrc.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
     noiseGain.connect(ctx.destination);
-    noiseSrc.start(now);
+    startTrackedSource(noiseSrc, now);
     noiseSrc.stop(now + dur * 0.85);
   }
 }
@@ -1101,38 +1118,43 @@ export function playUrlAudio(url: string, volume = 0.5): Promise<void> {
   if (!soundEnabled || !url) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let audio = urlAudioCache.get(url);
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (audio) activeAudioElements.delete(audio);
+      resolve();
+    };
+
     try {
-      let audio = urlAudioCache.get(url);
       if (!audio) {
         audio = new Audio(url);
-        audio.crossOrigin = 'anonymous';
+        audio.preload = 'auto';
         urlAudioCache.set(url, audio);
       }
 
       audio.volume = Math.max(0, Math.min(1, volume));
       audio.currentTime = 0;
-
       activeAudioElements.add(audio);
-      audio.onended = () => {
-        activeAudioElements.delete(audio!);
-        resolve();
-      };
+      audio.onended = finish;
+      audio.onpause = finish;
       audio.onerror = () => {
+        if (settled) return;
+        settled = true;
         activeAudioElements.delete(audio!);
-        reject(new Error(`Failed to load audio from: ${url}`));
+        reject(new Error(`No se pudo cargar el audio: ${url}`));
       };
 
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.then(() => resolve()).catch((err) => {
-          activeAudioElements.delete(audio!);
-          console.warn('Audio play prevented by browser policy:', err);
-          resolve();
-        });
-      }
-    } catch (e) {
-      console.warn('Audio URL error:', e);
-      resolve();
+      audio.play().catch((error) => {
+        if (settled) return;
+        settled = true;
+        activeAudioElements.delete(audio!);
+        reject(error);
+      });
+    } catch (error) {
+      if (audio) activeAudioElements.delete(audio);
+      reject(error);
     }
   });
 }
@@ -1151,6 +1173,9 @@ export function previewSoundDefinition(sound: SoundDefinition): Promise<void> {
     const ctx = getAudioContext();
     if (ctx) {
       playSynthWithConfig(ctx, sound.synthConfig);
+      return new Promise((resolve) => {
+        window.setTimeout(resolve, Math.max(40, sound.synthConfig!.duration * 1000 + 100));
+      });
     }
     return Promise.resolve();
   }
