@@ -1114,6 +1114,95 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                       </div>
                     )}
                   </div>
+
+                  <div className="pt-3 border-t border-amber-500/20 space-y-3">
+                    <div>
+                      <h6 className={`text-xs font-bold ${isClean ? 'text-[#2A2118]' : 'text-amber-200'}`}>
+                        Procesamiento no destructivo de la muestra
+                      </h6>
+                      <p className={`text-[10px] mt-1 ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
+                        El archivo original no se modifica. En esta fase, cambiar la velocidad también cambia la duración y el tono.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className="space-y-1 text-[11px]">
+                        <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                          Velocidad: {(activeSoundForm.audioProcessing?.playbackRate ?? 1).toFixed(2)}×
+                        </span>
+                        <input
+                          type="range" min="0.5" max="2" step="0.05"
+                          value={activeSoundForm.audioProcessing?.playbackRate ?? 1}
+                          onChange={(e) => setActiveSoundForm({ ...activeSoundForm, audioProcessing: { ...activeSoundForm.audioProcessing, playbackRate: Number(e.target.value) } })}
+                          className="w-full accent-amber-600"
+                        />
+                      </label>
+
+                      <label className="space-y-1 text-[11px]">
+                        <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                          Tono adicional: {activeSoundForm.audioProcessing?.pitchSemitones ?? 0} semitonos
+                        </span>
+                        <input
+                          type="range" min="-12" max="12" step="1"
+                          value={activeSoundForm.audioProcessing?.pitchSemitones ?? 0}
+                          onChange={(e) => setActiveSoundForm({ ...activeSoundForm, audioProcessing: { ...activeSoundForm.audioProcessing, pitchSemitones: Number(e.target.value) } })}
+                          className="w-full accent-amber-600"
+                        />
+                      </label>
+
+                      <label className="space-y-1 text-[11px]">
+                        <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                          Filtro paso bajo: {activeSoundForm.audioProcessing?.lowpassHz ?? 19000} Hz
+                        </span>
+                        <input
+                          type="range" min="500" max="19000" step="100"
+                          value={activeSoundForm.audioProcessing?.lowpassHz ?? 19000}
+                          onChange={(e) => setActiveSoundForm({ ...activeSoundForm, audioProcessing: { ...activeSoundForm.audioProcessing, lowpassHz: Number(e.target.value) } })}
+                          className="w-full accent-amber-600"
+                        />
+                      </label>
+
+                      <label className="space-y-1 text-[11px]">
+                        <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                          Eco: {Math.round((activeSoundForm.audioProcessing?.echoMix ?? 0) * 100)}%
+                        </span>
+                        <input
+                          type="range" min="0" max="0.7" step="0.05"
+                          value={activeSoundForm.audioProcessing?.echoMix ?? 0}
+                          onChange={(e) => setActiveSoundForm({ ...activeSoundForm, audioProcessing: { ...activeSoundForm.audioProcessing, echoMix: Number(e.target.value) } })}
+                          className="w-full accent-amber-600"
+                        />
+                      </label>
+
+                      <label className="space-y-1 text-[11px]">
+                        <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>Recorte inicial (segundos)</span>
+                        <input
+                          type="number" min="0" max="60" step="0.05"
+                          value={activeSoundForm.audioProcessing?.trimStartSeconds ?? 0}
+                          onChange={(e) => setActiveSoundForm({ ...activeSoundForm, audioProcessing: { ...activeSoundForm.audioProcessing, trimStartSeconds: Math.max(0, Number(e.target.value) || 0) } })}
+                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-white'}`}
+                        />
+                      </label>
+
+                      <label className="space-y-1 text-[11px]">
+                        <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>Recorte final (segundos)</span>
+                        <input
+                          type="number" min="0" max="60" step="0.05"
+                          value={activeSoundForm.audioProcessing?.trimEndSeconds ?? 0}
+                          onChange={(e) => setActiveSoundForm({ ...activeSoundForm, audioProcessing: { ...activeSoundForm.audioProcessing, trimEndSeconds: Math.max(0, Number(e.target.value) || 0) } })}
+                          className={`w-full px-2 py-1.5 rounded-lg border text-xs ${isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-white'}`}
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveSoundForm({ ...activeSoundForm, audioProcessing: {} })}
+                      className={`text-[10px] font-semibold underline underline-offset-2 ${isClean ? 'text-[#872820]' : 'text-amber-300'}`}
+                    >
+                      Restablecer procesamiento
+                    </button>
+                  </div>
                 </div>
               )}
 
