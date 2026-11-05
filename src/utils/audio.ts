@@ -546,84 +546,89 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
   // ORGANIC ANIMAL VOCALIZATION PROFILE
   // ==========================================
   if (config.synthesisProfile === 'animal_cry') {
-    // A layered, non-musical cry: unstable vocal pitch, two moving formants
-    // and a short breath/noise component instead of a single static oscillator.
-    const pitch = ctx.createOscillator();
-    const body = ctx.createOscillator();
-    const pitchGain = ctx.createGain();
-    const bodyGain = ctx.createGain();
-    const formantA = ctx.createBiquadFilter();
-    const formantB = ctx.createBiquadFilter();
-    const mix = ctx.createGain();
+    // Stylized cat-like meow: a voiced, rising-then-falling contour with
+    // soft harmonics and a two-part "mew-ow" amplitude shape.
+    const fundamental = ctx.createOscillator();
+    const harmonic2 = ctx.createOscillator();
+    const harmonic3 = ctx.createOscillator();
+    const voiceFilter = ctx.createBiquadFilter();
+    const upperFormant = ctx.createBiquadFilter();
+    const voiceGain = ctx.createGain();
+    const master = ctx.createGain();
 
-    pitch.type = 'sawtooth';
-    body.type = 'triangle';
-    pitch.frequency.setValueAtTime(startF, now);
-    body.frequency.setValueAtTime(startF * 0.503, now);
-    const endF = Math.max(65, config.endFreq || startF * 0.42);
-    pitch.frequency.exponentialRampToValueAtTime(endF, now + dur * 0.82);
-    body.frequency.exponentialRampToValueAtTime(Math.max(35, endF * 0.5), now + dur * 0.82);
+    const peak = Math.max(420, startF || 620);
+    const lowEnd = Math.max(180, config.endFreq || 390);
+    const pitchContour = new Float32Array([
+      peak * 0.88, peak * 0.94, peak * 1.08, peak * 1.22,
+      peak * 1.30, peak * 1.25, peak * 1.16, peak * 1.12,
+      peak * 1.18, peak * 1.10, peak * 0.98, peak * 0.88,
+      peak * 0.80, lowEnd * 1.12, lowEnd, lowEnd * 0.96,
+    ]);
+    const durationCurve = dur * 0.96;
+    [fundamental, harmonic2, harmonic3].forEach((osc, index) => {
+      osc.type = 'sine';
+      const ratio = [1, 2.02, 3.96][index];
+      const curve = new Float32Array(pitchContour.length);
+      pitchContour.forEach((freq, i) => {
+        // Tiny non-periodic deviations avoid the regular wobble of an LFO.
+        const drift = 1 + Math.sin(i * 2.17 + index) * 0.009;
+        curve[i] = freq * ratio * drift;
+      });
+      osc.frequency.setValueCurveAtTime(curve, now, durationCurve);
+    });
 
-    // Slightly irregular-feeling pitch movement keeps the cry from sounding like a siren.
-    const vibrato = ctx.createOscillator();
-    const vibratoGain = ctx.createGain();
-    vibrato.type = 'sine';
-    vibrato.frequency.setValueAtTime(4.7, now);
-    vibratoGain.gain.setValueAtTime(Math.max(3, startF * 0.018), now);
-    vibrato.connect(vibratoGain);
-    vibratoGain.connect(pitch.frequency);
-    vibrato.start(now);
-    vibrato.stop(now + dur + 0.03);
+    // Vocal colour: broad resonances rather than a narrow, buzzy filter.
+    voiceFilter.type = 'bandpass';
+    voiceFilter.frequency.setValueAtTime(1050, now);
+    voiceFilter.frequency.linearRampToValueAtTime(1320, now + dur * 0.35);
+    voiceFilter.frequency.linearRampToValueAtTime(880, now + dur);
+    voiceFilter.Q.setValueAtTime(0.75, now);
 
-    formantA.type = 'bandpass';
-    formantA.Q.setValueAtTime(2.2, now);
-    formantA.frequency.setValueAtTime(780, now);
-    formantA.frequency.linearRampToValueAtTime(1180, now + dur * 0.55);
-    formantA.frequency.linearRampToValueAtTime(920, now + dur);
+    upperFormant.type = 'lowpass';
+    upperFormant.frequency.setValueAtTime(3900, now);
+    upperFormant.frequency.linearRampToValueAtTime(3100, now + dur);
+    upperFormant.Q.setValueAtTime(0.55, now);
 
-    formantB.type = 'bandpass';
-    formantB.Q.setValueAtTime(1.6, now);
-    formantB.frequency.setValueAtTime(1450, now);
-    formantB.frequency.linearRampToValueAtTime(2050, now + dur * 0.7);
-    formantB.frequency.linearRampToValueAtTime(1550, now + dur);
+    // Fundamental dominates; upper harmonics add a little vocal edge only.
+    const partialMix = ctx.createGain();
+    fundamental.connect(partialMix);
+    harmonic2.connect(partialMix);
+    harmonic3.connect(partialMix);
+    partialMix.gain.setValueAtTime(1, now);
+    partialMix.connect(voiceFilter);
+    voiceFilter.connect(upperFormant);
+    upperFormant.connect(voiceGain);
+    voiceGain.connect(master);
+    master.gain.setValueAtTime(vol * 0.62, now);
 
-    pitchGain.gain.setValueAtTime(vol * 0.52, now);
-    bodyGain.gain.setValueAtTime(vol * 0.34, now);
-    mix.gain.setValueAtTime(0, now);
-    mix.gain.linearRampToValueAtTime(1, now + Math.min(0.075, dur * 0.18));
-    mix.gain.setValueAtTime(0.82, now + dur * 0.68);
-    mix.gain.linearRampToValueAtTime(0.001, now + dur);
+    // "Mew" onset, slight middle break, then the falling "ow" tail.
+    const envelope = new Float32Array([
+      0.015, 0.28, 0.72, 1.0, 0.88, 0.78, 0.74, 0.62,
+      0.70, 0.82, 0.76, 0.58, 0.38, 0.20, 0.08, 0.001,
+    ]);
+    voiceGain.gain.setValueCurveAtTime(envelope, now, dur);
 
-    pitch.connect(formantA);
-    body.connect(formantB);
-    formantA.connect(pitchGain);
-    formantB.connect(bodyGain);
-    pitchGain.connect(mix);
-    bodyGain.connect(mix);
-    mix.connect(ctx.destination);
+    fundamental.start(now);
+    harmonic2.start(now);
+    harmonic3.start(now);
+    fundamental.stop(now + dur + 0.03);
+    harmonic2.stop(now + dur + 0.03);
+    harmonic3.stop(now + dur + 0.03);
 
-    pitch.start(now);
-    body.start(now);
-    pitch.stop(now + dur + 0.04);
-    body.stop(now + dur + 0.04);
-
-    // A little filtered breath gives the attack and tail an airy, animal quality.
+    // Very restrained breath at the beginning; no continuous balloon-like hiss.
     const breath = ctx.createBufferSource();
-    breath.buffer = createNoiseBuffer(ctx, dur);
+    breath.buffer = createNoiseBuffer(ctx, Math.min(0.16, dur * 0.22));
     const breathFilter = ctx.createBiquadFilter();
     const breathGain = ctx.createGain();
-    breathFilter.type = 'bandpass';
-    breathFilter.frequency.setValueAtTime(1850, now);
-    breathFilter.frequency.linearRampToValueAtTime(1250, now + dur);
-    breathFilter.Q.setValueAtTime(0.8, now);
-    breathGain.gain.setValueAtTime(vol * 0.12, now);
-    breathGain.gain.linearRampToValueAtTime(vol * 0.2, now + dur * 0.12);
-    breathGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    breathFilter.type = 'highpass';
+    breathFilter.frequency.setValueAtTime(2600, now);
+    breathGain.gain.setValueAtTime(vol * 0.035, now);
+    breathGain.gain.exponentialRampToValueAtTime(0.001, now + Math.min(0.16, dur * 0.22));
     breath.connect(breathFilter);
     breathFilter.connect(breathGain);
     breathGain.connect(ctx.destination);
     breath.start(now);
-    breath.stop(now + dur + 0.04);
+    breath.stop(now + Math.min(0.17, dur * 0.23));
     return;
   }
 
