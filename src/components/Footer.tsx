@@ -56,7 +56,7 @@ export const Footer: React.FC<FooterProps> = ({ variant = 'web', onOpenPrivacyMo
 
           <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
 
-          {/* Favicon Attribution: [imagen] by catalyststuff */}
+          {/* Favicon Attribution: by catalyststuff */}
           <div className="inline-flex items-center gap-1 text-[11px]">
             <img
               src="https://i.ibb.co/BHqzTkfN/favicon-16x16.png"
@@ -71,7 +71,7 @@ export const Footer: React.FC<FooterProps> = ({ variant = 'web', onOpenPrivacyMo
                 isClean ? 'text-amber-700 hover:text-amber-800' : 'text-amber-400 hover:text-amber-300'
               }`}
             >
-              [imagen] by catalyststuff
+              by catalyststuff
             </a>
           </div>
         </div>
