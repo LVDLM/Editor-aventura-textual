@@ -1016,7 +1016,12 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.01, now);
     gain.gain.linearRampToValueAtTime(vol, now + Math.min(0.04, dur * 0.2));
-    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    if (config.sustain) {
+      gain.gain.setValueAtTime(vol, now + Math.max(0.05, dur - 0.05));
+      gain.gain.linearRampToValueAtTime(0.001, now + dur);
+    } else {
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    }
 
     if (config.filterType && config.filterType !== 'none') {
       const filter = ctx.createBiquadFilter();
@@ -1084,7 +1089,12 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
   // Envelope
   mainGain.gain.setValueAtTime(0, now);
   mainGain.gain.linearRampToValueAtTime(vol, now + Math.min(0.03, dur * 0.15));
-  mainGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  if (config.sustain) {
+    mainGain.gain.setValueAtTime(vol, now + Math.max(0.04, dur - 0.05));
+    mainGain.gain.linearRampToValueAtTime(0.001, now + dur);
+  } else {
+    mainGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+  }
 
   // Optional Filter Node
   if (config.filterType && config.filterType !== 'none') {
@@ -1111,7 +1121,12 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     const noiseGain = ctx.createGain();
     const noiseVol = vol * config.noiseMix;
     noiseGain.gain.setValueAtTime(noiseVol, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.8);
+    if (config.sustain) {
+      noiseGain.gain.setValueAtTime(noiseVol, now + dur * 0.8 - 0.05);
+      noiseGain.gain.linearRampToValueAtTime(0.001, now + dur * 0.8);
+    } else {
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.8);
+    }
 
     const noiseFilter = ctx.createBiquadFilter();
     noiseFilter.type = 'lowpass';

@@ -521,7 +521,8 @@ ${VOICE_ENGINE_EMBED}
           }
           g.gain.setValueAtTime(0, now);
           g.gain.linearRampToValueAtTime(vol, now + Math.min(0.03, dur * 0.15));
-          g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+          if (sc.sustain) { g.gain.setValueAtTime(vol, now + Math.max(0.04, dur - 0.05)); g.gain.linearRampToValueAtTime(0.001, now + dur); }
+          else g.gain.exponentialRampToValueAtTime(0.001, now + dur);
           o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + dur + 0.05);
           return;
         }

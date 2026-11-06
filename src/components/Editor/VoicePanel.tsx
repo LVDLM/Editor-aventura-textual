@@ -168,6 +168,20 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
   const sectionTitle = `text-[11px] font-black uppercase tracking-wide ${isClean ? 'text-[#872820]' : 'text-amber-400'}`;
   const divider = `pt-3 border-t ${isClean ? 'border-[#E5DCB8]' : 'border-white/10'}`;
 
+  const ProbarBtn = (
+    <button
+      type="button"
+      onClick={onPreview}
+      disabled={isPlaying}
+      aria-label="Probar sonido"
+      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer touch-manipulation ${
+        isClean ? 'bg-[#A4332A] hover:bg-[#872820] text-white' : 'bg-amber-600 hover:bg-amber-500 text-black'
+      }`}
+    >
+      <Play className="w-3.5 h-3.5 fill-current" /> Probar Sonido
+    </button>
+  );
+
   return (
     <div
       className={`p-4 rounded-2xl border space-y-4 ${isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'}`}
@@ -302,9 +316,46 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
         />
       </div>
 
+      {/* Volumen en el tiempo */}
+      <div className={`space-y-2 ${divider}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className={sectionTitle}>Volumen en el tiempo</span>
+          <span className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
+            {activeEnv ? activeEnv.label : 'Personalizada'}
+          </span>
+        </div>
+        <label className={`flex items-start gap-2 text-xs font-bold cursor-pointer ${txt}`}>
+          <input
+            type="checkbox"
+            checked={!!config.sustain}
+            onChange={(e) => onChangeAndPlay({ ...config, sustain: e.target.checked })}
+            className="mt-0.5 w-4 h-4 accent-amber-600"
+          />
+          <span>
+            Sin decaimiento (volumen constante)
+            <span className={`block text-[10px] font-normal ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
+              El sonido se mantiene a la misma fuerza hasta el final, con una entrada y salida muy cortas.
+            </span>
+          </span>
+        </label>
+        <div className={config.sustain ? 'opacity-40 pointer-events-none' : ''} aria-disabled={!!config.sustain}>
+        <MiniCurve pts={config.sustain ? [0, 1, 1, 1, 0] : envelope} isClean={isClean} label="Envolvente de volumen" />
+        <div className="flex flex-wrap gap-1.5">
+          {ENVELOPE_SHAPES.map((s) => (
+            <Chip key={s.id} isClean={isClean} active={activeEnv?.id === s.id} onClick={() => setVoicePlay({ envelope: s.pts })}>
+              {s.label}
+            </Chip>
+          ))}
+        </div>
+        </div>
+      </div>
+
       {/* Cuerpo */}
       <div className={`space-y-3 ${divider}`}>
-        <span className={sectionTitle}>Cuerpo y boca</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className={sectionTitle}>Cuerpo y boca</span>
+          {ProbarBtn}
+        </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <span className={`text-xs font-bold ${txt}`}>Vocal</span>
@@ -389,7 +440,10 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
 
       {/* Carácter */}
       <div className={`space-y-3 ${divider}`}>
-        <span className={sectionTitle}>Carácter</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className={sectionTitle}>Carácter</span>
+          {ProbarBtn}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Slider
             isClean={isClean}
@@ -467,23 +521,6 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
         </div>
       </div>
 
-      {/* Volumen en el tiempo */}
-      <div className={`space-y-2 ${divider}`}>
-        <div className="flex items-center justify-between gap-2">
-          <span className={sectionTitle}>Volumen en el tiempo</span>
-          <span className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
-            {activeEnv ? activeEnv.label : 'Personalizada'}
-          </span>
-        </div>
-        <MiniCurve pts={envelope} isClean={isClean} label="Envolvente de volumen" />
-        <div className="flex flex-wrap gap-1.5">
-          {ENVELOPE_SHAPES.map((s) => (
-            <Chip key={s.id} isClean={isClean} active={activeEnv?.id === s.id} onClick={() => setVoicePlay({ envelope: s.pts })}>
-              {s.label}
-            </Chip>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };

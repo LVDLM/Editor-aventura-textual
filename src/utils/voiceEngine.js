@@ -131,6 +131,15 @@ export function playVoiceSynth(ctx, config, startTime, startSource, destination)
     if (shimmer > 0) e *= 1 + shimmer * 0.22 * shimmerNoise();
     return x >= 0.999 ? 0 : clamp(e, 0, 1.4);
   });
+  if (config.sustain) {
+    // Sin decaimiento: volumen constante; solo una entrada y una salida cortas para evitar chasquidos
+    for (let i = 0; i < envCurve.length; i++) {
+      const t = (i / (envCurve.length - 1)) * dur;
+      const edge = Math.min(1, t / 0.04, (dur - t) / 0.05);
+      const wob = shimmer > 0 ? 1 + shimmer * 0.22 * shimmerNoise() : 1;
+      envCurve[i] = clamp(edge, 0, 1) * 0.95 * wob;
+    }
+  }
   envCurve[0] = Math.min(envCurve[0], 0.0001);
 
   // ---- Cadena de audio ----

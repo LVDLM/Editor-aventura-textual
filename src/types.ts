@@ -85,6 +85,8 @@ export interface VoiceConfig {
 
 export interface SynthSoundConfig {
   // 'voice': motor de voz orgánica configurable (voice). 'animal_cry': modelo fijo de maullido.
+  /** Mantiene el volumen constante hasta el final (sin decaimiento). */
+  sustain?: boolean;
   synthesisProfile?: 'animal_cry' | 'voice';
   voice?: VoiceConfig;
   oscType: 'sine' | 'triangle' | 'square' | 'sawtooth' | 'noise' | 'fm_synth' | 'arpeggio' | 'laser';

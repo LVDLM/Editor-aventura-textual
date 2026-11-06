@@ -1,0 +1,636 @@
+diff --git a/src/components/Editor/SoundManager.tsx b/src/components/Editor/SoundManager.tsx
+index 310fd0e..addd4c8 100644
+--- a/src/components/Editor/SoundManager.tsx
++++ b/src/components/Editor/SoundManager.tsx
+@@ -1,4 +1,4 @@
+-import React, { useState, useEffect } from 'react';
++import React, { useState, useEffect, useRef } from 'react';
+ import {
+   Volume2,
+   Play,
+@@ -274,6 +274,28 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+   const [globalSounds, setGlobalSounds] = useState<SoundDefinition[]>([...DEFAULT_SOUND_LIBRARY]);
+   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
+   const [isSavingGlobal, setIsSavingGlobal] = useState(false);
++  const [showSaveMenu, setShowSaveMenu] = useState(false);
++  const saveMenuRef = useRef<HTMLDivElement>(null);
++
++  // Cierra el menú Guardar con Escape o al pulsar fuera de él
++  useEffect(() => {
++    if (!showSaveMenu) return;
++    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowSaveMenu(false); };
++    const onDown = (e: MouseEvent | TouchEvent) => {
++      const t = e.target as Node;
++      if (saveMenuRef.current && !saveMenuRef.current.contains(t) && !(t as HTMLElement).closest?.('[aria-haspopup="dialog"]')) {
++        setShowSaveMenu(false);
++      }
++    };
++    document.addEventListener('keydown', onKey);
++    document.addEventListener('mousedown', onDown);
++    document.addEventListener('touchstart', onDown);
++    return () => {
++      document.removeEventListener('keydown', onKey);
++      document.removeEventListener('mousedown', onDown);
++      document.removeEventListener('touchstart', onDown);
++    };
++  }, [showSaveMenu]);
+   const [globalFeedback, setGlobalFeedback] = useState<string | null>(null);
+ 
+   // Filter & Search state
+@@ -441,6 +463,13 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+   // Save changes to active sound in Project
+   const handleSaveToProject = () => {
+     if (!activeSoundForm) return;
++    // Un sonido oficial no se sobrescribe: se guarda como copia editable en el proyecto
++    if (activeSoundForm.isGlobal) {
++      handleDuplicateToProject(activeSoundForm);
++      setGlobalFeedback('Copia del sonido guardada en tu proyecto.');
++      setTimeout(() => setGlobalFeedback(null), 3000);
++      return;
++    }
+ 
+     const updated = { ...activeSoundForm, isGlobal: false };
+ 
+@@ -933,37 +962,37 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+                 isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
+               }`}
+             >
+-              {/* Studio Header & Live Preview Bar */}
++              {/* Studio Header & Live Preview Bar (fija al hacer scroll, para probar mientras se editan las barras) */}
+               <div
+-                className={`p-4 rounded-xl border space-y-3 ${
+-                  isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-black/25 border-white/5'
++                className={`sticky top-[46px] sm:top-[58px] z-20 -mx-1 p-3 sm:p-4 rounded-xl border shadow-md ${
++                  isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1b150f] border-white/10'
+                 }`}
+               >
+-                <div className="flex items-center justify-between gap-3 flex-wrap">
+-                  <div className="flex items-center gap-2.5">
++                <div className="flex items-center justify-between gap-3">
++                  <div className="flex items-center gap-2.5 min-w-0">
+                     <div
+-                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
++                      className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center font-bold ${
+                         isClean ? 'bg-[#E5DCB8] text-[#A4332A]' : 'bg-amber-500/20 text-amber-400'
+                       }`}
+                     >
+                       <Volume2 className="w-5 h-5" />
+                     </div>
+-                    <div>
+-                      <h4 className={`text-sm font-bold ${isClean ? 'text-[#2A2118]' : 'text-white'}`}>
++                    <div className="min-w-0">
++                      <h4 className={`text-sm font-bold truncate ${isClean ? 'text-[#2A2118]' : 'text-white'}`}>
+                         {activeSoundForm.name}
+                       </h4>
+-                      <p className={`text-[11px] font-mono ${isClean ? 'text-[#872820] font-semibold' : 'text-amber-400'}`}>
++                      <p className={`text-[11px] font-mono truncate ${isClean ? 'text-[#872820] font-semibold' : 'text-amber-400'}`}>
+                         ID: {activeSoundForm.id}
+                       </p>
+                     </div>
+                   </div>
+ 
+-                  <div className="flex items-center gap-2">
++                  <div className="flex items-center gap-2 shrink-0">
+                     <button
+                       type="button"
+                       onClick={handleTestActiveForm}
+                       disabled={isPlayingTesting}
+-                      className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 text-white shadow-md transition-all cursor-pointer ${
++                      className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 text-white shadow-md transition-all cursor-pointer touch-manipulation ${
+                         isPlayingTesting
+                           ? 'bg-emerald-600 animate-pulse'
+                           : isClean
+@@ -972,12 +1001,193 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+                       }`}
+                     >
+                       {isPlayingTesting ? <Square className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
+-                      <span>{isPlayingTesting ? 'Reproduciendo...' : 'Probar Sonido'}</span>
++                      <span className="hidden sm:inline">{isPlayingTesting ? 'Reproduciendo...' : 'Probar Sonido'}</span>
++                      <span className="sm:hidden">{isPlayingTesting ? '...' : 'Probar'}</span>
++                    </button>
++                    <button
++                      type="button"
++                      onClick={() => setShowSaveMenu((v) => !v)}
++                      aria-expanded={showSaveMenu}
++                      aria-haspopup="dialog"
++                      className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 text-white shadow-md transition-all cursor-pointer touch-manipulation ${
++                        isClean ? 'bg-[#A4332A] hover:bg-[#872820]' : 'bg-amber-600 hover:bg-amber-500'
++                      }`}
++                    >
++                      <Save className="w-4 h-4" />
++                      <span>Guardar</span>
+                     </button>
+                   </div>
+                 </div>
++
++                {/* Menú de guardado: flota sobre el editor */}
++                {showSaveMenu && (
++                  <div
++                    ref={saveMenuRef}
++                    role="dialog"
++                    aria-label="Opciones de guardado"
++                    className={`absolute right-0 left-0 sm:left-auto sm:w-[460px] top-full mt-2 z-30 p-4 rounded-2xl border shadow-2xl space-y-4 ${
++                      isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
++                    }`}
++                  >
++                    <div className="flex items-center justify-between">
++                      <h5 className={`text-xs font-black uppercase tracking-wide ${isClean ? 'text-[#872820]' : 'text-amber-400'}`}>
++                        Guardar sonido
++                      </h5>
++                      <button
++                        type="button"
++                        onClick={() => setShowSaveMenu(false)}
++                        aria-label="Cerrar"
++                        className={`w-7 h-7 rounded-lg text-sm font-black cursor-pointer ${
++                          isClean ? 'text-[#6B5C46] hover:bg-[#EBE3CD]' : 'text-slate-400 hover:bg-white/10'
++                        }`}
++                      >
++                        ✕
++                      </button>
++                    </div>
++
++                    <div className="space-y-4">
++            
++            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
++              <div className="space-y-1">
++                <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
++                  Nombre del Sonido:
++                </label>
++                <input
++                  type="text"
++                  value={activeSoundForm.name}
++                  onChange={(e) => setActiveSoundForm({ ...activeSoundForm, name: e.target.value })}
++                  className={`w-full px-3 py-2 rounded-xl text-xs border ${
++                    isClean
++                      ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
++                      : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
++                  }`}
++                />
++              </div>
++
++              <div className="space-y-1">
++                <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
++                  Categoría Temática:
++                </label>
++                <select
++                  value={activeSoundForm.category}
++                  onChange={(e) =>
++                    setActiveSoundForm({ ...activeSoundForm, category: e.target.value as SoundCategory })
++                  }
++                  className={`w-full px-3 py-2 rounded-xl text-xs border ${
++                    isClean
++                      ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
++                      : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
++                  }`}
++                >
++                  {(['ui', 'action', 'movement', 'environment', 'magic', 'horror', 'music', 'custom'] as SoundCategory[]).map(
++                    (cat) => (
++                      <option key={cat} value={cat}>
++                        {CATEGORY_LABELS[cat]?.label}
++                      </option>
++                    )
++                  )}
++                </select>
++              </div>
++            </div>
++
++            
++            <div className="space-y-1">
++              <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
++                Descripción y Uso:
++              </label>
++              <input
++                type="text"
++                value={activeSoundForm.description || ''}
++                onChange={(e) => setActiveSoundForm({ ...activeSoundForm, description: e.target.value })}
++                placeholder="Ej: Sonido de cerradura al usar la llave dorada..."
++                className={`w-full px-3 py-2 rounded-xl text-xs border ${
++                  isClean
++                    ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
++                    : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
++                }`}
++              />
++            </div>
++                    </div>
++
++                    {activeSoundForm.isGlobal && !isAdmin && (
++                      <p className={`text-[11px] flex items-start gap-1.5 ${isClean ? 'text-[#6B5C46]' : 'text-slate-300'}`}>
++                        <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500" />
++                        <span>Es un sonido de la Biblioteca Oficial (solo lectura): al guardar se creará una copia editable en tu proyecto.</span>
++                      </p>
++                    )}
++
++                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
++                      <button
++                        type="button"
++                        onClick={() => { handleSaveToProject(); setShowSaveMenu(false); }}
++                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
++                        title="Lo verán todos los usuarios del proyecto"
++                      >
++                        <Save className="w-4 h-4" />
++                        <span>Guardar en el Proyecto</span>
++                      </button>
++                      <button
++                        type="button"
++                        onClick={() => { handleDuplicateToProject(activeSoundForm); setShowSaveMenu(false); }}
++                        className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
++                          isClean
++                            ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
++                            : 'bg-[#1F1913] hover:bg-[#2A2118] text-amber-200 border-amber-500/30'
++                        }`}
++                        title="Crear una copia editable de este sonido en tu proyecto"
++                      >
++                        <Copy className="w-3.5 h-3.5" />
++                        <span>Duplicar en mi Proyecto</span>
++                      </button>
++                      {!activeSoundForm.isGlobal && (
++                        <button
++                          type="button"
++                          onClick={() => { handleDeleteFromProject(activeSoundForm.id); setShowSaveMenu(false); }}
++                          className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
++                          title="Eliminar este sonido del proyecto"
++                        >
++                          <Trash2 className="w-4 h-4" />
++                          <span>Eliminar del Proyecto</span>
++                        </button>
++                      )}
++                    </div>
++                  </div>
++                )}
+               </div>
+ 
++              {/* Motor de síntesis (solo sintetizador) */}
++              {activeSoundForm.sourceType === 'synth' && (
++                  <div className="flex flex-wrap gap-2" role="group" aria-label="Motor de síntesis">
++                    {[
++                      { id: 'osc', label: 'Oscilador / Instrumento', desc: 'Pitidos, notas, efectos electrónicos' },
++                      { id: 'voice', label: 'Voz / Criatura', desc: 'Gritos, aullidos, gruñidos, respiración' },
++                    ].map((m) => {
++                      const active = (m.id === 'voice') === (activeSoundForm.synthConfig?.synthesisProfile === 'voice');
++                      return (
++                        <button
++                          key={m.id}
++                          type="button"
++                          aria-pressed={active}
++                          onClick={() => handleSelectEngine(m.id as 'osc' | 'voice')}
++                          className={`flex-1 min-w-[150px] p-2.5 rounded-xl border text-left transition-all cursor-pointer touch-manipulation ${
++                            active
++                              ? isClean
++                                ? 'bg-[#A4332A] text-white border-[#872820] shadow-sm'
++                                : 'bg-amber-600 text-white border-amber-500 shadow-sm'
++                              : isClean
++                              ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:bg-[#EBE3CD]'
++                              : 'bg-[#2C241C] border-[#42362B] text-slate-300 hover:text-white'
++                          }`}
++                        >
++                          <span className="block text-xs font-bold">{m.label}</span>
++                          <span className={`block text-[10px] mt-0.5 ${active ? 'text-white/80' : isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>{m.desc}</span>
++                        </button>
++                      );
++                    })}
++                  </div>
++
++              )}
++
+               {/* Source Type Selector: Synth vs URL */}
+               <div className="space-y-1.5">
+                 <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
+@@ -1020,68 +1230,6 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+                 </div>
+               </div>
+ 
+-              {/* Basic Fields: Name, Category, Description */}
+-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+-                <div className="space-y-1">
+-                  <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
+-                    Nombre del Sonido:
+-                  </label>
+-                  <input
+-                    type="text"
+-                    value={activeSoundForm.name}
+-                    onChange={(e) => setActiveSoundForm({ ...activeSoundForm, name: e.target.value })}
+-                    className={`w-full px-3 py-2 rounded-xl text-xs border ${
+-                      isClean
+-                        ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+-                        : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+-                    }`}
+-                  />
+-                </div>
+-
+-                <div className="space-y-1">
+-                  <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
+-                    Categoría Temática:
+-                  </label>
+-                  <select
+-                    value={activeSoundForm.category}
+-                    onChange={(e) =>
+-                      setActiveSoundForm({ ...activeSoundForm, category: e.target.value as SoundCategory })
+-                    }
+-                    className={`w-full px-3 py-2 rounded-xl text-xs border ${
+-                      isClean
+-                        ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+-                        : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+-                    }`}
+-                  >
+-                    {(['ui', 'action', 'movement', 'environment', 'magic', 'horror', 'music', 'custom'] as SoundCategory[]).map(
+-                      (cat) => (
+-                        <option key={cat} value={cat}>
+-                          {CATEGORY_LABELS[cat]?.label}
+-                        </option>
+-                      )
+-                    )}
+-                  </select>
+-                </div>
+-              </div>
+-
+-              {/* Description */}
+-              <div className="space-y-1">
+-                <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
+-                  Descripción y Uso:
+-                </label>
+-                <input
+-                  type="text"
+-                  value={activeSoundForm.description || ''}
+-                  onChange={(e) => setActiveSoundForm({ ...activeSoundForm, description: e.target.value })}
+-                  placeholder="Ej: Sonido de cerradura al usar la llave dorada..."
+-                  className={`w-full px-3 py-2 rounded-xl text-xs border ${
+-                    isClean
+-                      ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+-                      : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+-                  }`}
+-                />
+-              </div>
+-
+               {/* ==================== URL MODE ==================== */}
+               {activeSoundForm.sourceType === 'url' && (
+                 <div
+@@ -1145,36 +1293,6 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+               {/* ==================== SYNTHESIZER MODE ==================== */}
+               {activeSoundForm.sourceType === 'synth' && (
+                 <div className="space-y-5">
+-                  {/* Motor de síntesis */}
+-                  <div className="flex flex-wrap gap-2" role="group" aria-label="Motor de síntesis">
+-                    {[
+-                      { id: 'osc', label: 'Oscilador / Instrumento', desc: 'Pitidos, notas, efectos electrónicos' },
+-                      { id: 'voice', label: 'Voz / Criatura', desc: 'Gritos, aullidos, gruñidos, respiración' },
+-                    ].map((m) => {
+-                      const active = (m.id === 'voice') === (activeSoundForm.synthConfig?.synthesisProfile === 'voice');
+-                      return (
+-                        <button
+-                          key={m.id}
+-                          type="button"
+-                          aria-pressed={active}
+-                          onClick={() => handleSelectEngine(m.id as 'osc' | 'voice')}
+-                          className={`flex-1 min-w-[150px] p-2.5 rounded-xl border text-left transition-all cursor-pointer touch-manipulation ${
+-                            active
+-                              ? isClean
+-                                ? 'bg-[#A4332A] text-white border-[#872820] shadow-sm'
+-                                : 'bg-amber-600 text-white border-amber-500 shadow-sm'
+-                              : isClean
+-                              ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] hover:bg-[#EBE3CD]'
+-                              : 'bg-[#2C241C] border-[#42362B] text-slate-300 hover:text-white'
+-                          }`}
+-                        >
+-                          <span className="block text-xs font-bold">{m.label}</span>
+-                          <span className={`block text-[10px] mt-0.5 ${active ? 'text-white/80' : isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>{m.desc}</span>
+-                        </button>
+-                      );
+-                    })}
+-                  </div>
+-
+                   {activeSoundForm.synthConfig?.synthesisProfile === 'voice' && (
+                     <VoicePanel
+                       config={activeSoundForm.synthConfig}
+@@ -1495,6 +1613,27 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+                       </div>
+                     </div>
+ 
++                    {/* Sin decaimiento */}
++                    <label className={`flex items-start gap-2 text-xs font-bold cursor-pointer ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
++                      <input
++                        type="checkbox"
++                        checked={!!activeSoundForm.synthConfig?.sustain}
++                        onChange={(e) =>
++                          setActiveSoundForm({
++                            ...activeSoundForm,
++                            synthConfig: { ...(activeSoundForm.synthConfig as SynthSoundConfig), sustain: e.target.checked },
++                          })
++                        }
++                        className="mt-0.5 w-4 h-4 accent-amber-600"
++                      />
++                      <span>
++                        Sin decaimiento (volumen constante)
++                        <span className={`block text-[10px] font-normal ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
++                          Mantiene la misma fuerza hasta el final. Actúa en ondas básicas, ruido y modo personalizado; los instrumentos de percusión o pulsados conservan su caída natural.
++                        </span>
++                      </span>
++                    </label>
++
+                     {/* Arpeggio Notes Editor (if arpeggio selected) */}
+                     {activeSoundForm.synthConfig?.oscType === 'arpeggio' && (
+                       <div
+@@ -1607,65 +1746,21 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
+                   </div>
+                 )}
+ 
+-                <div className="flex items-center justify-between gap-3 flex-wrap">
+-                  <div className="flex items-center gap-2">
+-                    {/* Duplicate button */}
++                {/* Solo administradores: guardar en la biblioteca global (separado a propósito del menú Guardar) */}
++                {isAdmin && (
++                  <div className="flex justify-end">
+                     <button
+                       type="button"
+-                      onClick={() => handleDuplicateToProject(activeSoundForm)}
+-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+-                        isClean
+-                          ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+-                          : 'bg-[#1F1913] hover:bg-[#2A2118] text-amber-200 border-amber-500/30'
+-                      }`}
+-                      title="Crear una copia editable de este sonido en tu proyecto"
++                      onClick={handleAdminSaveToGlobalLibrary}
++                      disabled={isSavingGlobal}
++                      className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-60"
++                      title="Guardar y propagar cambios a toda la plataforma en Firestore"
+                     >
+-                      <Copy className="w-3.5 h-3.5" />
+-                      <span>Duplicar en mi Proyecto</span>
++                      <Shield className="w-4 h-4" />
++                      <span>{isSavingGlobal ? 'Guardando en Firestore...' : 'Guardar en Biblioteca Global'}</span>
+                     </button>
+-
+-                    {/* Delete button from Project */}
+-                    {!activeSoundForm.isGlobal && (
+-                      <button
+-                        type="button"
+-                        onClick={() => handleDeleteFromProject(activeSoundForm.id)}
+-                        className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+-                        title="Eliminar este sonido del proyecto"
+-                      >
+-                        <Trash2 className="w-4 h-4" />
+-                        <span>Eliminar del Proyecto</span>
+-                      </button>
+-                    )}
+                   </div>
+-
+-                  <div className="flex items-center gap-2 flex-wrap">
+-                    {/* If sound is project custom: Save to project */}
+-                    {!activeSoundForm.isGlobal && (
+-                      <button
+-                        type="button"
+-                        onClick={handleSaveToProject}
+-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+-                      >
+-                        <Save className="w-4 h-4" />
+-                        <span>Guardar en el Proyecto</span>
+-                      </button>
+-                    )}
+-
+-                    {/* If Admin: Option to save to global Firestore library */}
+-                    {isAdmin && (
+-                      <button
+-                        type="button"
+-                        onClick={handleAdminSaveToGlobalLibrary}
+-                        disabled={isSavingGlobal}
+-                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+-                        title="Guardar y propagar cambios a toda la plataforma en Firestore"
+-                      >
+-                        <Shield className="w-4 h-4" />
+-                        <span>{isSavingGlobal ? 'Guardando en Firestore...' : 'Guardar en Biblioteca Global'}</span>
+-                      </button>
+-                    )}
+-                  </div>
+-                </div>
++                )}
+               </div>
+             </div>
+           ) : (
+diff --git a/src/components/Editor/VoicePanel.tsx b/src/components/Editor/VoicePanel.tsx
+index 05508c4..3655abc 100644
+--- a/src/components/Editor/VoicePanel.tsx
++++ b/src/components/Editor/VoicePanel.tsx
+@@ -475,7 +475,22 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
+             {activeEnv ? activeEnv.label : 'Personalizada'}
+           </span>
+         </div>
+-        <MiniCurve pts={envelope} isClean={isClean} label="Envolvente de volumen" />
++        <label className={`flex items-start gap-2 text-xs font-bold cursor-pointer ${txt}`}>
++          <input
++            type="checkbox"
++            checked={!!config.sustain}
++            onChange={(e) => onChangeAndPlay({ ...config, sustain: e.target.checked })}
++            className="mt-0.5 w-4 h-4 accent-amber-600"
++          />
++          <span>
++            Sin decaimiento (volumen constante)
++            <span className={`block text-[10px] font-normal ${isClean ? 'text-[#6B5C46]' : 'text-slate-500'}`}>
++              El sonido se mantiene a la misma fuerza hasta el final, con una entrada y salida muy cortas.
++            </span>
++          </span>
++        </label>
++        <div className={config.sustain ? 'opacity-40 pointer-events-none' : ''} aria-disabled={!!config.sustain}>
++        <MiniCurve pts={config.sustain ? [0, 1, 1, 1, 0] : envelope} isClean={isClean} label="Envolvente de volumen" />
+         <div className="flex flex-wrap gap-1.5">
+           {ENVELOPE_SHAPES.map((s) => (
+             <Chip key={s.id} isClean={isClean} active={activeEnv?.id === s.id} onClick={() => setVoicePlay({ envelope: s.pts })}>
+@@ -483,6 +498,7 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
+             </Chip>
+           ))}
+         </div>
++        </div>
+       </div>
+     </div>
+   );
+diff --git a/src/types.ts b/src/types.ts
+index 86b0dec..4ee4958 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -85,6 +85,8 @@ export interface VoiceConfig {
+ 
+ export interface SynthSoundConfig {
+   // 'voice': motor de voz orgánica configurable (voice). 'animal_cry': modelo fijo de maullido.
++  /** Mantiene el volumen constante hasta el final (sin decaimiento). */
++  sustain?: boolean;
+   synthesisProfile?: 'animal_cry' | 'voice';
+   voice?: VoiceConfig;
+   oscType: 'sine' | 'triangle' | 'square' | 'sawtooth' | 'noise' | 'fm_synth' | 'arpeggio' | 'laser';
+diff --git a/src/utils/audio.ts b/src/utils/audio.ts
+index 103f6ec..ef0bc78 100644
+--- a/src/utils/audio.ts
++++ b/src/utils/audio.ts
+@@ -1016,7 +1016,12 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
+     const gain = ctx.createGain();
+     gain.gain.setValueAtTime(0.01, now);
+     gain.gain.linearRampToValueAtTime(vol, now + Math.min(0.04, dur * 0.2));
+-    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
++    if (config.sustain) {
++      gain.gain.setValueAtTime(vol, now + Math.max(0.05, dur - 0.05));
++      gain.gain.linearRampToValueAtTime(0.001, now + dur);
++    } else {
++      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
++    }
+ 
+     if (config.filterType && config.filterType !== 'none') {
+       const filter = ctx.createBiquadFilter();
+@@ -1084,7 +1089,12 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
+   // Envelope
+   mainGain.gain.setValueAtTime(0, now);
+   mainGain.gain.linearRampToValueAtTime(vol, now + Math.min(0.03, dur * 0.15));
+-  mainGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
++  if (config.sustain) {
++    mainGain.gain.setValueAtTime(vol, now + Math.max(0.04, dur - 0.05));
++    mainGain.gain.linearRampToValueAtTime(0.001, now + dur);
++  } else {
++    mainGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
++  }
+ 
+   // Optional Filter Node
+   if (config.filterType && config.filterType !== 'none') {
+@@ -1111,7 +1121,12 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
+     const noiseGain = ctx.createGain();
+     const noiseVol = vol * config.noiseMix;
+     noiseGain.gain.setValueAtTime(noiseVol, now);
+-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.8);
++    if (config.sustain) {
++      noiseGain.gain.setValueAtTime(noiseVol, now + dur * 0.8 - 0.05);
++      noiseGain.gain.linearRampToValueAtTime(0.001, now + dur * 0.8);
++    } else {
++      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.8);
++    }
+ 
+     const noiseFilter = ctx.createBiquadFilter();
+     noiseFilter.type = 'lowpass';
+diff --git a/src/utils/htmlExporter.ts b/src/utils/htmlExporter.ts
+index 6af0466..b8ebc44 100644
+--- a/src/utils/htmlExporter.ts
++++ b/src/utils/htmlExporter.ts
+@@ -521,7 +521,8 @@ ${VOICE_ENGINE_EMBED}
+           }
+           g.gain.setValueAtTime(0, now);
+           g.gain.linearRampToValueAtTime(vol, now + Math.min(0.03, dur * 0.15));
+-          g.gain.exponentialRampToValueAtTime(0.001, now + dur);
++          if (sc.sustain) { g.gain.setValueAtTime(vol, now + Math.max(0.04, dur - 0.05)); g.gain.linearRampToValueAtTime(0.001, now + dur); }
++          else g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+           o.connect(g); g.connect(audioCtx.destination); o.start(now); o.stop(now + dur + 0.05);
+           return;
+         }
+diff --git a/src/utils/voiceEngine.js b/src/utils/voiceEngine.js
+index 2b2fc67..3f2ae3d 100644
+--- a/src/utils/voiceEngine.js
++++ b/src/utils/voiceEngine.js
+@@ -131,6 +131,15 @@ export function playVoiceSynth(ctx, config, startTime, startSource, destination)
+     if (shimmer > 0) e *= 1 + shimmer * 0.22 * shimmerNoise();
+     return x >= 0.999 ? 0 : clamp(e, 0, 1.4);
+   });
++  if (config.sustain) {
++    // Sin decaimiento: volumen constante; solo una entrada y una salida cortas para evitar chasquidos
++    for (let i = 0; i < envCurve.length; i++) {
++      const t = (i / (envCurve.length - 1)) * dur;
++      const edge = Math.min(1, t / 0.04, (dur - t) / 0.05);
++      const wob = shimmer > 0 ? 1 + shimmer * 0.22 * shimmerNoise() : 1;
++      envCurve[i] = clamp(edge, 0, 1) * 0.95 * wob;
++    }
++  }
+   envCurve[0] = Math.min(envCurve[0], 0.0001);
+ 
+   // ---- Cadena de audio ----
