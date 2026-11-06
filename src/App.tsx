@@ -75,7 +75,14 @@ export default function App() {
         } else {
           const docData = await getProjectByIdFromCloud(gameParam);
           if (docData) {
-            const targetProj = sanitizeProjectForPlay(docData.publishedData || docData.projectData);
+            const baseData = docData.publishedData || docData.projectData;
+            const targetProj = sanitizeProjectForPlay({
+              ...baseData,
+              id: docData.id,
+              ratingAverage: docData.ratingAverage,
+              ratingCount: docData.ratingCount,
+              publishedVersion: docData.publishedVersion,
+            });
             setProject(targetProj);
             setCurrentCloudDocId(docData.id);
             resetGameStateForProject(targetProj);
@@ -441,6 +448,7 @@ export default function App() {
             onPlayProject={(selectedProj) => {
               const projToPlay = sanitizeProjectForPlay(selectedProj);
               setProject(projToPlay);
+              if (selectedProj.id) setCurrentCloudDocId(selectedProj.id);
               resetGameStateForProject(projToPlay);
               setCurrentView('play');
             }}

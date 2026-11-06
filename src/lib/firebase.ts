@@ -981,3 +981,169 @@ export async function resetGlobalSoundLibraryInFirestore(adminEmail: string): Pr
   return saveGlobalSoundLibraryToFirestore(DEFAULT_SOUND_LIBRARY, adminEmail);
 }
 
+/**
+ * Story Rating System (5-Star Scale)
+ * Ratings accumulate across all versions of a story.
+ */
+
+export function getOrCreateReaderDeviceId(): string {
+  try {
+    let id = localStorage.getItem('urdimbre_reader_id');
+    if (!id) {
+      id = 'reader_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      localStorage.setItem('urdimbre_reader_id', id);
+    }
+    return id;
+  } catch {
+    return 'reader_session';
+  }
+}
+
+export async function submitStoryRating(
+  storyId: string,
+  newRating: number,
+  userId?: string
+): Promise<{ ratingAverage: number; ratingCount: number; userRating: number }> {
+  const sanitizedRating = Math.max(1, Math.min(5, Math.round(newRating)));
+  const userKey = userId || auth.currentUser?.uid || getOrCreateReaderDeviceId();
+  const localKey = `urdimbre_rating_${storyId}`;
+  const previousLocalRating = Number(localStorage.getItem(localKey)) || 0;
+
+  let count = 0;
+  let total = 0;
+  let oldRating = previousLocalRating;
+
+  try {
+    // 1. Fetch current project rating totals
+    const projRef = doc(db, 'projects', storyId);
+    const projSnap = await getDoc(projRef);
+
+    if (projSnap.exists()) {
+      const data = projSnap.data() as CloudProjectDoc;
+      count = data.ratingCount || 0;
+      total = data.ratingTotal || 0;
+
+      // 2. Check if this user had already submitted a rating in Firestore
+      const ratingDocRef = doc(db, 'story_ratings', `${storyId}_${userKey}`);
+      const ratingSnap = await getDoc(ratingDocRef);
+      if (ratingSnap.exists()) {
+        const ratingData = ratingSnap.data();
+        if (typeof ratingData.rating === 'number') {
+          oldRating = ratingData.rating;
+        }
+      }
+
+      // 3. Compute new cumulative totals
+      if (oldRating > 0 && count > 0) {
+        // User is editing their existing rating
+        total = Math.max(0, total - oldRating + sanitizedRating);
+      } else {
+        // Brand new rating
+        count += 1;
+        total += sanitizedRating;
+      }
+
+      const average = count > 0 ? Math.round((total / count) * 10) / 10 : sanitizedRating;
+
+      // 4. Update the project document and rating record atomically / in sequence
+      await updateDoc(projRef, {
+        ratingCount: count,
+        ratingTotal: total,
+        ratingAverage: average,
+      });
+
+      await setDoc(ratingDocRef, {
+        storyId,
+        userId: userKey,
+        rating: sanitizedRating,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+
+      // Save to localStorage
+      try {
+        localStorage.setItem(localKey, String(sanitizedRating));
+        localStorage.setItem(`urdimbre_rating_summary_${storyId}`, JSON.stringify({ ratingAverage: average, ratingCount: count }));
+      } catch (e) {
+        // Ignore localStorage quota errors
+      }
+
+      return { ratingAverage: average, ratingCount: count, userRating: sanitizedRating };
+    }
+  } catch (err) {
+    console.warn('Could not submit rating to Firestore, falling back to local storage:', err);
+  }
+
+  // Local fallback for offline or non-cloud sample games
+  try {
+    const summaryRaw = localStorage.getItem(`urdimbre_rating_summary_${storyId}`);
+    let localSummary = summaryRaw ? JSON.parse(summaryRaw) : null;
+    let localCount = localSummary?.ratingCount || (previousLocalRating > 0 ? 1 : 0);
+    let localTotal = localSummary ? (localSummary.ratingAverage * localCount) : previousLocalRating;
+
+    if (previousLocalRating > 0 && localCount > 0) {
+      localTotal = Math.max(0, localTotal - previousLocalRating + sanitizedRating);
+    } else {
+      localCount += 1;
+      localTotal += sanitizedRating;
+    }
+
+    const localAvg = localCount > 0 ? Math.round((localTotal / localCount) * 10) / 10 : sanitizedRating;
+    localStorage.setItem(localKey, String(sanitizedRating));
+    localStorage.setItem(`urdimbre_rating_summary_${storyId}`, JSON.stringify({ ratingAverage: localAvg, ratingCount: localCount }));
+
+    return { ratingAverage: localAvg, ratingCount: localCount, userRating: sanitizedRating };
+  } catch {
+    return { ratingAverage: sanitizedRating, ratingCount: 1, userRating: sanitizedRating };
+  }
+}
+
+export async function getStoryRating(
+  storyId: string,
+  userId?: string
+): Promise<{ ratingAverage: number; ratingCount: number; userRating?: number }> {
+  const userKey = userId || auth.currentUser?.uid || getOrCreateReaderDeviceId();
+  const localKey = `urdimbre_rating_${storyId}`;
+  let userRating = Number(localStorage.getItem(localKey)) || undefined;
+
+  let ratingAverage = 0;
+  let ratingCount = 0;
+
+  try {
+    const projRef = doc(db, 'projects', storyId);
+    const projSnap = await getDoc(projRef);
+    if (projSnap.exists()) {
+      const data = projSnap.data() as CloudProjectDoc;
+      ratingAverage = data.ratingAverage || 0;
+      ratingCount = data.ratingCount || 0;
+    }
+
+    // Check user rating from Firestore if not found locally
+    if (!userRating) {
+      const ratingDocRef = doc(db, 'story_ratings', `${storyId}_${userKey}`);
+      const ratingSnap = await getDoc(ratingDocRef);
+      if (ratingSnap.exists()) {
+        const ratingData = ratingSnap.data();
+        if (typeof ratingData.rating === 'number') {
+          userRating = ratingData.rating;
+          try {
+            localStorage.setItem(localKey, String(userRating));
+          } catch {}
+        }
+      }
+    }
+
+    return { ratingAverage, ratingCount, userRating };
+  } catch (err) {
+    // Local fallback
+    try {
+      const summaryRaw = localStorage.getItem(`urdimbre_rating_summary_${storyId}`);
+      if (summaryRaw) {
+        const summary = JSON.parse(summaryRaw);
+        ratingAverage = summary.ratingAverage || 0;
+        ratingCount = summary.ratingCount || 0;
+      }
+    } catch {}
+    return { ratingAverage, ratingCount, userRating };
+  }
+}
+

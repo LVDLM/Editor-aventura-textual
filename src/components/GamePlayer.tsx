@@ -40,6 +40,8 @@ import {
   Highlighter,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { StarRatingDisplay, StoryRatingWidget } from './common/StarRating';
+import { getStoryRating } from '../lib/firebase';
 
 interface GamePlayerProps {
   project: GameProject;
@@ -354,6 +356,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     narrativeRef.current?.scrollTo({ top: 0 });
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [gameState.currentSceneId]);
+
+  // Fetch live accumulated rating for story
+  useEffect(() => {
+    if (project?.id) {
+      getStoryRating(project.id).then((res) => {
+        if (res && res.ratingAverage > 0 && updateProject) {
+          updateProject((p) => ({
+            ...p,
+            ratingAverage: res.ratingAverage,
+            ratingCount: res.ratingCount,
+          }));
+        }
+      });
+    }
+  }, [project?.id]);
 
   useEffect(() => {
     setQteMistakeMsg(null);
@@ -1915,6 +1932,25 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               )}
             </div>
           </div>
+
+          {/* 5-Star Story Rating Widget (Visible exclusively upon reaching good ending) */}
+          <div className="my-6">
+            <StoryRatingWidget
+              storyId={project.id || 'current_story'}
+              initialAverage={project.ratingAverage}
+              initialCount={project.ratingCount}
+              theme={isSepia ? 'sepia' : 'dark'}
+              onRatingSubmitted={(res) => {
+                if (updateProject) {
+                  updateProject((p) => ({
+                    ...p,
+                    ratingAverage: res.ratingAverage,
+                    ratingCount: res.ratingCount,
+                  }));
+                }
+              }}
+            />
+          </div>
         </>
       );
     }
@@ -2038,13 +2074,45 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               </div>
             )}
 
+            {/* Mobile Portada Version & Rating Badge */}
+            {isPortada && (
+              <div className={`md:hidden flex items-center justify-between px-3 py-1.5 mb-2.5 rounded-xl border ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
+                <span className={`font-mono text-xs ${themeConfig.textMutedClass}`}>
+                  v{project.version || '1.0'}
+                </span>
+                <StarRatingDisplay
+                  rating={project.ratingAverage}
+                  count={project.ratingCount}
+                  size="xs"
+                  theme={isSepia ? 'sepia' : 'dark'}
+                />
+              </div>
+            )}
+
             {/* PC Scene Header with Difficulty Selector */}
             <div className={`hidden md:flex flex-wrap items-center justify-between gap-3 border-b pb-3 ${themeConfig.cardBorderClass}`}>
-              <div className="flex items-center gap-2">
-                <Compass className={`w-5 h-5 ${themeConfig.accentClass}`} />
-                <h2 className={`font-bold text-xl ${themeConfig.textMainClass}`}>
-                  {currentScene?.name || 'Escena'}
-                </h2>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Compass className={`w-5 h-5 ${themeConfig.accentClass}`} />
+                  <h2 className={`font-bold text-xl ${themeConfig.textMainClass}`}>
+                    {currentScene?.name || 'Escena'}
+                  </h2>
+                </div>
+
+                {isPortada && (
+                  <div className={`flex items-center gap-2 px-2.5 py-1 rounded-xl border ${themeConfig.buttonBgClass} ${themeConfig.buttonBorderClass}`}>
+                    <span className={`font-mono text-xs ${themeConfig.textMutedClass}`}>
+                      v{project.version || '1.0'}
+                    </span>
+                    <span className="opacity-30">•</span>
+                    <StarRatingDisplay
+                      rating={project.ratingAverage}
+                      count={project.ratingCount}
+                      size="xs"
+                      theme={isSepia ? 'sepia' : 'dark'}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -2844,7 +2912,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <BookOpen className={`w-5 h-5 ${isSepia ? 'text-[#822b16]' : 'text-amber-400'}`} />
                   <div>
                     <h3 className={`font-bold text-base ${isSepia ? 'text-[#3b2d1d]' : 'text-slate-100'}`}>{project.title}</h3>
-                    <p className={`text-xs ${isSepia ? 'text-[#786146]' : 'text-slate-400'}`}>Por {project.author || 'Autor anónimo'} • v{project.version || '1.0'}</p>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      <p className={`text-xs ${isSepia ? 'text-[#786146]' : 'text-slate-400'}`}>Por {project.author || 'Autor anónimo'} • v{project.version || '1.0'}</p>
+                      <StarRatingDisplay
+                        rating={project.ratingAverage}
+                        count={project.ratingCount}
+                        size="xs"
+                        theme={isSepia ? 'sepia' : 'dark'}
+                      />
+                    </div>
                   </div>
                 </div>
                 <button

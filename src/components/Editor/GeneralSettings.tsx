@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GameProject, EngineTheme, VerbType, UserProfile, GENRE_TAGS, VerbDefinition } from '../../types';
 import { ALL_VERBS, getProjectVerbs, AVAILABLE_VERB_ICONS, renderVerbIcon } from '../../utils/verbs';
-import { Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, Sparkles, Check, X, ShieldAlert, Edit2 } from 'lucide-react';
+import { Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, Check, X, ShieldAlert, Edit2 } from 'lucide-react';
 
 interface GeneralSettingsProps {
   project: GameProject;
@@ -481,8 +481,7 @@ export const GeneralSettings: React.FC<GeneralSettingsProps> = ({
           isClean ? 'border-slate-200' : 'border-slate-800'
         }`}>
           <div>
-            <h3 className={`font-bold text-base flex items-center gap-2 ${isClean ? 'text-slate-900' : 'text-slate-100'}`}>
-              <Sparkles className="w-5 h-5 text-amber-500" />
+            <h3 className={`font-bold text-base ${isClean ? 'text-slate-900' : 'text-slate-100'}`}>
               <span>Verbos de Acción y Mensajes Genéricos (Fallbacks)</span>
             </h3>
             <p className={`text-xs mt-1 ${isClean ? 'text-slate-500' : 'text-slate-400'}`}>

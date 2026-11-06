@@ -5,6 +5,7 @@ import { exportProjectAsZip } from '../../utils/zipExporter';
 import { Plus, Edit3, Play, CloudUpload, Send, Trash2, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen, Upload, FileJson } from 'lucide-react';
 import { EditStoryModal } from './EditStoryModal';
 import { ImportJSONModal, ImportPendingData } from './ImportJSONModal';
+import { StarRatingDisplay } from '../common/StarRating';
 
 interface ProjectWorkspaceProps {
   currentUser: UserProfile | null;
@@ -274,9 +275,17 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
       case 'published':
         return (
           <div className="flex flex-col items-end gap-1">
-            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 font-semibold">
-              🟢 Publicado v{doc.publishedVersion || 1}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 font-semibold">
+                🟢 Publicado v{doc.publishedVersion || 1}
+              </span>
+              <StarRatingDisplay
+                rating={doc.ratingAverage}
+                count={doc.ratingCount}
+                size="xs"
+                theme="dark"
+              />
+            </div>
             {doc.hasUnpublishedChanges && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
                 ✏️ Cambios sin publicar (v{(doc.publishedVersion || 1) + 1} en edición)

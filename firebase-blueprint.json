@@ -29,9 +29,25 @@
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" },
         "publishedAt": { "type": "string" },
-        "reviewFeedback": { "type": "string" }
+        "reviewFeedback": { "type": "string" },
+        "ratingAverage": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "ratingTotal": { "type": "number" }
       },
       "required": ["title", "authorId", "status", "projectData"]
+    },
+    "story_ratings": {
+      "title": "Story Rating",
+      "description": "User ratings and 1-5 star reviews submitted at the good ending of stories",
+      "type": "object",
+      "properties": {
+        "storyId": { "type": "string" },
+        "rating": { "type": "number", "minimum": 1, "maximum": 5 },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["storyId", "rating"]
     },
     "global_settings": {
       "title": "Global System Settings & Sound Library",

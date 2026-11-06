@@ -325,6 +325,11 @@ export interface GameProject {
   allowDownload?: boolean; // Whether users other than author/admin can download story
   genreTags?: string[]; // Genre tags chosen by author/admin
   
+  ratingAverage?: number; // Puntuación media en escala de 5 estrellas (e.g. 4.8)
+  ratingCount?: number; // Número total de valoraciones acumuladas
+  ratingTotal?: number; // Suma acumulada de estrellas
+  publishedVersion?: number; // Versión pública activa (1, 2, 3...)
+
   gameCompleteTitle?: string; // Custom title for end message banner (e.g., "¡FIN DE LA AVENTURA!")
   gameCompleteSubtitle?: string; // Custom subtitle for end message banner (e.g., "Has completado felizmente la historia.")
 
@@ -391,5 +396,17 @@ export interface CloudProjectDoc {
   genre?: string;
   genreTags?: string[];
   allowDownload?: boolean; // Whether non-author users can download HTML/ZIP
+  ratingAverage?: number; // Puntuación media en escala de 5 estrellas (e.g. 4.8)
+  ratingCount?: number; // Número total de valoraciones acumuladas
+  ratingTotal?: number; // Suma acumulada de estrellas
+}
+
+export interface StoryRating {
+  id?: string;
+  storyId: string;
+  rating: number; // 1 to 5
+  userId?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 

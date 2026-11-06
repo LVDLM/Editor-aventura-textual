@@ -40,13 +40,32 @@ service cloud.firestore {
 
       // Authors can update their own projects (as long as they don't self-publish unless they are admin)
       // Admins can update any project (including publishing and reviewing)
-      allow update: if request.auth != null && (
-        isAdmin() || 
-        (isOwner(resource.data.authorId) && (request.resource.data.status != 'published' || resource.data.status == 'published'))
+      // Readers can update the aggregated rating fields
+      allow update: if (
+        (request.auth != null && (
+          isAdmin() || 
+          (isOwner(resource.data.authorId) && (request.resource.data.status != 'published' || resource.data.status == 'published'))
+        )) ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratingCount', 'ratingTotal', 'ratingAverage']) &&
+          request.resource.data.ratingCount is number &&
+          request.resource.data.ratingTotal is number &&
+          request.resource.data.ratingAverage is number
+        )
       );
 
       // Authors can delete their own drafts/projects, Admins can delete any
       allow delete: if (resource != null && isOwner(resource.data.authorId)) || isAdmin();
+    }
+
+    // Story ratings collection (1-5 stars submitted upon completing a story)
+    match /story_ratings/{ratingId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.rating is number &&
+                               request.resource.data.rating >= 1 &&
+                               request.resource.data.rating <= 5 &&
+                               request.resource.data.storyId is string;
+      allow delete: if isAdmin();
     }
 
     // Global settings & shared sound library collection

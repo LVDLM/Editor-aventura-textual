@@ -6,6 +6,7 @@ import { sampleGameProject } from '../../data/sampleGame';
 import { exportProjectAsZip } from '../../utils/zipExporter';
 import { renderTextWithLinks } from '../../utils/textUtils';
 import { EditStoryModal } from './EditStoryModal';
+import { StarRatingDisplay } from '../common/StarRating';
 
 interface PublicCatalogProps {
   onPlayProject: (project: GameProject) => void;
@@ -374,10 +375,18 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                           }`}>
                             #{primaryGenre}
                           </span>
-                          {/* Discreet version */}
-                          <span className="text-[10px] text-[#6B5C46] font-mono">
-                            v{doc.publishedVersion || 1}
-                          </span>
+                          {/* Discreet version & Star Rating */}
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <StarRatingDisplay
+                              rating={doc.ratingAverage}
+                              count={doc.ratingCount}
+                              size="xs"
+                              theme={isClean ? 'light' : 'dark'}
+                            />
+                            <span className="text-[10px] text-[#6B5C46] font-mono">
+                              v{doc.publishedVersion || 1}
+                            </span>
+                          </div>
                         </div>
 
                         <h3
@@ -431,7 +440,13 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     <div className="pt-4 space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => onPlayProject(doc.publishedData || doc.projectData)}
+                          onClick={() => onPlayProject({
+                            ...(doc.publishedData || doc.projectData),
+                            id: doc.id,
+                            ratingAverage: doc.ratingAverage,
+                            ratingCount: doc.ratingCount,
+                            publishedVersion: doc.publishedVersion,
+                          })}
                           className="py-2.5 px-3 bg-[#A4332A] hover:bg-[#8B2A22] text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
                         >
                           <Play className="w-3.5 h-3.5 fill-white" />
@@ -669,9 +684,22 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 <h2 className={`text-xl font-serif font-bold ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
                   {selectedDocModal.title}
                 </h2>
-                <p className={`text-xs font-medium ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>
-                  Autor / Creador: <strong className={isClean ? 'text-[#A4332A] font-bold' : 'text-[#C9A24B] font-bold'}>{selectedDocModal.authorName}</strong>
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className={`text-xs font-medium ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>
+                    Autor / Creador: <strong className={isClean ? 'text-[#A4332A] font-bold' : 'text-[#C9A24B] font-bold'}>{selectedDocModal.authorName}</strong>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <StarRatingDisplay
+                      rating={selectedDocModal.ratingAverage}
+                      count={selectedDocModal.ratingCount}
+                      size="sm"
+                      theme={isClean ? 'light' : 'dark'}
+                    />
+                    <span className="text-xs text-[#6B5C46] font-mono">
+                      • v{selectedDocModal.publishedVersion || 1}
+                    </span>
+                  </div>
+                </div>
 
                 {(selectedDocModal.genreTags || selectedDocModal.projectData?.genreTags)?.length ? (
                   <div className="flex flex-wrap gap-1.5 pt-1">
@@ -866,7 +894,13 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   onClick={() => {
                     const data = selectedDocModal.publishedData || selectedDocModal.projectData;
                     setSelectedDocModal(null);
-                    onPlayProject(data);
+                    onPlayProject({
+                      ...data,
+                      id: selectedDocModal.id,
+                      ratingAverage: selectedDocModal.ratingAverage,
+                      ratingCount: selectedDocModal.ratingCount,
+                      publishedVersion: selectedDocModal.publishedVersion,
+                    });
                   }}
                   className={`px-6 py-2.5 font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95 ${
                     isClean
