@@ -59,6 +59,91 @@ interface SceneEditorProps {
   webAspect?: 'clean' | 'classic';
 }
 
+interface ParagraphOrderBadgeProps {
+  index: number;
+  total: number;
+  onMove: (fromIndex: number, toIndex: number) => void;
+}
+
+const ParagraphOrderBadge: React.FC<ParagraphOrderBadgeProps> = ({
+  index,
+  total,
+  onMove,
+}) => {
+  const [inputValue, setInputValue] = useState<string>(String(index + 1));
+
+  React.useEffect(() => {
+    setInputValue(String(index + 1));
+  }, [index]);
+
+  const commitChange = (valStr: string) => {
+    const parsed = parseInt(valStr.trim(), 10);
+    if (isNaN(parsed)) {
+      setInputValue(String(index + 1));
+      return;
+    }
+    const targetPos = Math.max(1, Math.min(total, parsed));
+    const targetIndex = targetPos - 1;
+    if (targetIndex !== index) {
+      onMove(index, targetIndex);
+    } else {
+      setInputValue(String(index + 1));
+    }
+  };
+
+  return (
+    <div
+      className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-0.5 text-amber-400 font-mono text-[11px] font-bold"
+      title={`Posición ${index + 1} de ${total}. Cambia este número y pulsa Enter para reordenar la lista.`}
+    >
+      <span className="select-none">Párrafo #</span>
+      <input
+        type="number"
+        min={1}
+        max={total}
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commitChange(inputValue);
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Escape') {
+            setInputValue(String(index + 1));
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        onBlur={() => commitChange(inputValue)}
+        className="w-9 bg-black/70 border border-amber-500/40 rounded px-1 py-0.5 text-center text-amber-300 font-mono text-xs focus:ring-1 focus:ring-amber-400 outline-none hover:bg-black/90 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <span className="text-white/40 text-[10px] font-sans font-normal select-none">
+        de {total}
+      </span>
+      {total > 1 && (
+        <div className="flex items-center gap-0.5 ml-0.5 border-l border-amber-500/20 pl-1">
+          <button
+            type="button"
+            disabled={index === 0}
+            onClick={() => onMove(index, index - 1)}
+            className="p-0.5 rounded text-amber-400/80 hover:text-amber-200 hover:bg-amber-500/20 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+            title="Mover párrafo hacia arriba"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            disabled={index === total - 1}
+            onClick={() => onMove(index, index + 1)}
+            className="p-0.5 rounded text-amber-400/80 hover:text-amber-200 hover:bg-amber-500/20 disabled:opacity-20 disabled:pointer-events-none transition-colors"
+            title="Mover párrafo hacia abajo"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject, webAspect = 'clean' }) => {
   const [selectedSceneId, setSelectedSceneId] = useState<string>(
     project.scenes[0]?.id || ''
@@ -522,6 +607,27 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
         return {
           ...s,
           textBlocks: s.textBlocks.filter((b) => b.id !== blockId),
+        };
+      }),
+    }));
+  };
+
+  const handleMoveTextBlock = (fromIndex: number, toIndex: number) => {
+    if (!activeScene || !activeScene.textBlocks) return;
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || fromIndex >= activeScene.textBlocks.length) return;
+    if (toIndex < 0 || toIndex >= activeScene.textBlocks.length) return;
+
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        const newBlocks = [...s.textBlocks];
+        const [moved] = newBlocks.splice(fromIndex, 1);
+        newBlocks.splice(toIndex, 0, moved);
+        return {
+          ...s,
+          textBlocks: newBlocks,
         };
       }),
     }));
@@ -2305,9 +2411,11 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 >
                   <div className="flex flex-wrap items-center justify-between text-xs border-b border-white/5 pb-2.5 gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
-                        Párrafo #{index + 1}
-                      </span>
+                      <ParagraphOrderBadge
+                        index={index}
+                        total={activeScene.textBlocks.length}
+                        onMove={handleMoveTextBlock}
+                      />
 
                       {/* Block type selector */}
                       <select
