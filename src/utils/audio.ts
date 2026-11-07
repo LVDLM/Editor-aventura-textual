@@ -1,4 +1,4 @@
-import { SoundDefinition, SynthSoundConfig, GameProject, InstrumentType } from '../types';
+import { AudioProcessingConfig, SoundDefinition, SynthSoundConfig, GameProject, InstrumentType } from '../types';
 import { playVoiceSynth } from './voiceEngine.js';
 
 /**
@@ -11,7 +11,10 @@ let audioCtx: AudioContext | null = null;
 let soundEnabled = true;
 const activeAudioElements = new Set<HTMLAudioElement>();
 const activeSynthSources = new Set<AudioScheduledSourceNode>();
+const activeBufferSources = new Map<AudioBufferSourceNode, () => void>();
 const urlAudioCache = new Map<string, HTMLAudioElement>();
+const decodedAudioCache = new Map<string, Promise<AudioBuffer>>();
+let playbackGeneration = 0;
 
 function startTrackedSource(source: AudioScheduledSourceNode, when?: number) {
   activeSynthSources.add(source);
@@ -48,6 +51,9 @@ export function isSoundEnabled(): boolean {
 }
 
 export function stopAllAudio() {
+  // Invalidates loads still waiting for fetch/decode so they cannot start after Stop.
+  playbackGeneration += 1;
+
   activeAudioElements.forEach((audio) => {
     try {
       audio.pause();
@@ -57,6 +63,8 @@ export function stopAllAudio() {
     }
   });
   activeAudioElements.clear();
+
+  Array.from(activeBufferSources.values()).forEach((stop) => stop());
 
   activeSynthSources.forEach((source) => {
     try {
@@ -1143,8 +1151,164 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
 /**
  * Plays an audio source via external URL (mp3/wav/ogg)
  */
-export function playUrlAudio(url: string, volume = 0.5): Promise<void> {
-  if (!soundEnabled || !url) return Promise.resolve();
+async function loadDecodedAudio(url: string, ctx: AudioContext): Promise<AudioBuffer> {
+  const cached = decodedAudioCache.get(url);
+  if (cached) return cached;
+
+  const pending = fetch(url, { mode: 'cors', credentials: 'omit' })
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status} al cargar el audio`);
+      return response.arrayBuffer();
+    })
+    .then((data) => ctx.decodeAudioData(data.slice(0)));
+
+  decodedAudioCache.set(url, pending);
+  pending.catch(() => {
+    if (decodedAudioCache.get(url) === pending) decodedAudioCache.delete(url);
+  });
+  return pending;
+}
+
+function clampAudioValue(value: number | undefined, fallback: number, min: number, max: number): number {
+  const safeValue = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  return Math.max(min, Math.min(max, safeValue));
+}
+
+/** Reproduces an AudioBuffer through a disposable Web Audio graph; the source file is never changed. */
+function playDecodedAudio(
+  ctx: AudioContext,
+  buffer: AudioBuffer,
+  volume: number,
+  processing: AudioProcessingConfig = {}
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const source = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const dryGain = ctx.createGain();
+    const masterGain = ctx.createGain();
+    const nodesToDisconnect: AudioNode[] = [filter, dryGain, masterGain];
+    let delay: DelayNode | null = null;
+    let feedback: GainNode | null = null;
+    let wetGain: GainNode | null = null;
+    let settled = false;
+
+    const cleanup = () => {
+      activeBufferSources.delete(source);
+      source.onended = null;
+      try { source.disconnect(); } catch { /* Already disconnected. */ }
+      nodesToDisconnect.forEach((node) => {
+        try { node.disconnect(); } catch { /* Already disconnected. */ }
+      });
+    };
+
+    const finish = (stopSource: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (stopSource) {
+        try { source.stop(); } catch { /* It may have ended already. */ }
+      }
+      cleanup();
+      resolve();
+    };
+
+    try {
+      const now = ctx.currentTime;
+      const playbackRate = clampAudioValue(processing.playbackRate, 1, 0.5, 2);
+      const pitchSemitones = clampAudioValue(processing.pitchSemitones, 0, -12, 12);
+      const trimStart = clampAudioValue(processing.trimStartSeconds, 0, 0, Math.max(0, buffer.duration - 0.02));
+      const maxTrimEnd = Math.max(0, buffer.duration - trimStart - 0.02);
+      const trimEnd = clampAudioValue(processing.trimEndSeconds, 0, 0, maxTrimEnd);
+      const playDuration = Math.max(0.02, buffer.duration - trimStart - trimEnd);
+      const cutoff = clampAudioValue(processing.lowpassHz, 20000, 80, 20000);
+      const filterEnabled = cutoff < 19000;
+      const outputGain = clampAudioValue(processing.gain, 1, 0, 2);
+      const echoMix = clampAudioValue(processing.echoMix, 0, 0, 0.7);
+
+      source.buffer = buffer;
+      source.playbackRate.setValueAtTime(playbackRate, now);
+      source.detune.setValueAtTime(pitchSemitones * 100, now);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(cutoff, now);
+      filter.Q.setValueAtTime(0.707, now);
+
+      dryGain.gain.setValueAtTime(1, now);
+      masterGain.gain.setValueAtTime(
+        outputGain * clampAudioValue(volume, 0.5, 0, 1),
+        now
+      );
+
+      const processedSignal: AudioNode = filterEnabled ? filter : source;
+      if (filterEnabled) {
+        source.connect(filter);
+      }
+      processedSignal.connect(dryGain);
+      dryGain.connect(masterGain);
+
+      if (echoMix > 0) {
+        delay = ctx.createDelay(2);
+        feedback = ctx.createGain();
+        wetGain = ctx.createGain();
+        nodesToDisconnect.push(delay, feedback, wetGain);
+
+        delay.delayTime.setValueAtTime(
+          clampAudioValue(processing.echoDelaySeconds, 0.28, 0.05, 1.5),
+          now
+        );
+        feedback.gain.setValueAtTime(0.22, now);
+        wetGain.gain.setValueAtTime(echoMix, now);
+
+        processedSignal.connect(delay);
+        delay.connect(wetGain);
+        delay.connect(feedback);
+        feedback.connect(delay);
+        wetGain.connect(masterGain);
+      }
+
+      masterGain.connect(ctx.destination);
+      source.onended = () => finish(false);
+      activeBufferSources.set(source, () => finish(true));
+      source.start(now, trimStart, playDuration);
+    } catch (error) {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        reject(error);
+      }
+    }
+  });
+}
+
+/**
+ * Plays an external or user-provided sample.
+ * CORS-enabled sources use AudioBuffer processing; otherwise the original HTMLAudio
+ * path is retained so existing external links continue to play without processing.
+ */
+export async function playUrlAudio(
+  url: string,
+  volume = 0.5,
+  processing: AudioProcessingConfig = {}
+): Promise<void> {
+  if (!soundEnabled || !url) return;
+  const generation = playbackGeneration;
+  const ctx = getAudioContext();
+
+  if (ctx) {
+    try {
+      if (ctx.state === 'suspended') await ctx.resume();
+      const buffer = await loadDecodedAudio(url, ctx);
+      if (generation !== playbackGeneration || !soundEnabled) return;
+      await playDecodedAudio(ctx, buffer, volume, processing);
+      return;
+    } catch (error) {
+      if (generation !== playbackGeneration || !soundEnabled) return;
+      // Some hosts permit <audio> but deny fetch/decode through CORS.
+      // Preserve playback compatibility; processing is skipped on this fallback.
+      console.warn('AudioBuffer no disponible; se reproducirá la muestra original sin efectos:', error);
+    }
+  }
+
+  if (generation !== playbackGeneration || !soundEnabled) return;
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -1163,7 +1327,7 @@ export function playUrlAudio(url: string, volume = 0.5): Promise<void> {
         urlAudioCache.set(url, audio);
       }
 
-      audio.volume = Math.max(0, Math.min(1, volume));
+      audio.volume = clampAudioValue(volume * clampAudioValue(processing.gain, 1, 0, 2), 0.5, 0, 1);
       audio.currentTime = 0;
       activeAudioElements.add(audio);
       audio.onended = finish;
@@ -1188,14 +1352,12 @@ export function playUrlAudio(url: string, volume = 0.5): Promise<void> {
   });
 }
 
-/**
- * Preview / Test any SoundDefinition
- */
+/** Preview / Test any SoundDefinition using its saved, non-destructive sample settings. */
 export function previewSoundDefinition(sound: SoundDefinition): Promise<void> {
   if (!sound || !soundEnabled) return Promise.resolve();
 
   if (sound.sourceType === 'url' && sound.url) {
-    return playUrlAudio(sound.url, 0.7);
+    return playUrlAudio(sound.url, 0.7, sound.audioProcessing);
   }
 
   if (sound.synthConfig) {

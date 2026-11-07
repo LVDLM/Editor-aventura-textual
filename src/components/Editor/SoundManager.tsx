@@ -1401,6 +1401,207 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                 </div>
               )}
 
+              {/* ==================== NON-DESTRUCTIVE SAMPLE PROCESSING ==================== */}
+              {activeSoundForm.sourceType === 'url' && (
+                <div
+                  className={`p-4 rounded-xl border space-y-4 ${
+                    isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+                  }`}
+                >
+                  <div>
+                    <h5 className={`text-xs font-bold uppercase tracking-wide ${
+                      isClean ? 'text-[#2A2118]' : 'text-amber-300'
+                    }`}>
+                      Procesamiento no destructivo de la muestra
+                    </h5>
+                    <p className={`text-[11px] mt-1 ${
+                      isClean ? 'text-[#6B5C46]' : 'text-slate-400'
+                    }`}>
+                      Los ajustes se guardan con este sonido; el archivo original y su enlace no se modifican.
+                      En esta fase, la velocidad también cambia el tono.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label className="space-y-1 text-[11px]">
+                      <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                        Velocidad: {(activeSoundForm.audioProcessing?.playbackRate ?? 1).toFixed(2)}×
+                      </span>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.05"
+                        value={activeSoundForm.audioProcessing?.playbackRate ?? 1}
+                        onChange={(e) => setActiveSoundForm({
+                          ...activeSoundForm,
+                          audioProcessing: {
+                            ...(activeSoundForm.audioProcessing || {}),
+                            playbackRate: Number(e.target.value),
+                          },
+                        })}
+                        className="w-full accent-amber-600"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-[11px]">
+                      <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                        Tono adicional: {activeSoundForm.audioProcessing?.pitchSemitones ?? 0} semitonos
+                      </span>
+                      <input
+                        type="range"
+                        min="-12"
+                        max="12"
+                        step="1"
+                        value={activeSoundForm.audioProcessing?.pitchSemitones ?? 0}
+                        onChange={(e) => setActiveSoundForm({
+                          ...activeSoundForm,
+                          audioProcessing: {
+                            ...(activeSoundForm.audioProcessing || {}),
+                            pitchSemitones: Number(e.target.value),
+                          },
+                        })}
+                        className="w-full accent-amber-600"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-[11px]">
+                      <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                        Filtro paso bajo: {activeSoundForm.audioProcessing?.lowpassHz ?? 20000} Hz
+                      </span>
+                      <input
+                        type="range"
+                        min="500"
+                        max="20000"
+                        step="100"
+                        value={activeSoundForm.audioProcessing?.lowpassHz ?? 20000}
+                        onChange={(e) => setActiveSoundForm({
+                          ...activeSoundForm,
+                          audioProcessing: {
+                            ...(activeSoundForm.audioProcessing || {}),
+                            lowpassHz: Number(e.target.value),
+                          },
+                        })}
+                        className="w-full accent-amber-600"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-[11px]">
+                      <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                        Eco: {Math.round((activeSoundForm.audioProcessing?.echoMix ?? 0) * 100)}%
+                      </span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="0.7"
+                        step="0.05"
+                        value={activeSoundForm.audioProcessing?.echoMix ?? 0}
+                        onChange={(e) => setActiveSoundForm({
+                          ...activeSoundForm,
+                          audioProcessing: {
+                            ...(activeSoundForm.audioProcessing || {}),
+                            echoMix: Number(e.target.value),
+                          },
+                        })}
+                        className="w-full accent-amber-600"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-[11px]">
+                      <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                        Ganancia: {((activeSoundForm.audioProcessing?.gain ?? 1) * 100).toFixed(0)}%
+                      </span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.05"
+                        value={activeSoundForm.audioProcessing?.gain ?? 1}
+                        onChange={(e) => setActiveSoundForm({
+                          ...activeSoundForm,
+                          audioProcessing: {
+                            ...(activeSoundForm.audioProcessing || {}),
+                            gain: Number(e.target.value),
+                          },
+                        })}
+                        className="w-full accent-amber-600"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-[11px]">
+                      <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                        Recorte inicial (segundos)
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="600"
+                        step="0.05"
+                        value={activeSoundForm.audioProcessing?.trimStartSeconds ?? 0}
+                        onChange={(e) => setActiveSoundForm({
+                          ...activeSoundForm,
+                          audioProcessing: {
+                            ...(activeSoundForm.audioProcessing || {}),
+                            trimStartSeconds: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })}
+                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${
+                          isClean
+                            ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]'
+                            : 'bg-[#2C241C] border-[#42362B] text-white'
+                        }`}
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-[11px]">
+                      <span className={isClean ? 'text-[#6B5C46]' : 'text-slate-300'}>
+                        Recorte final (segundos)
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="600"
+                        step="0.05"
+                        value={activeSoundForm.audioProcessing?.trimEndSeconds ?? 0}
+                        onChange={(e) => setActiveSoundForm({
+                          ...activeSoundForm,
+                          audioProcessing: {
+                            ...(activeSoundForm.audioProcessing || {}),
+                            trimEndSeconds: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })}
+                        className={`w-full px-2 py-1.5 rounded-lg border text-xs ${
+                          isClean
+                            ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]'
+                            : 'bg-[#2C241C] border-[#42362B] text-white'
+                        }`}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className={`text-[10px] leading-relaxed max-w-xl ${
+                      isClean ? 'text-[#6B5C46]' : 'text-slate-400'
+                    }`}>
+                      Los efectos se aplican si el servidor permite acceso CORS al archivo. Si no, se mantiene la
+                      reproducción directa del original, pero sin estos ajustes.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveSoundForm({
+                        ...activeSoundForm,
+                        audioProcessing: undefined,
+                      })}
+                      className={`text-[10px] font-semibold underline underline-offset-2 ${
+                        isClean ? 'text-[#872820]' : 'text-amber-300'
+                      }`}
+                    >
+                      Restablecer
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* ==================== SYNTHESIZER MODE ==================== */}
               {activeSoundForm.sourceType === 'synth' && (
                 <div className="space-y-5">
