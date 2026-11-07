@@ -26,6 +26,7 @@ import {
   SynthSoundConfig,
   UserProfile,
   InstrumentType,
+  CloudProjectDoc,
 } from '../../types';
 import {
   DEFAULT_SOUND_LIBRARY,
@@ -39,6 +40,7 @@ import {
   fetchGlobalSoundLibraryFromFirestore,
   saveGlobalSoundLibraryToFirestore,
   resetGlobalSoundLibraryInFirestore,
+  getUserProjects,
 } from '../../lib/firebase';
 import { VoicePanel } from './VoicePanel';
 import { DEFAULT_VOICE } from '../../utils/voicePresets';
@@ -298,6 +300,43 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
   }, [showSaveMenu]);
   const [globalFeedback, setGlobalFeedback] = useState<string | null>(null);
 
+  // User project naming and cloud projects
+  const [projectNameInput, setProjectNameInput] = useState(project.title || 'Mi Historia de Aventuras');
+  const [userProjectsList, setUserProjectsList] = useState<CloudProjectDoc[]>([]);
+  const [selectedTargetDocId, setSelectedTargetDocId] = useState<string>('');
+
+  useEffect(() => {
+    setProjectNameInput(project.title || 'Mi Historia de Aventuras');
+  }, [project.title]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (currentUser) {
+      getUserProjects(currentUser.uid, currentUser.email, currentUser.role === 'admin')
+        .then((docs) => {
+          if (isMounted) setUserProjectsList(docs);
+        })
+        .catch((e) => console.warn('Error loading user projects:', e));
+    } else {
+      setUserProjectsList([]);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser]);
+
+  const handleTargetProjectChange = (docId: string) => {
+    setSelectedTargetDocId(docId);
+    if (!docId) {
+      setProjectNameInput(project.title || 'Mi Historia de Aventuras');
+    } else {
+      const found = userProjectsList.find((p) => p.id === docId);
+      if (found) {
+        setProjectNameInput(found.title || found.projectData?.title || 'Mi Proyecto');
+      }
+    }
+  };
+
   // Filter & Search state
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'global' | 'project' | SoundCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -441,33 +480,37 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
   };
 
   // Duplicate an official library sound into current project for customization
-  const handleDuplicateToProject = (sound: SoundDefinition) => {
+  const handleDuplicateToProject = (sound: SoundDefinition, overrideTitle?: string) => {
+    const trimmedTitle = (overrideTitle || projectNameInput || project.title || 'Mi Proyecto de Aventuras').trim();
     const copySound: SoundDefinition = {
       ...sound,
       id: sound.isGlobal ? `${sound.id}_custom` : `${sound.id}_copia`,
-      name: `${sound.name} (Personalizado)`,
+      name: sound.name.includes('(Personalizado)') ? sound.name : `${sound.name} (Personalizado)`,
       isGlobal: false,
       isDefault: false,
     };
 
     updateProject((prev) => ({
       ...prev,
+      title: trimmedTitle,
       customSounds: [...(prev.customSounds || []).filter((s) => s.id !== copySound.id), copySound],
     }));
 
     setSelectedSoundId(copySound.id);
     setActiveSoundForm({ ...copySound });
     setSelectedFilter('project');
+    setGlobalFeedback(`Copia del sonido guardada en el proyecto "${trimmedTitle}".`);
+    setTimeout(() => setGlobalFeedback(null), 3500);
   };
 
   // Save changes to active sound in Project
   const handleSaveToProject = () => {
     if (!activeSoundForm) return;
+    const trimmedTitle = (projectNameInput || project.title || 'Mi Proyecto de Aventuras').trim();
+
     // Un sonido oficial no se sobrescribe: se guarda como copia editable en el proyecto
     if (activeSoundForm.isGlobal) {
-      handleDuplicateToProject(activeSoundForm);
-      setGlobalFeedback('Copia del sonido guardada en tu proyecto.');
-      setTimeout(() => setGlobalFeedback(null), 3000);
+      handleDuplicateToProject(activeSoundForm, trimmedTitle);
       return;
     }
 
@@ -484,12 +527,13 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
       }
       return {
         ...prev,
+        title: trimmedTitle,
         customSounds: nextList,
       };
     });
 
-    setGlobalFeedback('¡Sonido guardado correctamente en tu proyecto!');
-    setTimeout(() => setGlobalFeedback(null), 3000);
+    setGlobalFeedback(`¡Sonido guardado correctamente en "${trimmedTitle}"!`);
+    setTimeout(() => setGlobalFeedback(null), 3500);
   };
 
   // Delete sound from Project
@@ -664,7 +708,7 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
             <p className={`text-xs mt-0.5 ${isClean ? 'text-[#6B5C46]' : 'text-[#D1C7B7]'}`}>
               {isAdmin
                 ? 'Edita y afina las ondas y frecuencias de la biblioteca global, inserta URLs de audio o añade nuevos efectos para toda la plataforma.'
-                : 'Escucha y asigna sonidos de la biblioteca oficial a tus escenas y acciones, o crea sonidos y enlaces URL propios para tu historia.'}
+                : 'Acceso exclusivo a la Biblioteca Oficial y a tu(s) proyecto(s) de autor. Escucha y asigna efectos a tus escenas o personaliza sonidos para tu historia.'}
             </p>
           </div>
         </div>
@@ -791,8 +835,9 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                     ? 'text-[#6B5C46] hover:text-[#2A2118]'
                     : 'text-slate-400 hover:text-white'
                 }`}
+                title={`Sonidos exclusivos de tu proyecto: ${project.title || 'Mi Proyecto'}`}
               >
-                <span>Proyecto ({projectCustomSounds.length})</span>
+                <span className="truncate">Mi Proyecto ({projectCustomSounds.length})</span>
               </button>
             </div>
 
@@ -990,19 +1035,19 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={handleTestActiveForm}
-                      disabled={isPlayingTesting}
+                      onClick={isPlayingTesting ? handleStopPreview : handleTestActiveForm}
                       className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 text-white shadow-md transition-all cursor-pointer touch-manipulation ${
                         isPlayingTesting
-                          ? 'bg-emerald-600 animate-pulse'
+                          ? 'bg-rose-600 hover:bg-rose-500 animate-pulse'
                           : isClean
                           ? 'bg-[#A4332A] hover:bg-[#872820]'
                           : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110'
                       }`}
+                      title={isPlayingTesting ? 'Detener reproducción' : 'Probar sonido'}
                     >
                       {isPlayingTesting ? <Square className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
-                      <span className="hidden sm:inline">{isPlayingTesting ? 'Reproduciendo...' : 'Probar Sonido'}</span>
-                      <span className="sm:hidden">{isPlayingTesting ? '...' : 'Probar'}</span>
+                      <span className="hidden sm:inline">{isPlayingTesting ? 'Parar Sonido' : 'Probar Sonido'}</span>
+                      <span className="sm:hidden">{isPlayingTesting ? 'Parar' : 'Probar'}</span>
                     </button>
                     <button
                       type="button"
@@ -1025,13 +1070,13 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                     ref={saveMenuRef}
                     role="dialog"
                     aria-label="Opciones de guardado"
-                    className={`absolute right-0 left-0 sm:left-auto sm:w-[460px] top-full mt-2 z-30 p-4 rounded-2xl border shadow-2xl space-y-4 ${
+                    className={`absolute right-0 left-0 sm:left-auto sm:w-[480px] top-full mt-2 z-30 p-4 rounded-2xl border shadow-2xl space-y-4 ${
                       isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <h5 className={`text-xs font-black uppercase tracking-wide ${isClean ? 'text-[#872820]' : 'text-amber-400'}`}>
-                        Guardar sonido
+                        Guardar sonido en proyecto
                       </h5>
                       <button
                         type="button"
@@ -1046,6 +1091,71 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                     </div>
 
                     <div className="space-y-4">
+                      {/* Destino y Nombre del Proyecto */}
+                      <div
+                        className={`p-3 rounded-xl border space-y-2.5 ${
+                          isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <label className={`text-xs font-bold flex items-center gap-1.5 ${isClean ? 'text-[#872820]' : 'text-amber-400'}`}>
+                            <FolderPlus className="w-3.5 h-3.5" />
+                            <span>Proyecto de destino</span>
+                          </label>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-300'
+                            }`}
+                          >
+                            {userProjectsList.length > 0 ? `${userProjectsList.length} proyectos de tu autoría` : 'Proyecto actual'}
+                          </span>
+                        </div>
+
+                        {userProjectsList.length > 1 && (
+                          <div className="space-y-1">
+                            <label className={`text-[11px] block font-medium ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
+                              Asignar a uno de tus proyectos:
+                            </label>
+                            <select
+                              value={selectedTargetDocId}
+                              onChange={(e) => handleTargetProjectChange(e.target.value)}
+                              className={`w-full px-3 py-1.5 rounded-xl text-xs border ${
+                                isClean
+                                  ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                                  : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+                              }`}
+                            >
+                              <option value="">{project.title || 'Proyecto activo en edición'}</option>
+                              {userProjectsList.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.title || p.projectData?.title || 'Sin título'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <label className={`text-[11px] block font-medium ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
+                            Nombre del Proyecto:
+                          </label>
+                          <input
+                            type="text"
+                            value={projectNameInput}
+                            onChange={(e) => setProjectNameInput(e.target.value)}
+                            placeholder="Nombre del proyecto..."
+                            className={`w-full px-3 py-2 rounded-xl text-xs border ${
+                              isClean
+                                ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                                : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+                            }`}
+                          />
+                          <p className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
+                            Solo tú tienes acceso a tus proyectos y a la biblioteca oficial.
+                          </p>
+                        </div>
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
@@ -1119,7 +1229,7 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                         type="button"
                         onClick={() => { handleSaveToProject(); setShowSaveMenu(false); }}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
-                        title="Lo verán todos los usuarios del proyecto"
+                        title={`Guardar en "${projectNameInput || project.title}"`}
                       >
                         <Save className="w-4 h-4" />
                         <span>Guardar en el Proyecto</span>
@@ -1132,7 +1242,7 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                             ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
                             : 'bg-[#1F1913] hover:bg-[#2A2118] text-amber-200 border-amber-500/30'
                         }`}
-                        title="Crear una copia editable de este sonido en tu proyecto"
+                        title={`Crear una copia editable de este sonido en "${projectNameInput || project.title}"`}
                       >
                         <Copy className="w-3.5 h-3.5" />
                         <span>Duplicar en mi Proyecto</span>
@@ -1262,12 +1372,16 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                       />
                       <button
                         type="button"
-                        onClick={handleTestActiveForm}
-                        disabled={!activeSoundForm.url || isPlayingTesting}
-                        className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer flex-shrink-0"
+                        onClick={isPlayingTesting ? handleStopPreview : handleTestActiveForm}
+                        disabled={!activeSoundForm.url}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer flex-shrink-0 ${
+                          isPlayingTesting
+                            ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse'
+                            : 'bg-sky-600 hover:bg-sky-500 text-white'
+                        }`}
                       >
-                        <Play className="w-3.5 h-3.5 fill-white" />
-                        <span>Probar Enlace</span>
+                        {isPlayingTesting ? <Square className="w-3.5 h-3.5 fill-white" /> : <Play className="w-3.5 h-3.5 fill-white" />}
+                        <span>{isPlayingTesting ? 'Parar Enlace' : 'Probar Enlace'}</span>
                       </button>
                     </div>
 
@@ -1396,8 +1510,21 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                         Forma de Onda del Oscilador:
                       </label>
                       <div className="flex items-center justify-end gap-1.5 mb-2">
-                        <button type="button" onClick={handleTestActiveForm} disabled={isPlayingTesting} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#A4332A] text-white' : 'bg-amber-600 text-black'} disabled:opacity-50`}><Play className="w-3 h-3 fill-current" /> Escuchar cambios</button>
-                        <button type="button" onClick={handleStopPreview} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 ${isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-200'}`}><Square className="w-3 h-3 fill-current" /> Parar</button>
+                        <button
+                          type="button"
+                          onClick={isPlayingTesting ? handleStopPreview : handleTestActiveForm}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                            isPlayingTesting
+                              ? 'bg-rose-600 text-white animate-pulse'
+                              : isClean
+                              ? 'bg-[#A4332A] text-white hover:bg-[#872820]'
+                              : 'bg-amber-600 text-black hover:bg-amber-500'
+                          }`}
+                        >
+                          {isPlayingTesting ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
+                          <span>{isPlayingTesting ? 'Parar' : 'Escuchar cambios'}</span>
+                        </button>
+                        <button type="button" onClick={handleStopPreview} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${isClean ? 'bg-[#E5DCB8] text-[#2A2118] hover:bg-[#D9CFA9]' : 'bg-white/10 text-slate-200 hover:bg-white/20'}`}><Square className="w-3 h-3 fill-current" /> Parar</button>
                       </div>
                       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                         {[

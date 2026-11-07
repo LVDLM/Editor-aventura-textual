@@ -171,14 +171,25 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
   const ProbarBtn = (
     <button
       type="button"
-      onClick={onPreview}
-      disabled={isPlaying}
-      aria-label="Probar sonido"
-      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer touch-manipulation ${
-        isClean ? 'bg-[#A4332A] hover:bg-[#872820] text-white' : 'bg-amber-600 hover:bg-amber-500 text-black'
+      onClick={isPlaying ? onStop : onPreview}
+      aria-label={isPlaying ? 'Parar sonido' : 'Probar sonido'}
+      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 shadow-sm cursor-pointer touch-manipulation transition-all ${
+        isPlaying
+          ? 'bg-rose-600 hover:bg-rose-500 text-white animate-pulse'
+          : isClean
+          ? 'bg-[#A4332A] hover:bg-[#872820] text-white'
+          : 'bg-amber-600 hover:bg-amber-500 text-black'
       }`}
     >
-      <Play className="w-3.5 h-3.5 fill-current" /> Probar Sonido
+      {isPlaying ? (
+        <>
+          <Square className="w-3.5 h-3.5 fill-current" /> Parar
+        </>
+      ) : (
+        <>
+          <Play className="w-3.5 h-3.5 fill-current" /> Probar Sonido
+        </>
+      )}
     </button>
   );
 
@@ -199,19 +210,23 @@ export const VoicePanel: React.FC<VoicePanelProps> = ({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={onPreview}
-            disabled={isPlaying}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 disabled:opacity-50 ${
-              isClean ? 'bg-[#A4332A] text-white' : 'bg-amber-600 text-black'
+            onClick={isPlaying ? onStop : onPreview}
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+              isPlaying
+                ? 'bg-rose-600 text-white animate-pulse'
+                : isClean
+                ? 'bg-[#A4332A] text-white hover:bg-[#872820]'
+                : 'bg-amber-600 text-black hover:bg-amber-500'
             }`}
           >
-            <Play className="w-3 h-3 fill-current" /> Escuchar
+            {isPlaying ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
+            <span>{isPlaying ? 'Parar' : 'Escuchar'}</span>
           </button>
           <button
             type="button"
             onClick={onStop}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 ${
-              isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-200'
+            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+              isClean ? 'bg-[#E5DCB8] text-[#2A2118] hover:bg-[#D9CFA9]' : 'bg-white/10 text-slate-200 hover:bg-white/20'
             }`}
           >
             <Square className="w-3 h-3 fill-current" /> Parar
