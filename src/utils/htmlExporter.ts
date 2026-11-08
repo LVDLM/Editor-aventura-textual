@@ -974,22 +974,35 @@ ${VOICE_ENGINE_EMBED}
           }
         }
 
+        // No se puede combinar si faltan unidades de lo que la combinacion gasta
+        var comboMissing = [];
         if (rule && flagsMatch) {
+          var comboRemovals = getRemovals(rule.stateChange);
+          for (var mk in comboRemovals) {
+            var haveQty = countItem(mk);
+            if (haveQty < comboRemovals[mk]) {
+              var missItem = PROJECT.inventoryItems.find(function(i) { return i.id === mk; });
+              comboMissing.push((comboRemovals[mk] - haveQty) + 'x ' + (missItem ? missItem.name : mk));
+            }
+          }
+        }
+
+        if (rule && flagsMatch && comboMissing.length === 0) {
           var sc = rule.stateChange || {};
           if (sc.setFlags) {
             for (var k in sc.setFlags) {
               gameState.flags[k] = sc.setFlags[k];
             }
           }
-          // Combinar no es una entrega de escena: sin proteccion anti-duplicados. Gasta 1 unidad, no todas.
-          if (sc.addItemId) {
-            gameState.inventory.push(sc.addItemId);
+          // Combinar no es una entrega de escena: sin proteccion anti-duplicados.
+          // Gasta primero (con las cantidades indicadas) y entrega despues.
+          var comboRem = getRemovals(sc);
+          for (var rk in comboRem) {
+            for (var ri = 0; ri < comboRem[rk]; ri++) removeOneUnit(rk);
           }
-          if (sc.removeItemId) {
-            removeOneUnit(sc.removeItemId);
-          }
-          if (sc.removeItem2Id) {
-            removeOneUnit(sc.removeItem2Id);
+          var comboGrants = getGrants(sc);
+          for (var gk in comboGrants) {
+            for (var gi2 = 0; gi2 < comboGrants[gk]; gi2++) gameState.inventory.push(gk);
           }
           if (sc.goToSceneId) {
             gameState.currentSceneId = sc.goToSceneId;
@@ -1018,6 +1031,8 @@ ${VOICE_ENGINE_EMBED}
 
         if (rule && !flagsMatch && rule.failMessage) {
           showPopupModal('Combinación no disponible', escapeHTML(rule.failMessage), null, 'ℹ️');
+        } else if (rule && flagsMatch && comboMissing.length > 0) {
+          showPopupModal('Combinación no disponible', escapeHTML(rule.failMessage || ('No tienes suficientes unidades. Te faltan: ' + comboMissing.join(', ') + '.')), null, 'ℹ️');
         } else {
           showPopupModal('Sin efecto', 'No parece ocurrir nada al usar ' + (sourceItem ? sourceItem.name : 'este objeto') + ' con ' + (targetItem ? targetItem.name : 'este objeto') + '.', null, 'ℹ️');
         }

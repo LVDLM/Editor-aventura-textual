@@ -2,6 +2,17 @@ import React, { useState } from 'react';
 import { GameProject, InventoryItem, ActionRule, SoundEffectType, SOUND_EFFECT_OPTIONS } from '../../types';
 import { getSoundOptionsGrouped } from '../../utils/audio';
 import { Package, Plus, Trash2, Key, BookOpen, Flashlight, Box, Sparkles, Edit2, Puzzle, ArrowRight, Zap, Check } from 'lucide-react';
+import { ItemQuantityDropdown } from './ItemQuantityDropdown';
+import { getGrants, getRemovals } from '../../utils/itemRules';
+
+// Texto corto de un mapa de cantidades: "2x Flecha, Arco"
+const describeQuantities = (map: Record<string, number>, items: InventoryItem[]): string =>
+  Object.entries(map)
+    .map(([id, n]) => {
+      const name = items.find((i) => i.id === id)?.name || id;
+      return n > 1 ? `${n}x ${name}` : name;
+    })
+    .join(', ');
 
 interface InventoryManagerProps {
   project: GameProject;
@@ -31,10 +42,18 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
   const [editingComboRuleId, setEditingComboRuleId] = useState<string | null>(null);
   const [comboRequiredItemId, setComboRequiredItemId] = useState('');
   const [comboResponseMsg, setComboResponseMsg] = useState('');
-  const [comboAddItem, setComboAddItem] = useState('');
-  const [comboRemoveThis, setComboRemoveThis] = useState(true);
-  const [comboRemoveRequired, setComboRemoveRequired] = useState(false);
+  // Objetos que entrega / gasta la combinación, con cantidades: { [idObjeto]: unidades }
+  const [comboAddMap, setComboAddMap] = useState<Record<string, number>>({});
+  // null = sin tocar: por defecto gasta 1 unidad del objeto que se está editando
+  const [comboRemoveMap, setComboRemoveMap] = useState<Record<string, number> | null>(null);
+  const [isComboAddOpen, setIsComboAddOpen] = useState(false);
+  const [isComboRemoveOpen, setIsComboRemoveOpen] = useState(false);
   const [comboSetFlag, setComboSetFlag] = useState('');
+  const [comboSetFlagVal, setComboSetFlagVal] = useState(true);
+  // Condición opcional: la combinación solo funciona si esta bandera tiene este valor
+  const [comboReqFlag, setComboReqFlag] = useState('');
+  const [comboReqFlagVal, setComboReqFlagVal] = useState(true);
+  const [comboFailMsg, setComboFailMsg] = useState('');
   const [comboSound, setComboSound] = useState<SoundEffectType>('pickup');
 
   // State for Direct Use Effect on Item (e.g. Health Potion, Flashlight, Book)
@@ -220,27 +239,70 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
     setComboRequiredItemId(comboRule.requiredItemId || '');
     setComboSound(comboRule.soundEffect || 'pickup');
     setComboResponseMsg(comboRule.responseMessage || '');
-    setComboAddItem(comboRule.stateChange?.addItemId || '');
-    setComboRemoveThis(!!comboRule.stateChange?.removeItemId);
-    setComboRemoveRequired(!!comboRule.stateChange?.removeItem2Id);
+    // getGrants / getRemovals leen el formato nuevo (con cantidades) y el antiguo (1 unidad)
+    setComboAddMap(getGrants(comboRule.stateChange));
+    setComboRemoveMap(getRemovals(comboRule.stateChange));
+    setIsComboAddOpen(false);
+    setIsComboRemoveOpen(false);
 
     const flagEntries = Object.entries(comboRule.stateChange?.setFlags || {});
     if (flagEntries.length > 0) {
       setComboSetFlag(flagEntries[0][0]);
+      setComboSetFlagVal(flagEntries[0][1] !== false);
     } else {
       setComboSetFlag('');
+      setComboSetFlagVal(true);
     }
+
+    const reqEntries = Object.entries(comboRule.requiredFlags || {});
+    if (reqEntries.length > 0) {
+      setComboReqFlag(reqEntries[0][0]);
+      setComboReqFlagVal(reqEntries[0][1] !== false);
+    } else {
+      setComboReqFlag('');
+      setComboReqFlagVal(true);
+    }
+    setComboFailMsg(comboRule.failMessage || '');
   };
 
   const handleCancelEditCombination = () => {
     setEditingComboRuleId(null);
     setComboRequiredItemId('');
     setComboResponseMsg('');
-    setComboAddItem('');
-    setComboRemoveThis(true);
-    setComboRemoveRequired(false);
+    setComboAddMap({});
+    setComboRemoveMap(null);
+    setIsComboAddOpen(false);
+    setIsComboRemoveOpen(false);
     setComboSetFlag('');
+    setComboSetFlagVal(true);
+    setComboReqFlag('');
+    setComboReqFlagVal(true);
+    setComboFailMsg('');
     setComboSound('pickup');
+  };
+
+  // Construye lo que cambia la combinación a partir del formulario (solo cantidades enteras > 0)
+  const buildComboStateChange = (targetItemId: string, base?: ActionRule['stateChange']) => {
+    const clean = (map: Record<string, number>) => {
+      const out: Record<string, number> = {};
+      Object.entries(map).forEach(([id, qty]) => {
+        const n = Math.floor(Number(qty) || 0);
+        if (n > 0) out[id] = n;
+      });
+      return out;
+    };
+    const removeMap = clean(comboRemoveMap ?? { [targetItemId]: 1 });
+    const addMap = clean(comboAddMap);
+    return {
+      ...base,
+      // El formato con cantidades sustituye al antiguo (removeItemId / removeItem2Id / addItemId)
+      addItems: Object.keys(addMap).length > 0 ? addMap : undefined,
+      addItemId: undefined,
+      removeItems: Object.keys(removeMap).length > 0 ? removeMap : undefined,
+      removeItemId: undefined,
+      removeItem2Id: undefined,
+      setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: comboSetFlagVal } : undefined,
+    };
   };
 
   const handleSaveCombination = (targetItemId: string) => {
@@ -260,13 +322,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                     requiredItemId: comboRequiredItemId,
                     responseMessage: comboResponseMsg.trim() || 'Has combinado los objetos con éxito.',
                     soundEffect: comboSound,
-                    stateChange: {
-                      ...c.stateChange,
-                      addItemId: comboAddItem || undefined,
-                      removeItemId: comboRemoveThis ? targetItemId : undefined,
-                      removeItem2Id: comboRemoveRequired ? comboRequiredItemId : undefined,
-                      setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: true } : undefined,
-                    },
+                    requiredFlags: comboReqFlag.trim() ? { [comboReqFlag.trim()]: comboReqFlagVal } : undefined,
+                    failMessage: comboFailMsg.trim() || undefined,
+                    stateChange: buildComboStateChange(targetItemId, c.stateChange),
                   };
                 }),
               }
@@ -280,12 +338,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
         requiredItemId: comboRequiredItemId,
         responseMessage: comboResponseMsg.trim() || 'Has combinado los objetos con éxito.',
         soundEffect: comboSound,
-        stateChange: {
-          addItemId: comboAddItem || undefined,
-          removeItemId: comboRemoveThis ? targetItemId : undefined,
-          removeItem2Id: comboRemoveRequired ? comboRequiredItemId : undefined,
-          setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: true } : undefined,
-        },
+        requiredFlags: comboReqFlag.trim() ? { [comboReqFlag.trim()]: comboReqFlagVal } : undefined,
+        failMessage: comboFailMsg.trim() || undefined,
+        stateChange: buildComboStateChange(targetItemId),
       };
 
       updateProject((prev) => ({
@@ -945,9 +1000,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                       <div className="space-y-1.5">
                         {existingCombos.map((combo) => {
                           const reqItem = project.inventoryItems.find((i) => i.id === combo.requiredItemId);
-                          const addedItem = combo.stateChange?.addItemId
-                            ? project.inventoryItems.find((i) => i.id === combo.stateChange?.addItemId)
-                            : null;
+                          const comboGrants = getGrants(combo.stateChange);
+                          const comboRemovals = getRemovals(combo.stateChange);
                           const isThisComboEditing = isManagingCombos && editingComboRuleId === combo.id;
 
                           return (
@@ -972,24 +1026,28 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                                   )}
                                 </div>
                                 <div className="flex flex-wrap gap-2 text-[10px] text-slate-400">
-                                  {addedItem && (
+                                  {Object.keys(comboGrants).length > 0 && (
                                     <span className="text-emerald-300 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                                      + Obtiene: {addedItem.name}
+                                      + Obtiene: {describeQuantities(comboGrants, project.inventoryItems)}
                                     </span>
                                   )}
-                                  {combo.stateChange?.removeItemId && (
+                                  {Object.keys(comboRemovals).length > 0 && (
                                     <span className="text-rose-300 bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-500/30">
-                                      - Retira: {item.name}
-                                    </span>
-                                  )}
-                                  {combo.stateChange?.removeItem2Id && (
-                                    <span className="text-rose-300 bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-500/30">
-                                      - Retira: {reqItem?.name || combo.requiredItemId}
+                                      - Gasta: {describeQuantities(comboRemovals, project.inventoryItems)}
                                     </span>
                                   )}
                                   {combo.stateChange?.setFlags && (
                                     <span className="text-sky-300 bg-sky-950/40 px-1.5 py-0.5 rounded border border-sky-500/30">
-                                      🚩 Bandera: {Object.keys(combo.stateChange.setFlags).join(', ')}
+                                      🚩 {Object.entries(combo.stateChange.setFlags)
+                                        .map(([k, v]) => `${k} → ${v === false ? 'desactivada' : 'activada'}`)
+                                        .join(', ')}
+                                    </span>
+                                  )}
+                                  {combo.requiredFlags && Object.keys(combo.requiredFlags).length > 0 && (
+                                    <span className="text-amber-300 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                      ⛔ Requiere: {Object.entries(combo.requiredFlags)
+                                        .map(([k, v]) => `${k} ${v === false ? 'desactivada' : 'activada'}`)
+                                        .join(', ')}
                                     </span>
                                   )}
                                 </div>
@@ -1113,36 +1171,48 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                        <div>
-                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                            4. Objeto resultante a entregar (Opcional)
-                          </label>
-                          <select
-                            value={comboAddItem}
-                            onChange={(e) => setComboAddItem(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500"
-                          >
-                            <option value="">-- Ninguno --</option>
-                            {project.inventoryItems.map((inv) => (
-                              <option key={inv.id} value={inv.id}>
-                                + Entregar: {inv.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <ItemQuantityDropdown
+                          label="4. Objeto(s) resultante(s) a entregar (Opcional)"
+                          labelClassName="block text-[11px] font-semibold text-slate-300 mb-1"
+                          panelTitle="Entregar Objetos"
+                          unitsTitle="Unidades a entregar de"
+                          items={project.inventoryItems}
+                          value={comboAddMap}
+                          onChange={setComboAddMap}
+                          isOpen={isComboAddOpen}
+                          onToggle={() => {
+                            setIsComboAddOpen((prev) => !prev);
+                            setIsComboRemoveOpen(false);
+                          }}
+                          onClose={() => setIsComboAddOpen(false)}
+                          sign="+"
+                          tone="emerald"
+                        />
 
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                            5. Activar Bandera / Flag (Opcional)
+                            5. Cambiar Bandera / Flag (Opcional)
                           </label>
-                          <input
-                            type="text"
-                            list="combo-flags-datalist"
-                            value={comboSetFlag}
-                            onChange={(e) => setComboSetFlag(e.target.value)}
-                            placeholder="Ej: papel_recortado"
-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500 font-mono"
-                          />
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              list="combo-flags-datalist"
+                              value={comboSetFlag}
+                              onChange={(e) => setComboSetFlag(e.target.value)}
+                              placeholder="Ej: arco_cargado"
+                              className="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500 font-mono"
+                            />
+                            <select
+                              value={comboSetFlagVal ? 'on' : 'off'}
+                              onChange={(e) => setComboSetFlagVal(e.target.value === 'on')}
+                              disabled={!comboSetFlag.trim()}
+                              className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-slate-100 focus:border-amber-500 disabled:opacity-40"
+                              title="Valor que toma la bandera al combinar"
+                            >
+                              <option value="on">Activar</option>
+                              <option value="off">Desactivar</option>
+                            </select>
+                          </div>
                           <datalist id="combo-flags-datalist">
                             {Object.keys(project.globalFlags || {}).map((flagKey) => (
                               <option key={flagKey} value={flagKey} />
@@ -1151,26 +1221,73 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={comboRemoveThis}
-                            onChange={(e) => setComboRemoveThis(e.target.checked)}
-                            className="rounded border-slate-800 text-amber-500 focus:ring-amber-500"
-                          />
-                          <span>Retirar "{item.name}" del inventario</span>
-                        </label>
+                      {(() => {
+                        const otherItem = project.inventoryItems.find((i) => i.id === comboRequiredItemId);
+                        const consumable = otherItem ? [item, otherItem] : [item];
+                        return (
+                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                            <ItemQuantityDropdown
+                              label="6. Objetos que se gastan al combinar (con unidades)"
+                              labelClassName="block text-[11px] font-semibold text-slate-300 mb-1"
+                              panelTitle="Gastar al combinar"
+                              unitsTitle="Unidades a gastar de"
+                              items={consumable}
+                              value={comboRemoveMap ?? { [item.id]: 1 }}
+                              onChange={setComboRemoveMap}
+                              isOpen={isComboRemoveOpen}
+                              onToggle={() => {
+                                setIsComboRemoveOpen((prev) => !prev);
+                                setIsComboAddOpen(false);
+                              }}
+                              onClose={() => setIsComboRemoveOpen(false)}
+                              sign="-"
+                              tone="rose"
+                            />
+                            <p className="text-[10px] text-slate-500 mt-1.5">
+                              Si el jugador no tiene las unidades indicadas, la combinación no se realiza.
+                            </p>
+                          </div>
+                        );
+                      })()}
 
-                        <label className="flex items-center gap-2 cursor-pointer">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                            7. Solo se puede combinar si la bandera... (Opcional)
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              list="combo-flags-datalist"
+                              value={comboReqFlag}
+                              onChange={(e) => setComboReqFlag(e.target.value)}
+                              placeholder="Ej: arco_cargado"
+                              className="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500 font-mono"
+                            />
+                            <select
+                              value={comboReqFlagVal ? 'on' : 'off'}
+                              onChange={(e) => setComboReqFlagVal(e.target.value === 'on')}
+                              disabled={!comboReqFlag.trim()}
+                              className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-slate-100 focus:border-amber-500 disabled:opacity-40"
+                              title="Estado que debe tener la bandera"
+                            >
+                              <option value="on">está activada</option>
+                              <option value="off">está desactivada</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                            Mensaje si no se cumple / faltan unidades (Opcional)
+                          </label>
                           <input
-                            type="checkbox"
-                            checked={comboRemoveRequired}
-                            onChange={(e) => setComboRemoveRequired(e.target.checked)}
-                            className="rounded border-slate-800 text-amber-500 focus:ring-amber-500"
+                            type="text"
+                            value={comboFailMsg}
+                            onChange={(e) => setComboFailMsg(e.target.value)}
+                            placeholder="Ej: El arco ya está cargado."
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500"
                           />
-                          <span>Retirar también el otro objeto de la combinación</span>
-                        </label>
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between pt-1">
