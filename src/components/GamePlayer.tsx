@@ -4,7 +4,7 @@ import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS, getProjectVerbs, renderVerbIcon } from '../utils/verbs';
 import { playSound } from '../utils/audio';
-import { applyItemEffects, canAfford, deliveryKey, isDelivered } from '../utils/itemRules';
+import { applyItemEffects, canAfford, deliveryKey, getGrants, getRemovals, isDelivered, missingItems } from '../utils/itemRules';
 import {
   Eye,
   Zap,
@@ -630,7 +630,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         });
       }
 
-      if (rule && flagsMatch) {
+      // No se puede combinar si faltan unidades de lo que la combinación gasta
+      const comboMissing = rule && flagsMatch ? missingItems(rule.stateChange, gameState.inventory) : {};
+      const comboAffordable = Object.keys(comboMissing).length === 0;
+
+      if (rule && flagsMatch && comboAffordable) {
         const sc = rule.stateChange;
         const soundToPlay = rule.soundEffect || 'pickup';
         playSound(soundToPlay);
@@ -640,36 +644,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           let newInventory = [...prev.inventory];
           let nextSceneId = prev.currentSceneId;
 
-          // Combinar objetos no es una entrega de escena: no lleva la protección anti-duplicados
-          if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
-            Object.entries(sc.addItems).forEach(([id, qty]) => {
-              const count = Math.max(0, Math.floor(Number(qty) || 0));
-              for (let i = 0; i < count; i++) {
-                newInventory.push(id);
-              }
-            });
-          } else if (sc?.addItemId) {
-            newInventory.push(sc.addItemId);
-          }
-
-          if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
-            Object.entries(sc.removeItems).forEach(([id, qty]) => {
-              const count = Math.max(0, Math.floor(Number(qty) || 0));
-              for (let i = 0; i < count; i++) {
-                const idx = newInventory.indexOf(id);
-                if (idx !== -1) newInventory.splice(idx, 1);
-              }
-            });
-          } else {
-            if (sc?.removeItemId) {
-              const idx = newInventory.indexOf(sc.removeItemId);
+          // Combinar objetos no es una entrega de escena: no lleva la protección anti-duplicados.
+          // Gasta primero (con las cantidades indicadas) y entrega después.
+          Object.entries(getRemovals(sc)).forEach(([id, count]) => {
+            for (let i = 0; i < count; i++) {
+              const idx = newInventory.indexOf(id);
               if (idx !== -1) newInventory.splice(idx, 1);
             }
-            if (sc?.removeItem2Id) {
-              const idx = newInventory.indexOf(sc.removeItem2Id);
-              if (idx !== -1) newInventory.splice(idx, 1);
-            }
-          }
+          });
+          Object.entries(getGrants(sc)).forEach(([id, count]) => {
+            for (let i = 0; i < count; i++) newInventory.push(id);
+          });
 
           if (sc?.goToSceneId) {
             nextSceneId = sc.goToSceneId;
@@ -708,6 +693,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           title: 'Combinación no disponible',
           verbIconName: 'Info',
           message: rule.failMessage,
+        });
+      } else if (rule && flagsMatch && !comboAffordable) {
+        const missingText = Object.entries(comboMissing)
+          .map(([id, n]) => `${n}x ${project.inventoryItems.find((i) => i.id === id)?.name || id}`)
+          .join(', ');
+        setModalFeedback({
+          type: 'item',
+          title: 'Combinación no disponible',
+          verbIconName: 'Info',
+          message: rule.failMessage || `No tienes suficientes unidades. Te faltan: ${missingText}.`,
         });
       } else {
         setModalFeedback({

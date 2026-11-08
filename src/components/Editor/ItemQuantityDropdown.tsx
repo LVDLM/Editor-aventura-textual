@@ -4,6 +4,8 @@ import { InventoryItem } from '../../types';
 
 interface ItemQuantityDropdownProps {
   label: string;
+  /** Clases de la etiqueta (por defecto, la del editor de escenas) */
+  labelClassName?: string;
   /** Texto de la cabecera del desplegable (p. ej. "Retirar Objetos") */
   panelTitle: string;
   /** Texto del tooltip del campo de unidades: se completa con el nombre del objeto */
@@ -41,6 +43,7 @@ const TONES = {
  */
 export const ItemQuantityDropdown: React.FC<ItemQuantityDropdownProps> = ({
   label,
+  labelClassName = 'block text-[10px] text-slate-400 mb-1',
   panelTitle,
   unitsTitle,
   items,
@@ -57,7 +60,7 @@ export const ItemQuantityDropdown: React.FC<ItemQuantityDropdownProps> = ({
 
   return (
     <div className="relative">
-      <label className="block text-[10px] text-slate-400 mb-1">{label}</label>
+      <label className={labelClassName}>{label}</label>
       <button
         type="button"
         onClick={onToggle}
