@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
 import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
-import { playSound } from '../../utils/audio';
+import { playSound, getSoundOptionsGrouped, stopAllAudio } from '../../utils/audio';
 import { isWordMatchInText, isWordChar } from '../../utils/textUtils';
 import { HotspotEditorModal } from './HotspotEditorModal';
 import { DialogueEditor } from './DialogueEditor';
@@ -151,6 +151,13 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
   const activeScene = project.scenes.find((s) => s.id === selectedSceneId) || project.scenes[0];
 
+  // Detener inmediatamente cualquier audio al desmontar el editor de escenas
+  useEffect(() => {
+    return () => {
+      stopAllAudio();
+    };
+  }, []);
+
   // Live Scene Preview state inside editor
   const [isPreviewingActiveScene, setIsPreviewingActiveScene] = useState(false);
   const [testSceneGameState, setTestSceneGameState] = useState<any>(null);
@@ -177,6 +184,9 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
 
   const [activeHotspotForEdit, setActiveHotspotForEdit] = useState<Hotspot | null>(null);
   const [showSceneAlerts, setShowSceneAlerts] = useState(false);
+
+  // Grouped sound options: Project sounds (if any) and Official Library
+  const { projectSounds, officialSounds, projectName } = getSoundOptionsGrouped(project);
 
   // Sidebar collapse preference
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -654,6 +664,20 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
         return {
           ...s,
           textBlocks: s.textBlocks.map((b) => (b.id === blockId ? { ...b, coverMode } : b)),
+        };
+      }),
+    }));
+  };
+
+  const handleUpdateBlockSound = (blockId: string, soundEffect: string) => {
+    const sfxVal = soundEffect === 'none' ? undefined : (soundEffect as SoundEffectType);
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          textBlocks: s.textBlocks.map((b) => (b.id === blockId ? { ...b, soundEffect: sfxVal } : b)),
         };
       }),
     }));
@@ -1779,13 +1803,27 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                   Sonido al Cargar Escena
                 </span>
                 {activeScene?.sfx && activeScene.sfx !== 'none' && (
-                  <button
-                    type="button"
-                    onClick={() => playSound(activeScene.sfx)}
-                    className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <span>▶ Probar</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopAllAudio();
+                        playSound(activeScene.sfx, project.customSounds);
+                      }}
+                      className="text-[10px] text-amber-400 hover:text-amber-200 hover:underline flex items-center gap-0.5 cursor-pointer font-bold"
+                      title="Probar sonido de la escena"
+                    >
+                      <span>▶ Probar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => stopAllAudio()}
+                      className="text-[10px] text-rose-400 hover:text-rose-200 hover:underline flex items-center gap-0.5 cursor-pointer font-bold"
+                      title="Detener sonido"
+                    >
+                      <span>⏹ Parar</span>
+                    </button>
+                  </div>
                 )}
               </label>
               <select
@@ -1798,15 +1836,26 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                       s.id === activeScene.id ? { ...s, sfx: sfx !== 'none' ? sfx : undefined } : s
                     ),
                   }));
-                  if (sfx !== 'none') playSound(sfx);
                 }}
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-amber-200 font-medium focus:border-amber-500 outline-none"
               >
-                {SOUND_EFFECT_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
-                ))}
+                <option value="none">Sin Sonido</option>
+                {projectSounds && projectSounds.length > 0 && (
+                  <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
+                    {projectSounds.map((cs) => (
+                      <option key={cs.id} value={cs.id} className="bg-[#1F1913] text-amber-200">
+                        {cs.name} ({cs.id})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Biblioteca Oficial" className="bg-[#1F1913] text-amber-400 font-bold">
+                  {officialSounds.map((opt) => (
+                    <option key={opt.id} value={opt.id} className="bg-[#1F1913] text-slate-200">
+                      {opt.name} ({opt.id})
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
           </div>
@@ -2456,6 +2505,58 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                           </button>
                         </div>
                       )}
+
+                      {/* Paragraph sound selector */}
+                      <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-lg px-2 py-0.5 text-[11px]">
+                        <Volume2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <select
+                          value={block.soundEffect || 'none'}
+                          onChange={(e) => handleUpdateBlockSound(block.id, e.target.value)}
+                          className="bg-transparent text-amber-200 text-[11px] focus:outline-none cursor-pointer max-w-[150px] sm:max-w-[210px] truncate"
+                          title="Sonido a reproducir al mostrar este párrafo"
+                        >
+                          <option value="none" className="bg-[#1F1913] text-slate-300">Sin sonido</option>
+                          {projectSounds && projectSounds.length > 0 && (
+                            <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
+                              {projectSounds.map((cs) => (
+                                <option key={cs.id} value={cs.id} className="bg-[#1F1913] text-amber-200">
+                                  {cs.name} ({cs.id})
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          <optgroup label="Biblioteca Oficial" className="bg-[#1F1913] text-amber-400 font-bold">
+                            {officialSounds.map((s) => (
+                              <option key={s.id} value={s.id} className="bg-[#1F1913] text-slate-200">
+                                {s.name} ({s.id})
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                        {block.soundEffect && block.soundEffect !== 'none' && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                stopAllAudio();
+                                playSound(block.soundEffect!, project.customSounds);
+                              }}
+                              className="text-[10px] text-amber-400 hover:text-amber-200 hover:underline cursor-pointer flex items-center gap-0.5 shrink-0 font-bold"
+                              title="Probar sonido del párrafo"
+                            >
+                              ▶
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => stopAllAudio()}
+                              className="text-[10px] text-rose-400 hover:text-rose-200 hover:underline cursor-pointer flex items-center gap-0.5 shrink-0 font-bold"
+                              title="Detener sonido"
+                            >
+                              ⏹
+                            </button>
+                          </div>
+                        )}
+                      </div>
 
                       {block.isGameOver && (
                         <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded font-bold flex items-center gap-1">

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Hotspot, ActionRule, GameProject, VerbType, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
 import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
-import { playSound, getAllMergedSounds } from '../../utils/audio';
+import { playSound, getAllMergedSounds, stopAllAudio } from '../../utils/audio';
 import { DialogueEditor } from './DialogueEditor';
 import { AutoGrowTextarea } from '../common/AutoGrowTextarea';
 import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
@@ -24,6 +24,13 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const projectVerbs = getProjectVerbs(project);
   const [currentHotspot, setCurrentHotspot] = useState<Hotspot>({ ...hotspot });
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
+
+  // Detener audio inmediatamente al cerrar / desmontar el modal de hotspot
+  useEffect(() => {
+    return () => {
+      stopAllAudio();
+    };
+  }, []);
 
   // New inline flag creation
   const [newFlagName, setNewFlagName] = useState('');
@@ -844,7 +851,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                       >
                         <option value="none">Sin Sonido</option>
                         {project.customSounds && project.customSounds.length > 0 && (
-                          <optgroup label="Sonidos del Proyecto">
+                          <optgroup label={`Sonidos de ${project.title || 'este proyecto'}`}>
                             {project.customSounds.map((cs) => (
                               <option key={cs.id} value={cs.id}>
                                 {cs.name} ({cs.id})
@@ -863,13 +870,27 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                         </optgroup>
                       </select>
                       {soundEffect !== 'none' && (
-                        <button
-                          type="button"
-                          onClick={() => playSound(soundEffect, project.customSounds)}
-                          className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                        >
-                          <span>Probar</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              stopAllAudio();
+                              playSound(soundEffect, project.customSounds);
+                            }}
+                            className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                            title="Probar sonido"
+                          >
+                            <span>Probar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => stopAllAudio()}
+                            className="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                            title="Detener sonido"
+                          >
+                            <span>Parar</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1164,13 +1185,27 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                         </optgroup>
                       </select>
                       {failSoundEffect !== 'none' && (
-                        <button
-                          type="button"
-                          onClick={() => playSound(failSoundEffect, project.customSounds)}
-                          className="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                        >
-                          <span>Probar</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              stopAllAudio();
+                              playSound(failSoundEffect, project.customSounds);
+                            }}
+                            className="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                            title="Probar sonido"
+                          >
+                            <span>Probar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => stopAllAudio()}
+                            className="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                            title="Detener sonido"
+                          >
+                            <span>Parar</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

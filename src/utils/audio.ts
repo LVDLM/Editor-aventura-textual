@@ -12,6 +12,24 @@ let soundEnabled = true;
 const activeAudioElements = new Set<HTMLAudioElement>();
 const activeSynthSources = new Set<AudioScheduledSourceNode>();
 const urlAudioCache = new Map<string, HTMLAudioElement>();
+const stopListeners = new Set<() => void>();
+let activePreviewTimer: ReturnType<typeof setTimeout> | null = null;
+let activePreviewResolver: (() => void) | null = null;
+
+export function onAudioStop(listener: () => void): () => void {
+  stopListeners.add(listener);
+  return () => {
+    stopListeners.delete(listener);
+  };
+}
+
+function notifyStopListeners() {
+  stopListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch {}
+  });
+}
 
 function startTrackedSource(source: AudioScheduledSourceNode, when?: number) {
   activeSynthSources.add(source);
@@ -22,7 +40,7 @@ function startTrackedSource(source: AudioScheduledSourceNode, when?: number) {
 
 export function getAudioContext(): AudioContext | null {
   if (!soundEnabled) return null;
-  if (!audioCtx) {
+  if (!audioCtx || audioCtx.state === 'closed') {
     const AudioContextClass =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -48,24 +66,53 @@ export function isSoundEnabled(): boolean {
 }
 
 export function stopAllAudio() {
+  // Cancel active preview timer and promise
+  if (activePreviewTimer) {
+    clearTimeout(activePreviewTimer);
+    activePreviewTimer = null;
+  }
+  if (activePreviewResolver) {
+    try {
+      activePreviewResolver();
+    } catch {}
+    activePreviewResolver = null;
+  }
+
+  // 1. Pause, clear and reset all active HTMLAudio elements
   activeAudioElements.forEach((audio) => {
     try {
       audio.pause();
       audio.currentTime = 0;
+      audio.src = '';
     } catch {
       // Ignore
     }
   });
   activeAudioElements.clear();
 
+  // 2. Stop and disconnect all active scheduled synth sources
   activeSynthSources.forEach((source) => {
     try {
       source.stop();
-    } catch {
-      // The source may already have stopped.
-    }
-    activeSynthSources.delete(source);
+    } catch {}
+    try {
+      source.disconnect();
+    } catch {}
   });
+  activeSynthSources.clear();
+
+  // 3. Immediately close and nullify AudioContext for an absolute, instant cutoff
+  if (audioCtx) {
+    try {
+      if (audioCtx.state !== 'closed') {
+        audioCtx.close();
+      }
+    } catch {}
+    audioCtx = null;
+  }
+
+  // 4. Notify all UI components to reset buttons
+  notifyStopListeners();
 }
 
 /**
@@ -527,6 +574,19 @@ export function getAllMergedSounds(project?: GameProject | null): SoundDefinitio
   return Array.from(map.values());
 }
 
+/**
+ * Returns sounds grouped into project sounds and official library sounds
+ */
+export function getSoundOptionsGrouped(project?: GameProject | null) {
+  const officialSounds = globalSoundLibrary;
+  const projectSounds = project?.customSounds || projectCustomSounds || [];
+  return {
+    projectName: project?.title || 'Proyecto',
+    projectSounds,
+    officialSounds,
+  };
+}
+
 export interface InstrumentOption {
   id: InstrumentType;
   name: string;
@@ -564,8 +624,8 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
   // CONFIGURABLE ORGANIC VOICE ENGINE (creatures, howls, screams, growls...)
   // ==========================================
   if (config.synthesisProfile === 'voice') {
-    playVoiceSynth(ctx, config, now, startTrackedSource);
-    return;
+    const totalVoiceSecs = playVoiceSynth(ctx, config, now, startTrackedSource);
+    return totalVoiceSecs || dur;
   }
 
   // ==========================================
@@ -1138,6 +1198,8 @@ export function playSynthWithConfig(ctx: AudioContext, config: SynthSoundConfig,
     startTrackedSource(noiseSrc, now);
     noiseSrc.stop(now + dur * 0.85);
   }
+
+  return dur;
 }
 
 /**
@@ -1201,9 +1263,15 @@ export function previewSoundDefinition(sound: SoundDefinition): Promise<void> {
   if (sound.synthConfig) {
     const ctx = getAudioContext();
     if (ctx) {
-      playSynthWithConfig(ctx, sound.synthConfig);
+      const activeDuration = playSynthWithConfig(ctx, sound.synthConfig) || sound.synthConfig.duration || 0.4;
       return new Promise((resolve) => {
-        window.setTimeout(resolve, Math.max(40, sound.synthConfig!.duration * 1000 + 100));
+        activePreviewResolver = resolve;
+        const durMs = Math.max(80, Math.round(activeDuration * 1000) + 60);
+        activePreviewTimer = setTimeout(() => {
+          activePreviewTimer = null;
+          activePreviewResolver = null;
+          resolve();
+        }, durMs);
       });
     }
     return Promise.resolve();

@@ -251,6 +251,7 @@ export interface SceneTextBlock {
   imageFileData?: string; // Uploaded Base64 file data
   imageFileName?: string; // Filename for ZIP export (e.g. img/escena_bosque.png)
   coverMode?: 'full' | 'with_text'; // 'full' = Portada completa, 'with_text' = Acompañada de texto
+  soundEffect?: SoundEffectType; // Sound effect played when this paragraph block is revealed
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
   requiredItemId?: string; // Single required inventory item for backwards compatibility

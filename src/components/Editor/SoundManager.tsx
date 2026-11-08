@@ -34,6 +34,7 @@ import {
   playSynthWithConfig,
   previewSoundDefinition,
   stopAllAudio,
+  onAudioStop,
   INSTRUMENT_OPTIONS,
 } from '../../utils/audio';
 import {
@@ -350,6 +351,18 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
   const [activeSoundForm, setActiveSoundForm] = useState<SoundDefinition | null>(null);
   const [urlTestingStatus, setUrlTestingStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [urlErrorMessage, setUrlErrorMessage] = useState('');
+
+  // Sincronizar estado cuando se detiene el audio desde cualquier origen y detener al desmontar
+  useEffect(() => {
+    const unsub = onAudioStop(() => {
+      setPlayingSoundId(null);
+      setIsPlayingTesting(false);
+    });
+    return () => {
+      unsub();
+      stopAllAudio();
+    };
+  }, []);
 
   // Load Global Sound Library from Firestore on mount
   useEffect(() => {
@@ -835,9 +848,9 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                     ? 'text-[#6B5C46] hover:text-[#2A2118]'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title={`Sonidos exclusivos de tu proyecto: ${project.title || 'Mi Proyecto'}`}
+                title={`Sonidos exclusivos de tu proyecto: ${project.title || 'Proyecto'}`}
               >
-                <span className="truncate">Mi Proyecto ({projectCustomSounds.length})</span>
+                <span className="truncate max-w-[170px]">{project.title || 'Proyecto'} ({projectCustomSounds.length})</span>
               </button>
             </div>
 
@@ -957,10 +970,11 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                         </span>
                       ) : (
                         <span
-                          className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold flex items-center gap-1"
-                          title="Sonido exclusivo de este proyecto"
+                          className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold flex items-center gap-1 max-w-[150px]"
+                          title={`Sonido del proyecto: ${project.title || 'Proyecto'}`}
                         >
-                          <span>Proyecto</span>
+                          <FolderPlus className="w-3 h-3 text-indigo-400 shrink-0" />
+                          <span className="truncate">{project.title || 'Proyecto'}</span>
                         </span>
                       )}
 
@@ -1111,46 +1125,41 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                           </span>
                         </div>
 
-                        {userProjectsList.length > 1 && (
-                          <div className="space-y-1">
-                            <label className={`text-[11px] block font-medium ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
-                              Asignar a uno de tus proyectos:
-                            </label>
+                        <div className="space-y-1">
+                          <label className={`text-[11px] block font-medium ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
+                            {userProjectsList.length > 0 ? 'Seleccionar proyecto:' : 'Proyecto de destino:'}
+                          </label>
+                          {userProjectsList.length > 0 ? (
                             <select
                               value={selectedTargetDocId}
                               onChange={(e) => handleTargetProjectChange(e.target.value)}
-                              className={`w-full px-3 py-1.5 rounded-xl text-xs border ${
+                              className={`w-full px-3 py-1.5 rounded-xl text-xs border font-semibold ${
                                 isClean
                                   ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
                                   : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
                               }`}
                             >
                               <option value="">{project.title || 'Proyecto activo en edición'}</option>
-                              {userProjectsList.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.title || p.projectData?.title || 'Sin título'}
-                                </option>
-                              ))}
+                              {userProjectsList.map((p) => {
+                                const pTitle = p.title || p.projectData?.title || 'Sin título';
+                                if (pTitle === (project.title || '')) return null;
+                                return (
+                                  <option key={p.id} value={p.id}>
+                                    {pTitle}
+                                  </option>
+                                );
+                              })}
                             </select>
-                          </div>
-                        )}
-
-                        <div className="space-y-1">
-                          <label className={`text-[11px] block font-medium ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
-                            Nombre del Proyecto:
-                          </label>
-                          <input
-                            type="text"
-                            value={projectNameInput}
-                            onChange={(e) => setProjectNameInput(e.target.value)}
-                            placeholder="Nombre del proyecto..."
-                            className={`w-full px-3 py-2 rounded-xl text-xs border ${
-                              isClean
-                                ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
-                                : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
-                            }`}
-                          />
-                          <p className={`text-[10px] ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
+                          ) : (
+                            <div
+                              className={`px-3 py-2 rounded-xl text-xs border font-bold ${
+                                isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-amber-200'
+                              }`}
+                            >
+                              {project.title || 'Proyecto en edición'}
+                            </div>
+                          )}
+                          <p className={`text-[10px] mt-1 ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
                             Solo tú tienes acceso a tus proyectos y a la biblioteca oficial.
                           </p>
                         </div>

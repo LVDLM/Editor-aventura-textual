@@ -16,7 +16,7 @@ import { UserProfilePage } from './components/Portal/UserProfilePage';
 import { PrivacyPolicyModal } from './components/Portal/PrivacyPolicyModal';
 import { PrivacyBanner } from './components/Portal/PrivacyBanner';
 import { Footer } from './components/Footer';
-import { setSoundEnabled } from './utils/audio';
+import { setSoundEnabled, stopAllAudio } from './utils/audio';
 import { auth, getUserProfile, createOrUpdateUserProfile, ADMIN_EMAILS, getProjectByIdFromCloud, consolidateAdminProfilesInFirestore, getMasterAdminProfile } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -94,9 +94,10 @@ export default function App() {
     checkUrlGame();
   }, []);
 
-  // Al cambiar de vista (Biblioteca → historia, etc.) se empieza siempre arriba
+  // Al cambiar de vista (Biblioteca → historia, etc.) se empieza siempre arriba y se corta cualquier sonido activo
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    stopAllAudio();
   }, [currentView]);
 
   // Synchronize URL search parameter when playing a game or navigating views

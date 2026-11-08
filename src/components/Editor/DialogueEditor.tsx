@@ -666,7 +666,7 @@ export const DialogueEditor: React.FC<DialogueEditorProps> = ({
                             >
                               <option value="none">Sin Sonido</option>
                               {project.customSounds && project.customSounds.length > 0 && (
-                                <optgroup label="📁 Sonidos del Proyecto">
+                                <optgroup label={`📁 Sonidos de ${project.title || 'este proyecto'}`}>
                                   {project.customSounds.map((cs) => (
                                     <option key={cs.id} value={cs.id}>
                                       ⭐ {cs.name} ({cs.id})

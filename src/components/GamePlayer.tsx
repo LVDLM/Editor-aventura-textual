@@ -374,8 +374,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   useEffect(() => {
     setQteMistakeMsg(null);
-    if (currentScene?.sfx) {
-      playSound(currentScene.sfx);
+    if (currentScene) {
+      const visibleBlocks = (currentScene.textBlocks || []).filter((b) => {
+        if (b.visibleIfFlags && Object.entries(b.visibleIfFlags).some(([k, v]) => !!gameState.flags[k] !== v)) return false;
+        if (b.hiddenIfFlags && Object.entries(b.hiddenIfFlags).some(([k, v]) => !!gameState.flags[k] === v)) return false;
+        if (b.requiredItemId && !gameState.inventory.includes(b.requiredItemId)) return false;
+        if (b.requiredItemIds && b.requiredItemIds.some((id) => !gameState.inventory.includes(id))) return false;
+        return true;
+      });
+
+      const blockWithSound = visibleBlocks.find((b) => b.soundEffect && b.soundEffect !== 'none');
+      if (blockWithSound?.soundEffect) {
+        playSound(blockWithSound.soundEffect, project.customSounds);
+      } else if (currentScene.sfx) {
+        playSound(currentScene.sfx, project.customSounds);
+      }
     }
     if (currentScene && (currentScene.type === 'qte' || currentScene.qteConfig) && currentScene.qteConfig?.sequence?.length) {
       const timeLimit = currentScene.qteConfig.timeLimitSeconds || 10;

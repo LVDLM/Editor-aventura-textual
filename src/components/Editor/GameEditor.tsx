@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameProject, UserProfile } from '../../types';
 import { GeneralSettings } from './GeneralSettings';
 import { SceneEditor } from './SceneEditor';
@@ -8,6 +8,7 @@ import { CharacterManager } from './CharacterManager';
 import { SoundManager } from './SoundManager';
 import { FileText, Settings, Package, ToggleLeft, AlertTriangle, MoveHorizontal, User, Volume2 } from 'lucide-react';
 import { validateProjectScenes } from '../../utils/sceneValidator';
+import { stopAllAudio } from '../../utils/audio';
 
 interface GameEditorProps {
   project: GameProject;
@@ -32,6 +33,18 @@ export const GameEditor: React.FC<GameEditorProps> = ({
   const [editorWidth, setEditorWidth] = useState<'standard' | 'wide' | 'full'>(() => {
     return (localStorage.getItem('editor_width_preference') as any) || 'wide';
   });
+
+  // Detener todo el audio al desmontar el editor (salir del editor de aventuras)
+  useEffect(() => {
+    return () => {
+      stopAllAudio();
+    };
+  }, []);
+
+  // Detener audio al cambiar entre pestañas del editor
+  useEffect(() => {
+    stopAllAudio();
+  }, [activeTab]);
 
   const handleWidthChange = (width: 'standard' | 'wide' | 'full') => {
     setEditorWidth(width);

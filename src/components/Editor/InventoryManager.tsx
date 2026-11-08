@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { GameProject, InventoryItem, ActionRule, SoundEffectType, SOUND_EFFECT_OPTIONS } from '../../types';
+import { getSoundOptionsGrouped } from '../../utils/audio';
 import { Package, Plus, Trash2, Key, BookOpen, Flashlight, Box, Sparkles, Edit2, Puzzle, ArrowRight, Zap, Check } from 'lucide-react';
 
 interface InventoryManagerProps {
@@ -15,6 +16,7 @@ const AVAILABLE_ICONS = [
 ];
 
 export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, updateProject }) => {
+  const { projectSounds, officialSounds, projectName } = getSoundOptionsGrouped(project);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('Box');
@@ -540,11 +542,23 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                     onChange={(e) => setUseEffectSound(e.target.value as SoundEffectType)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:border-amber-500 outline-none"
                   >
-                    {SOUND_EFFECT_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))}
+                    <option value="none">Sin Sonido</option>
+                    {projectSounds && projectSounds.length > 0 && (
+                      <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
+                        {projectSounds.map((cs) => (
+                          <option key={cs.id} value={cs.id} className="bg-[#1F1913] text-amber-200">
+                            {cs.name} ({cs.id})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Biblioteca Oficial" className="bg-[#1F1913] text-amber-400 font-bold">
+                      {officialSounds.map((opt) => (
+                        <option key={opt.id} value={opt.id} className="bg-[#1F1913] text-slate-200">
+                          {opt.name} ({opt.id})
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
               </div>
@@ -992,11 +1006,23 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                             onChange={(e) => setComboSound(e.target.value as SoundEffectType)}
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500"
                           >
-                            {SOUND_EFFECT_OPTIONS.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.label}
-                              </option>
-                            ))}
+                            <option value="none">Sin Sonido</option>
+                            {projectSounds && projectSounds.length > 0 && (
+                              <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
+                                {projectSounds.map((cs) => (
+                                  <option key={cs.id} value={cs.id} className="bg-[#1F1913] text-amber-200">
+                                    {cs.name} ({cs.id})
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            <optgroup label="Biblioteca Oficial" className="bg-[#1F1913] text-amber-400 font-bold">
+                              {officialSounds.map((s) => (
+                                <option key={s.id} value={s.id} className="bg-[#1F1913] text-slate-200">
+                                  {s.name} ({s.id})
+                                </option>
+                              ))}
+                            </optgroup>
                           </select>
                         </div>
                       </div>

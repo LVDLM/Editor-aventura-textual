@@ -771,8 +771,14 @@ ${VOICE_ENGINE_EMBED}
       }
 
       if (lastRenderedSceneId !== scene.id) {
-        lastRenderedSceneId = scene.id;
-        if (scene.sfx) playSound(scene.sfx);
+        var pBlock = (scene.textBlocks || []).find(function(b) {
+          return (typeof isBlockVisible === 'function' ? isBlockVisible(b) : true) && b.soundEffect && b.soundEffect !== 'none';
+        });
+        if (pBlock && pBlock.soundEffect) {
+          playSound(pBlock.soundEffect);
+        } else if (scene.sfx) {
+          playSound(scene.sfx);
+        }
       }
 
       let combinedHTML = '';
