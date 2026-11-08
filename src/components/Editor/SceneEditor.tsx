@@ -171,6 +171,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
       appendedTextsPerScene: {},
       history: [],
       usedHotspotIds: [],
+      deliveredRuleKeys: [],
       difficulty: 'facil',
     });
     setIsPreviewingActiveScene(true);

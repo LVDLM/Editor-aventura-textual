@@ -4,6 +4,7 @@ import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
 import { playSound, getAllMergedSounds, stopAllAudio } from '../../utils/audio';
 import { DialogueEditor } from './DialogueEditor';
 import { AutoGrowTextarea } from '../common/AutoGrowTextarea';
+import { ItemQuantityDropdown } from './ItemQuantityDropdown';
 import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface HotspotEditorModalProps {
@@ -58,7 +59,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   // State change consequences (Conditions MET)
   const [addItemId, setAddItemId] = useState('');
   const [addItemsMap, setAddItemsMap] = useState<Record<string, number>>({});
-  const [removeItemId, setRemoveItemId] = useState('');
+  const [removeItemsMap, setRemoveItemsMap] = useState<Record<string, number>>({});
   const [flagToSet, setFlagToSet] = useState('');
   const [flagSetValue, setFlagSetValue] = useState<boolean>(true);
   const [setFlagsMap, setSetFlagsMap] = useState<Record<string, boolean>>({});
@@ -73,7 +74,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [failSoundEffect, setFailSoundEffect] = useState<SoundEffectType>('none');
   const [failAddItemId, setFailAddItemId] = useState('');
   const [failAddItemsMap, setFailAddItemsMap] = useState<Record<string, number>>({});
-  const [failRemoveItemId, setFailRemoveItemId] = useState('');
+  const [failRemoveItemsMap, setFailRemoveItemsMap] = useState<Record<string, number>>({});
   const [failFlagToSet, setFailFlagToSet] = useState('');
   const [failFlagSetValue, setFailFlagSetValue] = useState<boolean>(true);
   const [failSetFlagsMap, setFailSetFlagsMap] = useState<Record<string, boolean>>({});
@@ -81,6 +82,26 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
   const [failAppendStoryText, setFailAppendStoryText] = useState('');
   const [isAddItemsDropdownOpen, setIsAddItemsDropdownOpen] = useState(false);
   const [isFailAddItemsDropdownOpen, setIsFailAddItemsDropdownOpen] = useState(false);
+  const [isRemoveItemsDropdownOpen, setIsRemoveItemsDropdownOpen] = useState(false);
+  const [isFailRemoveItemsDropdownOpen, setIsFailRemoveItemsDropdownOpen] = useState(false);
+
+  // Lee los objetos retirados de un StateChange. Acepta el formato nuevo (removeItems con cantidades)
+  // y el antiguo (removeItemId = 1 unidad), para que los proyectos ya guardados sigan abriéndose bien.
+  const readRemoveItems = (sc?: { removeItems?: Record<string, number>; removeItemId?: string }): Record<string, number> => {
+    if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) return { ...sc.removeItems };
+    if (sc?.removeItemId) return { [sc.removeItemId]: 1 };
+    return {};
+  };
+
+  // Limpia el mapa del formulario (solo cantidades enteras > 0)
+  const cleanQuantities = (map: Record<string, number>): Record<string, number> => {
+    const clean: Record<string, number> = {};
+    Object.entries(map).forEach(([itemId, qty]) => {
+      const n = Math.floor(Number(qty) || 0);
+      if (n > 0) clean[itemId] = n;
+    });
+    return clean;
+  };
 
   const [duplicateConflict, setDuplicateConflict] = useState<{
     newRule: ActionRule;
@@ -113,7 +134,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       setAddItemId('');
     }
 
-    setRemoveItemId(action.stateChange?.removeItemId || '');
+    setRemoveItemsMap(readRemoveItems(action.stateChange));
     if (action.stateChange?.setFlags) {
       const entries = Object.entries(action.stateChange.setFlags);
       if (entries.length > 0) {
@@ -159,7 +180,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       setFailAddItemId('');
     }
 
-    setFailRemoveItemId(action.failStateChange?.removeItemId || '');
+    setFailRemoveItemsMap(readRemoveItems(action.failStateChange));
     if (action.failStateChange?.setFlags) {
       const entries = Object.entries(action.failStateChange.setFlags);
       if (entries.length > 0) {
@@ -206,7 +227,11 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       stateChangeObj.addItemId = Object.keys(cleanAddItems)[0];
     }
 
-    if (removeItemId) stateChangeObj.removeItemId = removeItemId;
+    const cleanRemoveItems = cleanQuantities(removeItemsMap);
+    if (Object.keys(cleanRemoveItems).length > 0) {
+      stateChangeObj.removeItems = cleanRemoveItems;
+      stateChangeObj.removeItemId = Object.keys(cleanRemoveItems)[0]; // compatibilidad con versiones anteriores
+    }
     if (goToSceneId) stateChangeObj.goToSceneId = goToSceneId;
     if (appendStoryText.trim()) stateChangeObj.appendStoryText = appendStoryText.trim();
     if (isGameOver) stateChangeObj.isGameOver = true;
@@ -229,7 +254,11 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
       failStateChangeObj.addItemId = Object.keys(cleanFailAddItems)[0];
     }
 
-    if (failRemoveItemId) failStateChangeObj.removeItemId = failRemoveItemId;
+    const cleanFailRemoveItems = cleanQuantities(failRemoveItemsMap);
+    if (Object.keys(cleanFailRemoveItems).length > 0) {
+      failStateChangeObj.removeItems = cleanFailRemoveItems;
+      failStateChangeObj.removeItemId = Object.keys(cleanFailRemoveItems)[0]; // compatibilidad con versiones anteriores
+    }
     if (failGoToSceneId) failStateChangeObj.goToSceneId = failGoToSceneId;
     if (failAppendStoryText.trim()) failStateChangeObj.appendStoryText = failAppendStoryText.trim();
     if (failIsGameOver) failStateChangeObj.isGameOver = true;
@@ -339,7 +368,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
 
     setAddItemId('');
     setAddItemsMap({});
-    setRemoveItemId('');
+    setRemoveItemsMap({});
     setFlagToSet('');
     setFlagSetValue(true);
     setSetFlagsMap({});
@@ -353,7 +382,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setFailSoundEffect('none');
     setFailAddItemId('');
     setFailAddItemsMap({});
-    setFailRemoveItemId('');
+    setFailRemoveItemsMap({});
     setFailFlagToSet('');
     setFailFlagSetValue(true);
     setFailSetFlagsMap({});
@@ -361,6 +390,8 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
     setFailAppendStoryText('');
     setIsAddItemsDropdownOpen(false);
     setIsFailAddItemsDropdownOpen(false);
+    setIsRemoveItemsDropdownOpen(false);
+    setIsFailRemoveItemsDropdownOpen(false);
     setIsRequiredFlagsExpanded(false);
   };
 
@@ -1019,21 +1050,23 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                         )}
                       </div>
 
-                      <div>
-                        <label className="block text-[10px] text-slate-400 mb-1">Retirar Objeto</label>
-                        <select
-                          value={removeItemId}
-                          onChange={(e) => setRemoveItemId(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
-                        >
-                          <option value="">-- Ninguno --</option>
-                          {project.inventoryItems.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              - {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <ItemQuantityDropdown
+                        label="Retirar / Gastar Objeto(s)"
+                        panelTitle="Retirar Objetos"
+                        unitsTitle="Unidades a gastar de"
+                        items={project.inventoryItems}
+                        value={removeItemsMap}
+                        onChange={setRemoveItemsMap}
+                        isOpen={isRemoveItemsDropdownOpen}
+                        onToggle={() => {
+                          setIsRemoveItemsDropdownOpen((prev) => !prev);
+                          setIsAddItemsDropdownOpen(false);
+                          setIsFailAddItemsDropdownOpen(false);
+                        }}
+                        onClose={() => setIsRemoveItemsDropdownOpen(false)}
+                        sign="-"
+                        tone="rose"
+                      />
 
                       <div>
                         <label className="block text-[10px] text-slate-400 mb-1">Cambiar a Escena</label>
@@ -1334,21 +1367,23 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                         )}
                       </div>
 
-                      <div>
-                        <label className="block text-[10px] text-slate-400 mb-1">Retirar Objeto al Fallar</label>
-                        <select
-                          value={failRemoveItemId}
-                          onChange={(e) => setFailRemoveItemId(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
-                        >
-                          <option value="">-- Ninguno --</option>
-                          {project.inventoryItems.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              - {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <ItemQuantityDropdown
+                        label="Retirar / Gastar al Fallar"
+                        panelTitle="Retirar Objetos (Fallo)"
+                        unitsTitle="Unidades a gastar al fallar de"
+                        items={project.inventoryItems}
+                        value={failRemoveItemsMap}
+                        onChange={setFailRemoveItemsMap}
+                        isOpen={isFailRemoveItemsDropdownOpen}
+                        onToggle={() => {
+                          setIsFailRemoveItemsDropdownOpen((prev) => !prev);
+                          setIsAddItemsDropdownOpen(false);
+                          setIsFailAddItemsDropdownOpen(false);
+                        }}
+                        onClose={() => setIsFailRemoveItemsDropdownOpen(false)}
+                        sign="-"
+                        tone="rose"
+                      />
 
                       <div>
                         <label className="block text-[10px] text-slate-400 mb-1">Cambiar a Escena al Fallar</label>
@@ -1573,9 +1608,14 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                                     }
                                     return null;
                                   })()}
-                                  {act.failStateChange.removeItemId && (
-                                    <span>- {project.inventoryItems.find((i) => i.id === act.failStateChange.removeItemId)?.name || 'Objeto retirado'}</span>
-                                  )}
+                                  {(() => {
+                                    const removed = readRemoveItems(act.failStateChange);
+                                    const labels = Object.entries(removed).map(([id, qty]) => {
+                                      const name = project.inventoryItems.find((i) => i.id === id)?.name || 'Objeto retirado';
+                                      return qty > 1 ? `${qty}x ${name}` : name;
+                                    });
+                                    return labels.length > 0 ? <span>- {labels.join(', ')}</span> : null;
+                                  })()}
                                   {act.failStateChange.setFlags && <span>🚩 Banderas cambiadas</span>}
                                   {act.failStateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
                                   {act.failStateChange.appendStoryText && <span>📝 Párrafo añadido</span>}
@@ -1602,9 +1642,14 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                                 }
                                 return null;
                               })()}
-                              {act.stateChange.removeItemId && (
-                                <span>- {project.inventoryItems.find((i) => i.id === act.stateChange.removeItemId)?.name || 'Objeto retirado'}</span>
-                              )}
+                              {(() => {
+                                const removed = readRemoveItems(act.stateChange);
+                                const labels = Object.entries(removed).map(([id, qty]) => {
+                                  const name = project.inventoryItems.find((i) => i.id === id)?.name || 'Objeto retirado';
+                                  return qty > 1 ? `${qty}x ${name}` : name;
+                                });
+                                return labels.length > 0 ? <span>- {labels.join(', ')}</span> : null;
+                              })()}
                               {act.stateChange.setFlags && <span>🚩 Banderas cambiadas</span>}
                               {act.stateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
                               {act.stateChange.appendStoryText && <span>📝 Párrafo añadido</span>}

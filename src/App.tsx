@@ -133,6 +133,7 @@ export default function App() {
     appendedTextsPerScene: {} as Record<string, string[]>,
     history: [] as { id: string; type: 'story' | 'response' | 'system'; text: string }[],
     usedHotspotIds: [] as string[],
+    deliveredRuleKeys: [] as string[],
     difficulty: 'normal' as 'facil' | 'normal' | 'dificil',
   });
 
@@ -225,6 +226,7 @@ export default function App() {
       appendedTextsPerScene: {},
       history: [],
       usedHotspotIds: [],
+      deliveredRuleKeys: [],
       difficulty: gameState.difficulty || 'normal',
     });
   };
@@ -565,6 +567,7 @@ export default function App() {
                 history: slotData.narrativeHistory || [],
                 appendedTextsPerScene: slotData.appendedTextsPerScene || {},
                 usedHotspotIds: slotData.usedHotspotIds || [],
+                deliveredRuleKeys: slotData.deliveredRuleKeys || [],
                 difficulty: slotData.difficulty || 'facil',
               });
               setCurrentView('play');

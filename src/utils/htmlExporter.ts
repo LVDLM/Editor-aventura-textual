@@ -422,6 +422,7 @@ ${jsonProject}
       flags: Object.assign({}, PROJECT.globalFlags || {}),
       appendedTexts: {},
       usedHotspotIds: [],
+      deliveredRuleKeys: [],
       verbUseCounts: {},
       difficulty: PROJECT.difficultyMode || 'easy',
       isGameOver: false
@@ -911,17 +912,17 @@ ${VOICE_ENGINE_EMBED}
 
     function formatTextWithLinks(str) {
       if (!str) return '';
-      if (/<[a-z][\s\S]*>/i.test(str)) {
-        return str.replace(/<a\s+(?:[^>]*?\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$2</a>');
+      if (/<[a-z][\\s\\S]*>/i.test(str)) {
+        return str.replace(/<a\\s+(?:[^>]*?\\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\\/a>/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$2</a>');
       }
       const escaped = escapeHTML(str);
-      return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$1</a>');
+      return escaped.replace(/(https?:\\/\\/[^\\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$1</a>');
     }
 
     function toggleDetailsModal() {
       const syn = PROJECT.synopsis || PROJECT.description || 'Sin sinopsis registrada.';
-      const creds = PROJECT.credits ? ('<div style="margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 0.8rem;"><strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Créditos y Fuentes:</strong>' + formatTextWithLinks(PROJECT.credits).replace(/\n/g, '<br/>') + '</div>') : '';
-      showPopupModal('📖 Detalles de la Historia', '<div style="font-size: 0.95rem; line-height: 1.6;"><strong>' + escapeHTML(PROJECT.title) + '</strong> por <em>' + escapeHTML(PROJECT.author) + '</em></div><div style="margin-top: 0.75rem; font-size: 0.9rem; color: #cbd5e1;">' + escapeHTML(syn).replace(/\n/g, '<br/>') + '</div>' + creds, null, '✨');
+      const creds = PROJECT.credits ? ('<div style="margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 0.8rem;"><strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Créditos y Fuentes:</strong>' + formatTextWithLinks(PROJECT.credits).replace(/\\n/g, '<br/>') + '</div>') : '';
+      showPopupModal('📖 Detalles de la Historia', '<div style="font-size: 0.95rem; line-height: 1.6;"><strong>' + escapeHTML(PROJECT.title) + '</strong> por <em>' + escapeHTML(PROJECT.author) + '</em></div><div style="margin-top: 0.75rem; font-size: 0.9rem; color: #cbd5e1;">' + escapeHTML(syn).replace(/\\n/g, '<br/>') + '</div>' + creds, null, '✨');
     }
 
     function closePopupOnBackdrop(e) {
@@ -980,14 +981,15 @@ ${VOICE_ENGINE_EMBED}
               gameState.flags[k] = sc.setFlags[k];
             }
           }
-          if (sc.addItemId && gameState.inventory.indexOf(sc.addItemId) === -1) {
+          // Combinar no es una entrega de escena: sin proteccion anti-duplicados. Gasta 1 unidad, no todas.
+          if (sc.addItemId) {
             gameState.inventory.push(sc.addItemId);
           }
           if (sc.removeItemId) {
-            gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItemId; });
+            removeOneUnit(sc.removeItemId);
           }
           if (sc.removeItem2Id) {
-            gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItem2Id; });
+            removeOneUnit(sc.removeItem2Id);
           }
           if (sc.goToSceneId) {
             gameState.currentSceneId = sc.goToSceneId;
@@ -1200,6 +1202,88 @@ ${VOICE_ENGINE_EMBED}
       updateSentenceBar();
     }
 
+    // ---- Reglas de objetos: copia en JS de src/utils/itemRules.ts (si cambias una, cambia la otra) ----
+    // 1) No se puede gastar más de lo que se tiene.
+    // 2) Cada fuente de entrega de una escena entrega sus objetos UNA sola vez (aunque se repita la acción,
+    //    se gasten los objetos o se vuelva a la escena). Se registra en gameState.deliveredRuleKeys.
+    function countItem(id) {
+      var n = 0;
+      for (var i = 0; i < gameState.inventory.length; i++) {
+        if (gameState.inventory[i] === id) n++;
+      }
+      return n;
+    }
+
+    function getRemovals(sc) {
+      var out = {};
+      if (!sc) return out;
+      if (sc.removeItems && Object.keys(sc.removeItems).length > 0) {
+        for (var k in sc.removeItems) {
+          var n = Math.floor(Number(sc.removeItems[k]) || 0);
+          if (n > 0) out[k] = n;
+        }
+        return out;
+      }
+      if (sc.removeItemId) out[sc.removeItemId] = 1;
+      if (sc.removeItem2Id) out[sc.removeItem2Id] = (out[sc.removeItem2Id] || 0) + 1;
+      return out;
+    }
+
+    function getGrants(sc) {
+      var out = {};
+      if (!sc) return out;
+      if (sc.addItems && Object.keys(sc.addItems).length > 0) {
+        for (var k in sc.addItems) {
+          var n = Math.floor(Number(sc.addItems[k]) || 0);
+          if (n > 0) out[k] = n;
+        }
+        return out;
+      }
+      if (sc.addItemId) out[sc.addItemId] = 1;
+      return out;
+    }
+
+    function canAfford(sc) {
+      var removals = getRemovals(sc);
+      for (var k in removals) {
+        if (countItem(k) < removals[k]) return false;
+      }
+      return true;
+    }
+
+    function deliveryKey(sceneId, hotspotId, ruleId, suffix) {
+      return [sceneId, hotspotId, ruleId].concat(suffix ? [suffix] : []).join('::');
+    }
+
+    function isDelivered(sc, key) {
+      return Object.keys(getGrants(sc)).length > 0 && (gameState.deliveredRuleKeys || []).indexOf(key) !== -1;
+    }
+
+    function removeOneUnit(id) {
+      var idx = gameState.inventory.indexOf(id);
+      if (idx !== -1) gameState.inventory.splice(idx, 1);
+    }
+
+    // Gasta y entrega. Si la fuente ya entregó antes, no hace nada con los objetos (ni entrega ni gasta).
+    function applyItemEffects(sc, key) {
+      if (!gameState.deliveredRuleKeys) gameState.deliveredRuleKeys = [];
+      var grants = getGrants(sc);
+      var grantsSomething = Object.keys(grants).length > 0;
+      if (grantsSomething && gameState.deliveredRuleKeys.indexOf(key) !== -1) {
+        return { alreadyDelivered: true };
+      }
+      var removals = getRemovals(sc);
+      for (var rk in removals) {
+        for (var i = 0; i < removals[rk]; i++) removeOneUnit(rk);
+      }
+      for (var gk in grants) {
+        for (var j = 0; j < grants[gk]; j++) gameState.inventory.push(gk);
+      }
+      if (grantsSomething) gameState.deliveredRuleKeys.push(key);
+      return { alreadyDelivered: false };
+    }
+    // ---- fin reglas de objetos ----
+
     function clickHotspot(hotspotId, event) {
       if (event) event.stopPropagation();
       if (isGameOverState()) return;
@@ -1231,19 +1315,24 @@ ${VOICE_ENGINE_EMBED}
         if (!checkConditions(a.visibleIfFlags, a.hiddenIfFlags)) {
           return false;
         }
+        // No se puede gastar más de lo que se tiene: si faltan unidades la acción no se cumple
+        // (pasa a la rama de fallo). Una acción que ya entregó sus objetos no vuelve a gastar.
+        if (!isDelivered(a.stateChange, deliveryKey(scene.id, hs.id, a.id)) && !canAfford(a.stateChange)) {
+          return false;
+        }
         return true;
       });
 
-      function getRuleScore(r: any) {
+      function getRuleScore(r) {
         return (r.requiredFlags ? Object.keys(r.requiredFlags).length : 0) + (r.requiredItemId ? 1 : 0);
       }
 
-      matchingRules.sort(function(r1: any, r2: any) {
+      matchingRules.sort(function(r1, r2) {
         return getRuleScore(r2) - getRuleScore(r1);
       });
 
       const maxScore = matchingRules.length > 0 ? getRuleScore(matchingRules[0]) : 0;
-      const topRules = matchingRules.filter(function(r: any) {
+      const topRules = matchingRules.filter(function(r) {
         return getRuleScore(r) === maxScore;
       });
 
@@ -1267,13 +1356,13 @@ ${VOICE_ENGINE_EMBED}
         } else if (sc && sc.addItemId) {
           ruleItemIds.push(sc.addItemId);
         }
-        var alreadyHasItems = ruleItemIds.length > 0 && ruleItemIds.every(function(id) {
-          return gameState.inventory.indexOf(id) !== -1;
-        });
+        // Esta acción de escena ya entregó sus objetos antes (ahora o en una visita anterior a la escena)
+        var ruleDeliveryKey = deliveryKey(scene.id, hs.id, rule.id);
+        var alreadyDelivered = isDelivered(sc, ruleDeliveryKey);
 
         if (rule.soundEffect && rule.soundEffect !== 'none') {
           playSound(rule.soundEffect);
-        } else if (sc && sc.addItemId && !alreadyHasItems) {
+        } else if (sc && sc.addItemId && !alreadyDelivered) {
           playSound('pickup');
         } else if (sc && sc.goToSceneId) {
           playSound('door');
@@ -1284,13 +1373,13 @@ ${VOICE_ENGINE_EMBED}
         var firstItem = ruleItemIds.length > 0 ? PROJECT.inventoryItems.find(function(i) { return i.id === ruleItemIds[0]; }) : null;
 
         let msg = '';
-        if (alreadyHasItems) {
+        if (alreadyDelivered) {
           if (firstItem && firstItem.description && firstItem.description.trim()) {
             msg = firstItem.description.trim();
           } else if (rule.responseMessage) {
             msg = stripGameOverTag(rule.responseMessage);
           } else {
-            msg = 'Ya tienes ' + (firstItem ? firstItem.name : 'este objeto') + ' en tu inventario.';
+            msg = 'Ya has recogido ' + (firstItem ? firstItem.name : 'este objeto') + '.';
           }
         } else {
           msg = stripGameOverTag(rule.responseMessage || '');
@@ -1299,7 +1388,7 @@ ${VOICE_ENGINE_EMBED}
         let addedImgHtml = '';
         let itemImgSrc = '';
 
-        if (alreadyHasItems && firstItem) {
+        if (alreadyDelivered && firstItem) {
           itemImgSrc = getImageSrc(firstItem);
           if (itemImgSrc) {
             addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(firstItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
@@ -1313,44 +1402,17 @@ ${VOICE_ENGINE_EMBED}
 
         if (rule.stateChange) {
           if (sc.setFlags) Object.assign(gameState.flags, sc.setFlags);
-          if (sc.addItems && Object.keys(sc.addItems).length > 0) {
-            for (var ak in sc.addItems) {
-              var an = Math.floor(Number(sc.addItems[ak]) || 0);
-              if (gameState.inventory.indexOf(ak) === -1) {
-                for (var ac = 0; ac < an; ac++) gameState.inventory.push(ak);
-              }
-              const addedItem = PROJECT.inventoryItems.find(i => i.id === ak);
-              if (addedItem && !itemImgSrc && !alreadyHasItems) {
+          applyItemEffects(sc, ruleDeliveryKey);
+          if (!alreadyDelivered) {
+            for (var gi = 0; gi < ruleItemIds.length && !itemImgSrc; gi++) {
+              var addedItem = PROJECT.inventoryItems.find(function(i) { return i.id === ruleItemIds[gi]; });
+              if (addedItem) {
                 itemImgSrc = getImageSrc(addedItem);
                 if (itemImgSrc) {
                   addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
                 }
               }
             }
-          } else if (sc.addItemId) {
-            if (gameState.inventory.indexOf(sc.addItemId) === -1) {
-              gameState.inventory.push(sc.addItemId);
-            }
-            const addedItem = PROJECT.inventoryItems.find(i => i.id === sc.addItemId);
-            if (addedItem && !itemImgSrc && !alreadyHasItems) {
-              itemImgSrc = getImageSrc(addedItem);
-              if (itemImgSrc) {
-                addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
-              }
-            }
-          }
-
-          if (sc.removeItems && Object.keys(sc.removeItems).length > 0) {
-            for (var rk in sc.removeItems) {
-              var rn = Math.floor(Number(sc.removeItems[rk]) || 0);
-              for (var rc = 0; rc < rn; rc++) {
-                var ridx = gameState.inventory.indexOf(rk);
-                if (ridx !== -1) gameState.inventory.splice(ridx, 1);
-              }
-            }
-          } else if (sc.removeItemId) {
-            var rmidx = gameState.inventory.indexOf(sc.removeItemId);
-            if (rmidx !== -1) gameState.inventory.splice(rmidx, 1);
           }
           if (sc.appendStoryText) {
             if (!gameState.appendedTexts[gameState.currentSceneId]) {
@@ -1460,30 +1522,15 @@ ${VOICE_ENGINE_EMBED}
         if (failedRule && failedRule.failStateChange) {
           const fsc = failedRule.failStateChange;
           if (fsc.setFlags) Object.assign(gameState.flags, fsc.setFlags);
-          if (fsc.addItems && Object.keys(fsc.addItems).length > 0) {
-            for (var fak in fsc.addItems) {
-              var fan = Math.floor(Number(fsc.addItems[fak]) || 0);
-              for (var fac = 0; fac < fan; fac++) gameState.inventory.push(fak);
-              const addedItem = PROJECT.inventoryItems.find(i => i.id === fak);
-              if (addedItem && !failImgSrc) failImgSrc = getImageSrc(addedItem);
+          // Las consecuencias del fallo tambien entregan una sola vez por escena y accion;
+          // el gasto aqui retira lo que haya (ya estamos en la rama de fallo).
+          var failResult = applyItemEffects(fsc, deliveryKey(scene.id, hs.id, failedRule.id, 'fail'));
+          if (!failResult.alreadyDelivered) {
+            var failGrantIds = Object.keys(getGrants(fsc));
+            for (var fgi = 0; fgi < failGrantIds.length && !failImgSrc; fgi++) {
+              var failItem = PROJECT.inventoryItems.find(function(i) { return i.id === failGrantIds[fgi]; });
+              if (failItem) failImgSrc = getImageSrc(failItem);
             }
-          } else if (fsc.addItemId) {
-            gameState.inventory.push(fsc.addItemId);
-            const addedItem = PROJECT.inventoryItems.find(i => i.id === fsc.addItemId);
-            if (addedItem) failImgSrc = getImageSrc(addedItem);
-          }
-
-          if (fsc.removeItems && Object.keys(fsc.removeItems).length > 0) {
-            for (var frk in fsc.removeItems) {
-              var frn = Math.floor(Number(fsc.removeItems[frk]) || 0);
-              for (var frc = 0; frc < frn; frc++) {
-                var fridx = gameState.inventory.indexOf(frk);
-                if (fridx !== -1) gameState.inventory.splice(fridx, 1);
-              }
-            }
-          } else if (fsc.removeItemId) {
-            var frmidx = gameState.inventory.indexOf(fsc.removeItemId);
-            if (frmidx !== -1) gameState.inventory.splice(frmidx, 1);
           }
           if (fsc.appendStoryText) {
             if (!gameState.appendedTexts[gameState.currentSceneId]) {
@@ -1550,6 +1597,7 @@ ${VOICE_ENGINE_EMBED}
           gameState = JSON.parse(data);
           if (!gameState.verbUseCounts) gameState.verbUseCounts = {};
           if (!gameState.usedHotspotIds) gameState.usedHotspotIds = [];
+          if (!gameState.deliveredRuleKeys) gameState.deliveredRuleKeys = [];
           if (!gameState.difficulty) gameState.difficulty = PROJECT.difficultyMode || 'easy';
           if (gameState.isGameOver === undefined) gameState.isGameOver = false;
           showPopupModal('📂 Cargar Partida', '¡Partida cargada correctamente!');
@@ -1570,6 +1618,7 @@ ${VOICE_ENGINE_EMBED}
           flags: Object.assign({}, PROJECT.globalFlags || {}),
           appendedTexts: {},
           usedHotspotIds: [],
+          deliveredRuleKeys: [],
           verbUseCounts: {},
           difficulty: PROJECT.difficultyMode || 'easy',
           isGameOver: false

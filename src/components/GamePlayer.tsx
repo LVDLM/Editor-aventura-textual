@@ -4,6 +4,7 @@ import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS, getProjectVerbs, renderVerbIcon } from '../utils/verbs';
 import { playSound } from '../utils/audio';
+import { applyItemEffects, canAfford, deliveryKey, isDelivered } from '../utils/itemRules';
 import {
   Eye,
   Zap,
@@ -53,6 +54,7 @@ interface GamePlayerProps {
     appendedTextsPerScene: Record<string, AppendedTextEntry[]>;
     history: { id: string; type: 'story' | 'response' | 'system'; text: string }[];
     usedHotspotIds?: string[];
+    deliveredRuleKeys?: string[]; // Fuentes de entrega de escena que ya entregaron sus objetos
     difficulty?: 'facil' | 'normal' | 'dificil';
   };
   setGameState: React.Dispatch<React.SetStateAction<any>>;
@@ -92,7 +94,8 @@ const isItemNeededInScene = (item: InventoryItem, scene?: Scene): boolean => {
     (hs.actions || []).some(
       (act) =>
         act.stateChange?.removeItemId === item.id ||
-        act.stateChange?.removeItem2Id === item.id
+        act.stateChange?.removeItem2Id === item.id ||
+        (act.stateChange?.removeItems?.[item.id] ?? 0) > 0
     )
   );
   if (touchesItemState) return true;
@@ -481,12 +484,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       }));
     }
 
-    const itemIdsToGrant = (config?.onSuccessItemIds || []).filter(Boolean);
+    // Entrega única: si este evento ya se superó antes (aunque el jugador haya gastado los objetos),
+    // no se vuelven a entregar al repetirlo o al volver a la escena.
+    const qteKey = deliveryKey(currentScene?.id, 'qte');
+    const qteAlreadyDelivered = (gameState.deliveredRuleKeys || []).includes(qteKey);
+    const itemIdsToGrant = qteAlreadyDelivered ? [] : (config?.onSuccessItemIds || []).filter(Boolean);
     if (itemIdsToGrant.length > 0) {
-      setGameState((prev: any) => ({
-        ...prev,
-        inventory: Array.from(new Set([...(prev.inventory || []), ...itemIdsToGrant])),
-      }));
+      setGameState((prev: any) => {
+        if ((prev.deliveredRuleKeys || []).includes(qteKey)) return prev;
+        return {
+          ...prev,
+          inventory: [...(prev.inventory || []), ...itemIdsToGrant],
+          deliveredRuleKeys: [...(prev.deliveredRuleKeys || []), qteKey],
+        };
+      });
     }
 
     const itemsToGrant = itemIdsToGrant
@@ -629,19 +640,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           let newInventory = [...prev.inventory];
           let nextSceneId = prev.currentSceneId;
 
+          // Combinar objetos no es una entrega de escena: no lleva la protección anti-duplicados
           if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
             Object.entries(sc.addItems).forEach(([id, qty]) => {
               const count = Math.max(0, Math.floor(Number(qty) || 0));
-              if (!newInventory.includes(id)) {
-                for (let i = 0; i < count; i++) {
-                  newInventory.push(id);
-                }
+              for (let i = 0; i < count; i++) {
+                newInventory.push(id);
               }
             });
           } else if (sc?.addItemId) {
-            if (!newInventory.includes(sc.addItemId)) {
-              newInventory.push(sc.addItemId);
-            }
+            newInventory.push(sc.addItemId);
           }
 
           if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
@@ -786,19 +794,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       let newInventory = [...prev.inventory];
       let nextSceneId = prev.currentSceneId;
 
+      // Usar un objeto del inventario no es una entrega de escena: no lleva la protección anti-duplicados
       if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
         Object.entries(sc.addItems).forEach(([id, qty]) => {
           const count = Math.max(0, Math.floor(Number(qty) || 0));
-          if (!newInventory.includes(id)) {
-            for (let i = 0; i < count; i++) {
-              newInventory.push(id);
-            }
+          for (let i = 0; i < count; i++) {
+            newInventory.push(id);
           }
         });
       } else if (sc?.addItemId) {
-        if (!newInventory.includes(sc.addItemId)) {
-          newInventory.push(sc.addItemId);
-        }
+        newInventory.push(sc.addItemId);
       }
 
       if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
@@ -940,6 +945,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       // Check required flags & conditions
       if (a.requiredFlags && !checkConditions(a.requiredFlags)) return false;
       if (!checkConditions(a.visibleIfFlags, a.hiddenIfFlags)) return false;
+      // No se puede gastar más de lo que se tiene: si faltan unidades, la acción no se cumple
+      // (pasa a la rama "Si NO cumple requisitos"). Una acción que ya entregó sus objetos no vuelve a gastar.
+      const alreadyDone = isDelivered(
+        gameState.deliveredRuleKeys,
+        a.stateChange,
+        deliveryKey(gameState.currentSceneId, hotspot.id, a.id)
+      );
+      if (!alreadyDone && !canAfford(a.stateChange, gameState.inventory)) return false;
       return true;
     });
 
@@ -1066,12 +1079,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       const itemObj = firstAddedItemId ? project.inventoryItems.find((i) => i.id === firstAddedItemId) : null;
       const hasItemGains = itemIdsFromRule.length > 0;
 
-      // Check if ALL granted items are ALREADY in the player's inventory
-      const alreadyHasItems = hasItemGains && itemIdsFromRule.every((id) => (gameState.inventory || []).includes(id));
+      // Esta acción de escena ya entregó sus objetos antes (hace un momento o en una visita anterior).
+      // Lo que cuenta es la fuente de la entrega, no que el jugador conserve o no el objeto.
+      const ruleDeliveryKey = deliveryKey(gameState.currentSceneId, hotspot.id, rule.id);
+      const alreadyDelivered = isDelivered(gameState.deliveredRuleKeys, sc, ruleDeliveryKey);
 
       if (rule.soundEffect && rule.soundEffect !== 'none') {
         playSound(rule.soundEffect);
-      } else if (rule.stateChange?.addItemId && !alreadyHasItems) {
+      } else if (rule.stateChange?.addItemId && !alreadyDelivered) {
         playSound('pickup');
       } else if (rule.stateChange?.goToSceneId) {
         playSound('door');
@@ -1079,7 +1094,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         playSound('select');
       }
 
-      if (alreadyHasItems) {
+      if (alreadyDelivered) {
         // Player already has the object(s) in inventory:
         // Do not repeat the pickup modal or duplicate the item.
         // Instead, display the object's description extracted from its item card.
@@ -1089,7 +1104,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         } else if (rule.responseMessage) {
           messageToShow = rule.responseMessage;
         } else {
-          messageToShow = `Ya tienes ${itemObj?.name || 'este objeto'} en tu inventario.`;
+          messageToShow = `Ya has recogido ${itemObj?.name || 'este objeto'}.`;
         }
       } else if (rule.stateChange?.appendStoryText) {
         // If action appends text to paragraph, display full paragraph directly in story (no response popup message)
@@ -1098,7 +1113,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         messageToShow = rule.responseMessage;
       }
 
-      const willPickupItem = hasItemGains && !alreadyHasItems;
+      const willPickupItem = hasItemGains && !alreadyDelivered;
       const isAutosaveTriggered = willPickupItem || !!sc?.goToSceneId;
       const isRuleGameOver = !!rule.isGameOver || !!rule.stateChange?.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.responseMessage || '');
 
@@ -1118,40 +1133,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           [useKey]: (prev.verbUseCounts?.[useKey] || 0) + 1,
         };
 
-        if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
-          Object.entries(sc.addItems).forEach(([id, qty]) => {
-            const count = Math.max(0, Math.floor(Number(qty) || 0));
-            // Prevent duplicate acquisitions if item is already in inventory
-            if (!newInventory.includes(id)) {
-              for (let i = 0; i < count; i++) {
-                newInventory.push(id);
-              }
-            }
-          });
-        } else if (sc?.addItemId) {
-          if (!newInventory.includes(sc.addItemId)) {
-            newInventory.push(sc.addItemId);
-          }
-        }
-
-        if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
-          Object.entries(sc.removeItems).forEach(([id, qty]) => {
-            const count = Math.max(0, Math.floor(Number(qty) || 0));
-            for (let i = 0; i < count; i++) {
-              const idx = newInventory.indexOf(id);
-              if (idx !== -1) newInventory.splice(idx, 1);
-            }
-          });
-        } else {
-          if (sc?.removeItemId) {
-            const idx = newInventory.indexOf(sc.removeItemId);
-            if (idx !== -1) newInventory.splice(idx, 1);
-          }
-          if (sc?.removeItem2Id) {
-            const idx = newInventory.indexOf(sc.removeItem2Id);
-            if (idx !== -1) newInventory.splice(idx, 1);
-          }
-        }
+        // Gasta y entrega con la lógica compartida. Se vuelve a comprobar con el estado más reciente (prev)
+        // para que un doble clic rápido no pueda entregar dos veces.
+        const itemResult = applyItemEffects(newInventory, prev.deliveredRuleKeys, sc, ruleDeliveryKey);
+        newInventory = itemResult.inventory;
+        const newDeliveredKeys = itemResult.deliveredRuleKeys;
 
         if (sc?.appendStoryText) {
           const currentList = newAppended[prev.currentSceneId] || [];
@@ -1202,6 +1188,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             narrativeHistory: newHistory,
             appendedTextsPerScene: newAppended,
             usedHotspotIds: newUsedHotspots,
+            deliveredRuleKeys: newDeliveredKeys,
             difficulty: prev.difficulty || 'facil',
           };
           try {
@@ -1221,6 +1208,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           currentSceneId: nextSceneId,
           appendedTextsPerScene: newAppended,
           usedHotspotIds: newUsedHotspots,
+          deliveredRuleKeys: newDeliveredKeys,
           verbUseCounts: newVerbUseCounts,
           isGameOver: prev.isGameOver || isRuleGameOver,
           history: newHistory,
@@ -1261,10 +1249,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       } else if (messageToShow) {
         setModalFeedback({
           type: 'action',
-          title: (alreadyHasItems && itemObj?.name) ? itemObj.name : actionTitle,
-          showTitle: alreadyHasItems,
-          verbIconName: (alreadyHasItems && !verbIconName) ? 'Eye' : verbIconName,
-          itemImageUrl: (alreadyHasItems && itemObj) ? (itemObj.imageFileData || itemObj.imageUrl) : undefined,
+          title: (alreadyDelivered && itemObj?.name) ? itemObj.name : actionTitle,
+          showTitle: alreadyDelivered,
+          verbIconName: (alreadyDelivered && !verbIconName) ? 'Eye' : verbIconName,
+          itemImageUrl: (alreadyDelivered && itemObj) ? (itemObj.imageFileData || itemObj.imageUrl) : undefined,
           message: messageToShow.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
         });
       }
@@ -1318,39 +1306,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         let nextSceneId = prev.currentSceneId;
         const newAppended = { ...prev.appendedTextsPerScene };
 
-        if (fsc?.addItems && Object.keys(fsc.addItems).length > 0) {
-          Object.entries(fsc.addItems).forEach(([id, qty]) => {
-            const count = Math.max(0, Math.floor(Number(qty) || 0));
-            if (!newInventory.includes(id)) {
-              for (let i = 0; i < count; i++) {
-                newInventory.push(id);
-              }
-            }
-          });
-        } else if (fsc?.addItemId) {
-          if (!newInventory.includes(fsc.addItemId)) {
-            newInventory.push(fsc.addItemId);
-          }
-        }
-
-        if (fsc?.removeItems && Object.keys(fsc.removeItems).length > 0) {
-          Object.entries(fsc.removeItems).forEach(([id, qty]) => {
-            const count = Math.max(0, Math.floor(Number(qty) || 0));
-            for (let i = 0; i < count; i++) {
-              const idx = newInventory.indexOf(id);
-              if (idx !== -1) newInventory.splice(idx, 1);
-            }
-          });
-        } else {
-          if (fsc?.removeItemId) {
-            const idx = newInventory.indexOf(fsc.removeItemId);
-            if (idx !== -1) newInventory.splice(idx, 1);
-          }
-          if (fsc?.removeItem2Id) {
-            const idx = newInventory.indexOf(fsc.removeItem2Id);
-            if (idx !== -1) newInventory.splice(idx, 1);
-          }
-        }
+        // Las consecuencias del fallo también entregan una sola vez por escena y acción.
+        // Aquí el gasto no bloquea nada: ya estamos en la rama de fallo, así que se retira lo que haya.
+        const failResult = applyItemEffects(
+          newInventory,
+          prev.deliveredRuleKeys,
+          fsc,
+          deliveryKey(prev.currentSceneId, hotspot.id, failedRule?.id, 'fail')
+        );
+        newInventory = failResult.inventory;
+        const newDeliveredKeys = failResult.deliveredRuleKeys;
 
         if (fsc?.appendStoryText) {
           const currentList = newAppended[prev.currentSceneId] || [];
@@ -1388,6 +1353,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           currentSceneId: nextSceneId,
           appendedTextsPerScene: newAppended,
           usedHotspotIds: newUsedHotspots,
+          deliveredRuleKeys: newDeliveredKeys,
           isGameOver: prev.isGameOver || isFailGameOver,
           history: newHistory,
         };
@@ -1568,7 +1534,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     } else if (option.giveItemId) {
       dialogueItemIds.push(option.giveItemId);
     }
-    const playerAlreadyHasDialogueItem = dialogueItemIds.length > 0 && dialogueItemIds.every((id) => (gameState.inventory || []).includes(id));
+    // Cada opción de diálogo entrega sus objetos una sola vez por escena (aunque el jugador ya los haya gastado)
+    const dialogueDeliveryKey = deliveryKey(gameState.currentSceneId, 'dialogue', option.id);
+    const dialogueAlreadyDelivered = dialogueItemIds.length > 0 && (gameState.deliveredRuleKeys || []).includes(dialogueDeliveryKey);
 
     // Item consuming (-Objeto)
     const consumeItemObj =
@@ -1585,7 +1553,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       responseText += `${character.name}: ${option.npcResponse}`;
     }
 
-    if (!playerAlreadyHasDialogueItem) {
+    if (!dialogueAlreadyDelivered) {
       if (option.giveItems && Object.keys(option.giveItems).length > 0) {
         const summary = Object.entries(option.giveItems)
           .map(([id, qty]) => {
@@ -1599,13 +1567,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         responseText += `\n\n[Recibido: ${giveItemObj.name}]`;
       }
     }
-    if (consumeItemObj) {
+    if (consumeItemObj && !dialogueAlreadyDelivered) {
       responseText += `\n\n[Entregado: ${consumeItemObj.name}]`;
     }
 
     // Track items received during this dialogue session
     const currentReceived = activeDialogue?.receivedItemIds || [];
-    const itemsToAdd = !playerAlreadyHasDialogueItem
+    const itemsToAdd = !dialogueAlreadyDelivered
       ? dialogueItemIds
       : [];
     const updatedReceived = [...currentReceived, ...itemsToAdd];
@@ -1615,25 +1583,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       let newInventory = [...prev.inventory];
       let nextSceneId = prev.currentSceneId;
 
-      if (option.giveItems && Object.keys(option.giveItems).length > 0) {
-        Object.entries(option.giveItems).forEach(([id, qty]) => {
-          const count = Math.max(0, Math.floor(Number(qty) || 0));
-          if (!newInventory.includes(id)) {
-            for (let i = 0; i < count; i++) {
-              newInventory.push(id);
-            }
-          }
-        });
-      } else if (option.giveItemId) {
-        if (!newInventory.includes(option.giveItemId)) {
-          newInventory.push(option.giveItemId);
-        }
-      }
-
-      if (option.requiredItemId && option.consumeRequiredItem) {
-        const idx = newInventory.indexOf(option.requiredItemId);
-        if (idx !== -1) newInventory.splice(idx, 1);
-      }
+      // Entrega y consumo con la lógica compartida (entrega única por opción y escena)
+      const dialogueResult = applyItemEffects(
+        newInventory,
+        prev.deliveredRuleKeys,
+        {
+          addItems: option.giveItems,
+          addItemId: option.giveItemId,
+          removeItemId: option.requiredItemId && option.consumeRequiredItem ? option.requiredItemId : undefined,
+        },
+        dialogueDeliveryKey
+      );
+      newInventory = dialogueResult.inventory;
+      const newDeliveredKeys = dialogueResult.deliveredRuleKeys;
 
       if (option.goToSceneId) {
         nextSceneId = option.goToSceneId;
@@ -1667,6 +1629,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         inventory: newInventory,
         currentSceneId: nextSceneId,
         usedDialogueOptionIds,
+        deliveredRuleKeys: newDeliveredKeys,
         appendedTextsPerScene: newAppended,
         isGameOver: option.isGameOver || prev.isGameOver,
       };
@@ -1698,7 +1661,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       );
     }
 
-    if ((giveItemObj && !playerAlreadyHasDialogueItem) || option.goToSceneId) {
+    if ((giveItemObj && !dialogueAlreadyDelivered) || option.goToSceneId) {
       setShowSaveNotification(true);
       setTimeout(() => setShowSaveNotification(false), 2500);
     }

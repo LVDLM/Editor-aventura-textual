@@ -360,6 +360,7 @@ export interface SaveSlotData {
   narrativeHistory: { id: string; type: 'story' | 'response' | 'system'; text: string; timestamp?: string }[];
   appendedTextsPerScene: Record<string, AppendedTextEntry[]>;
   usedHotspotIds?: string[];
+  deliveredRuleKeys?: string[]; // Fuentes de entrega de escena que ya entregaron sus objetos (no repetir al volver)
   difficulty?: 'facil' | 'normal' | 'dificil';
 }
 

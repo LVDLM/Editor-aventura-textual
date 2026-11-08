@@ -74,6 +74,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
       narrativeHistory: currentGameState.history || [],
       appendedTextsPerScene: currentGameState.appendedTextsPerScene || {},
       usedHotspotIds: currentGameState.usedHotspotIds || [],
+      deliveredRuleKeys: currentGameState.deliveredRuleKeys || [],
       difficulty: currentGameState.difficulty || 'facil',
     };
 
@@ -94,6 +95,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
       history: slot.narrativeHistory,
       appendedTextsPerScene: slot.appendedTextsPerScene || {},
       usedHotspotIds: slot.usedHotspotIds || [],
+      deliveredRuleKeys: slot.deliveredRuleKeys || [],
       difficulty: slot.difficulty || 'facil',
     });
     showNotification(`¡Partida cargada correctamente!`);
@@ -127,6 +129,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
       narrativeHistory: currentGameState.history || [],
       appendedTextsPerScene: currentGameState.appendedTextsPerScene || {},
       usedHotspotIds: currentGameState.usedHotspotIds || [],
+      deliveredRuleKeys: currentGameState.deliveredRuleKeys || [],
       difficulty: currentGameState.difficulty || 'facil',
     };
 
@@ -156,6 +159,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
             history: parsed.narrativeHistory || [],
             appendedTextsPerScene: parsed.appendedTextsPerScene || {},
             usedHotspotIds: parsed.usedHotspotIds || [],
+            deliveredRuleKeys: parsed.deliveredRuleKeys || [],
             difficulty: parsed.difficulty || 'facil',
           });
           showNotification('¡Partida importada y cargada con éxito!');
