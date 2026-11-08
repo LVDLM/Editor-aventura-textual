@@ -42,6 +42,7 @@ import {
   saveGlobalSoundLibraryToFirestore,
   resetGlobalSoundLibraryInFirestore,
   getUserProjects,
+  saveProjectToCloud,
 } from '../../lib/firebase';
 import { VoicePanel } from './VoicePanel';
 import { DEFAULT_VOICE } from '../../utils/voicePresets';
@@ -385,23 +386,50 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
     };
   }, []);
 
-  // Combined sound catalog: Global Library + Project Custom Sounds
-  const projectCustomSounds = project.customSounds || [];
+  // User project selection for viewing and library filtering
+  const [selectedProjectDocId, setSelectedProjectDocId] = useState<string>('');
+
+  const activeProjectDoc = selectedProjectDocId
+    ? userProjectsList.find((p) => p.id === selectedProjectDocId)
+    : null;
+  const activeProjectTitle = activeProjectDoc
+    ? activeProjectDoc.title || activeProjectDoc.projectData?.title || 'Proyecto'
+    : (projectNameInput || project.title || 'Mi Proyecto');
+  const activeProjectCustomSounds: SoundDefinition[] = activeProjectDoc
+    ? (activeProjectDoc.projectData?.customSounds || [])
+    : (project.customSounds || []);
 
   const allMergedSounds: SoundDefinition[] = [
     ...globalSounds.map((s) => ({ ...s, isGlobal: true })),
-    ...projectCustomSounds.filter((cs) => !globalSounds.some((gs) => gs.id === cs.id)),
+    ...activeProjectCustomSounds.map((cs) => ({ ...cs, isGlobal: false, projectTitle: activeProjectTitle })),
   ];
+
+  // Select sound and load all its characteristics into the editor on the side
+  const handleSelectSound = (sound: SoundDefinition) => {
+    setSelectedSoundId(sound.id);
+    const soundCopy: SoundDefinition = {
+      ...sound,
+      synthConfig: sound.synthConfig
+        ? {
+            ...sound.synthConfig,
+            voice: sound.synthConfig.voice ? { ...sound.synthConfig.voice } : undefined,
+            arpeggioNotes: sound.synthConfig.arpeggioNotes ? [...sound.synthConfig.arpeggioNotes] : undefined,
+          }
+        : undefined,
+    };
+    setActiveSoundForm(soundCopy);
+    setIsPlayingTesting(false);
+    setUrlTestingStatus('idle');
+    setUrlErrorMessage('');
+  };
 
   // Select sound on initial load or sound change
   useEffect(() => {
     const found = allMergedSounds.find((s) => s.id === selectedSoundId) || allMergedSounds[0];
-    if (found) {
-      // Check if project has custom override
-      const projectOverride = projectCustomSounds.find((s) => s.id === found.id);
-      setActiveSoundForm(projectOverride ? { ...projectOverride, isGlobal: false } : { ...found });
+    if (found && (!activeSoundForm || activeSoundForm.id !== found.id)) {
+      handleSelectSound(found);
     }
-  }, [selectedSoundId, globalSounds, project.customSounds]);
+  }, [selectedSoundId, selectedProjectDocId, globalSounds.length, activeProjectCustomSounds.length]);
 
   // Filtered sounds list
   const filteredSounds = allMergedSounds.filter((sound) => {
@@ -487,14 +515,13 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
       customSounds: [...(prev.customSounds || []), newSound],
     }));
 
-    setSelectedSoundId(newSound.id);
-    setActiveSoundForm({ ...newSound });
+    handleSelectSound(newSound);
     setSelectedFilter('project');
   };
 
   // Duplicate an official library sound into current project for customization
   const handleDuplicateToProject = (sound: SoundDefinition, overrideTitle?: string) => {
-    const trimmedTitle = (overrideTitle || projectNameInput || project.title || 'Mi Proyecto de Aventuras').trim();
+    const trimmedTitle = (overrideTitle || projectNameInput || activeProjectTitle || 'Mi Proyecto de Aventuras').trim();
     const copySound: SoundDefinition = {
       ...sound,
       id: sound.isGlobal ? `${sound.id}_custom` : `${sound.id}_copia`,
@@ -509,17 +536,18 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
       customSounds: [...(prev.customSounds || []).filter((s) => s.id !== copySound.id), copySound],
     }));
 
-    setSelectedSoundId(copySound.id);
-    setActiveSoundForm({ ...copySound });
+    handleSelectSound(copySound);
     setSelectedFilter('project');
     setGlobalFeedback(`Copia del sonido guardada en el proyecto "${trimmedTitle}".`);
     setTimeout(() => setGlobalFeedback(null), 3500);
   };
 
   // Save changes to active sound in Project
-  const handleSaveToProject = () => {
+  const handleSaveToProject = async () => {
     if (!activeSoundForm) return;
-    const trimmedTitle = (projectNameInput || project.title || 'Mi Proyecto de Aventuras').trim();
+    const targetDocId = selectedTargetDocId || selectedProjectDocId;
+    const targetDoc = targetDocId ? userProjectsList.find((p) => p.id === targetDocId) : null;
+    const trimmedTitle = (projectNameInput || targetDoc?.title || targetDoc?.projectData?.title || project.title || 'Mi Proyecto de Aventuras').trim();
 
     // Un sonido oficial no se sobrescribe: se guarda como copia editable en el proyecto
     if (activeSoundForm.isGlobal) {
@@ -527,41 +555,100 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
       return;
     }
 
-    const updated = { ...activeSoundForm, isGlobal: false };
+    const updated: SoundDefinition = { ...activeSoundForm, isGlobal: false, projectTitle: trimmedTitle };
 
-    updateProject((prev) => {
-      const existingList = prev.customSounds || [];
-      const index = existingList.findIndex((s) => s.id === updated.id);
-      let nextList = [...existingList];
-      if (index >= 0) {
-        nextList[index] = updated;
-      } else {
-        nextList.push(updated);
+    if (targetDocId && targetDoc && targetDoc.id !== project.id) {
+      try {
+        const existingList = targetDoc.projectData?.customSounds || [];
+        const index = existingList.findIndex((s) => s.id === updated.id);
+        const nextList = index >= 0
+          ? existingList.map((s, i) => (i === index ? updated : s))
+          : [...existingList, updated];
+
+        const updatedProjectData: GameProject = {
+          ...(targetDoc.projectData || project),
+          title: trimmedTitle,
+          customSounds: nextList,
+        };
+
+        if (currentUser) {
+          await saveProjectToCloud(
+            targetDoc.id,
+            updatedProjectData,
+            { uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email },
+            'preserve'
+          );
+        }
+
+        setUserProjectsList((prev) =>
+          prev.map((p) => (p.id === targetDoc.id ? { ...p, title: trimmedTitle, projectData: updatedProjectData } : p))
+        );
+        handleSelectSound(updated);
+        setGlobalFeedback(`¡Sonido guardado correctamente en "${trimmedTitle}"!`);
+        setTimeout(() => setGlobalFeedback(null), 3500);
+      } catch (err) {
+        console.error('Error saving sound to cloud project:', err);
       }
-      return {
-        ...prev,
-        title: trimmedTitle,
-        customSounds: nextList,
-      };
-    });
-
-    setGlobalFeedback(`¡Sonido guardado correctamente en "${trimmedTitle}"!`);
-    setTimeout(() => setGlobalFeedback(null), 3500);
+    } else {
+      updateProject((prev) => {
+        const existingList = prev.customSounds || [];
+        const index = existingList.findIndex((s) => s.id === updated.id);
+        let nextList = [...existingList];
+        if (index >= 0) {
+          nextList[index] = updated;
+        } else {
+          nextList.push(updated);
+        }
+        return {
+          ...prev,
+          title: trimmedTitle,
+          customSounds: nextList,
+        };
+      });
+      handleSelectSound(updated);
+      setGlobalFeedback(`¡Sonido guardado correctamente en "${trimmedTitle}"!`);
+      setTimeout(() => setGlobalFeedback(null), 3500);
+    }
   };
 
   // Delete sound from Project
-  const handleDeleteFromProject = (soundId: string) => {
-    updateProject((prev) => {
-      const nextCustom = (prev.customSounds || []).filter((s) => s.id !== soundId);
-      return {
-        ...prev,
-        customSounds: nextCustom,
-      };
-    });
+  const handleDeleteFromProject = async (soundId: string) => {
+    const targetDocId = selectedTargetDocId || selectedProjectDocId;
+    const targetDoc = targetDocId ? userProjectsList.find((p) => p.id === targetDocId) : null;
 
-    // Pick first available global sound to switch to smoothly
-    const fallbackId = globalSounds[0]?.id || 'click';
-    setSelectedSoundId(fallbackId);
+    if (targetDocId && targetDoc && targetDoc.id !== project.id) {
+      try {
+        const nextCustom = (targetDoc.projectData?.customSounds || []).filter((s) => s.id !== soundId);
+        const updatedProjectData: GameProject = {
+          ...(targetDoc.projectData || project),
+          customSounds: nextCustom,
+        };
+        if (currentUser) {
+          await saveProjectToCloud(
+            targetDoc.id,
+            updatedProjectData,
+            { uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email },
+            'preserve'
+          );
+        }
+        setUserProjectsList((prev) =>
+          prev.map((p) => (p.id === targetDoc.id ? { ...p, projectData: updatedProjectData } : p))
+        );
+      } catch (e) {
+        console.error('Error deleting sound from cloud project:', e);
+      }
+    } else {
+      updateProject((prev) => {
+        const nextCustom = (prev.customSounds || []).filter((s) => s.id !== soundId);
+        return {
+          ...prev,
+          customSounds: nextCustom,
+        };
+      });
+    }
+
+    const fallback = globalSounds[0];
+    if (fallback) handleSelectSound(fallback);
     setGlobalFeedback('Sonido eliminado del proyecto.');
     setTimeout(() => setGlobalFeedback(null), 3000);
   };
@@ -836,22 +923,58 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                 <Shield className="w-3 h-3 text-amber-300" />
                 <span>Oficiales ({globalSounds.length})</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setSelectedFilter('project')}
-                className={`flex-1 py-1.5 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1 ${
-                  selectedFilter === 'project'
-                    ? isClean
-                      ? 'bg-[#A4332A] text-white font-bold shadow-sm'
-                      : 'bg-amber-600 text-white font-bold shadow-sm'
-                    : isClean
-                    ? 'text-[#6B5C46] hover:text-[#2A2118]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title={`Sonidos exclusivos de tu proyecto: ${project.title || 'Proyecto'}`}
-              >
-                <span className="truncate max-w-[170px]">{project.title || 'Proyecto'} ({projectCustomSounds.length})</span>
-              </button>
+              <div className="flex-1 flex items-center gap-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFilter('project')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1 min-w-0 ${
+                    selectedFilter === 'project'
+                      ? isClean
+                        ? 'bg-[#A4332A] text-white font-bold shadow-sm'
+                        : 'bg-amber-600 text-white font-bold shadow-sm'
+                      : isClean
+                      ? 'text-[#6B5C46] hover:text-[#2A2118]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title={`Sonidos exclusivos de: ${activeProjectTitle}`}
+                >
+                  <FolderPlus className="w-3 h-3 shrink-0 text-amber-300" />
+                  <span className="truncate max-w-[110px]">{activeProjectTitle}</span>
+                  <span className="shrink-0">({activeProjectCustomSounds.length})</span>
+                </button>
+                {userProjectsList.length > 0 && (
+                  <select
+                    value={selectedProjectDocId}
+                    onChange={(e) => {
+                      const newDocId = e.target.value;
+                      setSelectedProjectDocId(newDocId);
+                      setSelectedFilter('project');
+                      const targetProj = newDocId ? userProjectsList.find((p) => p.id === newDocId) : null;
+                      const sounds = targetProj ? (targetProj.projectData?.customSounds || []) : (project.customSounds || []);
+                      if (sounds.length > 0) {
+                        handleSelectSound(sounds[0]);
+                      }
+                    }}
+                    title="Seleccionar proyecto para ver y editar sus sonidos"
+                    className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border cursor-pointer outline-none shrink-0 ${
+                      isClean
+                        ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]'
+                        : 'bg-[#1F1913] border-[#42362B] text-amber-300'
+                    }`}
+                  >
+                    <option value="">{project.title || 'Proyecto actual'}</option>
+                    {userProjectsList.map((p) => {
+                      const pTitle = p.title || p.projectData?.title || 'Sin título';
+                      if (p.id === project.id || pTitle === (project.title || '')) return null;
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {pTitle}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
             </div>
 
             {/* Category Chips */}
@@ -913,13 +1036,13 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                   <div
                     key={sound.id}
                     onClick={() => {
-                      setSelectedSoundId(sound.id);
+                      handleSelectSound(sound);
                     }}
                     className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                       isSelected
                         ? isClean
-                          ? 'bg-[#EAE0C8] border-[#A4332A]/50 shadow-sm'
-                          : 'bg-amber-500/15 border-amber-500/50 shadow-sm'
+                          ? 'bg-[#EAE0C8] border-[#A4332A]/50 shadow-sm ring-1 ring-[#A4332A]/30'
+                          : 'bg-amber-500/15 border-amber-500/50 shadow-sm ring-1 ring-amber-500/30'
                         : isClean
                         ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8]/70 border-[#E5DCB8]'
                         : 'bg-[#1F1913] hover:bg-[#2A2118] border-[#42362B]'
@@ -971,10 +1094,10 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                       ) : (
                         <span
                           className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold flex items-center gap-1 max-w-[150px]"
-                          title={`Sonido del proyecto: ${project.title || 'Proyecto'}`}
+                          title={`Sonido del proyecto: ${sound.projectTitle || activeProjectTitle}`}
                         >
                           <FolderPlus className="w-3 h-3 text-indigo-400 shrink-0" />
-                          <span className="truncate">{project.title || 'Proyecto'}</span>
+                          <span className="truncate">{sound.projectTitle || activeProjectTitle}</span>
                         </span>
                       )}
 

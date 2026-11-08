@@ -116,6 +116,7 @@ export interface SoundDefinition {
   synthConfig?: SynthSoundConfig;
   isGlobal?: boolean; // True if official platform sound
   isDefault?: boolean; // True if default built-in preset
+  projectTitle?: string; // Optional title of the project this sound belongs to
   updatedAt?: string;
   updatedBy?: string;
 }
