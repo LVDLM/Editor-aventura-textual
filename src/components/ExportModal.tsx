@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { GameProject, UserProfile, CloudProjectDoc } from '../types';
-import { exportProjectAsZip, projectHasImages } from '../utils/zipExporter';
+import { exportProjectAsZip, projectHasImages, projectHasSounds } from '../utils/zipExporter';
 import { saveProjectToCloud, getProjectByIdFromCloud, getUserProjects } from '../lib/firebase';
 import { Download, Upload, X, Archive, Cloud } from 'lucide-react';
 import { ImportJSONModal, ImportPendingData } from './Portal/ImportJSONModal';
@@ -32,6 +32,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [isReadingFile, setIsReadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hasImages = projectHasImages(project);
+  const hasSounds = projectHasSounds(project);
 
   const handleSaveToCloud = async () => {
     if (!currentUser) {
@@ -73,7 +74,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const handleExportZip = async () => {
     try {
       setIsExportingZip(true);
-      const blob = await exportProjectAsZip(project);
+      const blob = await exportProjectAsZip(project, (names) => {
+        alert(
+          'Estos sonidos no se han podido descargar y seguirán usando su enlace original dentro del juego:\n\n' +
+            names.join('\n')
+        );
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -426,7 +432,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </div>
 
           {/* ZIP Package Export */}
-          {hasImages && (
+          {(hasImages || hasSounds) && (
             <div className={`p-4 rounded-2xl space-y-3 border shadow-sm ${
               isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#241D17] border-[#42362B]'
             }`}>
@@ -440,10 +446,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </div>
                 <div>
                   <h4 className={`font-serif font-bold text-sm ${isClean ? 'text-[#2A2118]' : 'text-[#F4EFE3]'}`}>
-                    Exportar Paquete ZIP (Con Carpeta de Imágenes)
+                    Exportar Paquete ZIP (Con Imágenes y Sonidos)
                   </h4>
                   <p className={`text-xs mt-1 leading-relaxed ${isClean ? 'text-[#6B5C46]' : 'text-[#A89880]'}`}>
-                    Tu proyecto incluye imágenes locales. Genera un paquete ZIP comprimido con todos los recursos del juego.
+                    {hasImages && hasSounds
+                      ? 'Tu proyecto incluye imágenes y sonidos. El ZIP guarda las imágenes en la carpeta "img" y los sonidos añadidos por URL en la carpeta "sounds".'
+                      : hasSounds
+                        ? 'Tu proyecto incluye sonidos añadidos por URL. El ZIP los guarda en la carpeta "sounds", junto al juego.'
+                        : 'Tu proyecto incluye imágenes locales. Genera un paquete ZIP comprimido con todos los recursos del juego.'}
                   </p>
                 </div>
               </div>
