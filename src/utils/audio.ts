@@ -21,6 +21,8 @@ let musicAudio: HTMLAudioElement | null = null;
 let musicSoundId: string | null = null;
 let musicSynthTimer: ReturnType<typeof setInterval> | null = null;
 let musicRetryBound = false;
+let currentMusicDef: SoundDefinition | null = null; // pista que suena ahora
+let mutedMusicDef: SoundDefinition | null = null; // pista que debe volver al reactivar el sonido
 
 export function onAudioStop(listener: () => void): () => void {
   stopListeners.add(listener);
@@ -61,9 +63,17 @@ export function getAudioContext(): AudioContext | null {
 }
 
 export function setSoundEnabled(enabled: boolean) {
+  if (enabled === soundEnabled) return;
+  const musicToResume = currentMusicDef;
   soundEnabled = enabled;
   if (!enabled) {
     stopAllAudio();
+    // Al silenciar se corta la música, pero vuelve al reactivar el sonido
+    mutedMusicDef = musicToResume;
+  } else if (mutedMusicDef) {
+    const def = mutedMusicDef;
+    mutedMusicDef = null;
+    playMusic(def);
   }
 }
 
@@ -72,6 +82,7 @@ export function isSoundEnabled(): boolean {
 }
 
 export function stopAllAudio() {
+  mutedMusicDef = null;
   stopMusic();
 
   // Cancel active preview timer and promise
@@ -1347,6 +1358,7 @@ export function stopMusic() {
     musicAudio = null;
   }
   musicSoundId = null;
+  currentMusicDef = null;
 }
 
 // Los navegadores bloquean el sonido hasta que el jugador interactúa: se reintenta en el primer gesto
@@ -1368,11 +1380,17 @@ function retryMusicOnGesture(audio: HTMLAudioElement) {
  * si suena otra, se detiene y empieza la nueva. Se repite hasta que otra música la sustituya.
  */
 export function playMusic(def: SoundDefinition) {
-  if (!soundEnabled || !def) return;
+  if (!def) return;
+  if (!soundEnabled) {
+    // Con el sonido silenciado, la música de la escena queda anotada y suena al reactivarlo
+    mutedMusicDef = def;
+    return;
+  }
   if (musicSoundId === def.id && (musicAudio || musicSynthTimer)) return;
 
   stopMusic();
   musicSoundId = def.id;
+  currentMusicDef = def;
 
   if (def.sourceType === 'url' && def.url) {
     const audio = new Audio(def.url);
@@ -1429,7 +1447,14 @@ export const playSound = (
   typeOrUrl?: string,
   projectCustomSoundsOverride?: SoundDefinition[]
 ) => {
-  if (!soundEnabled || !typeOrUrl || typeOrUrl === 'none') return;
+  if (!typeOrUrl || typeOrUrl === 'none') return;
+
+  if (!soundEnabled) {
+    // En silencio no suena nada, pero la música de la escena queda anotada para cuando se reactive el sonido
+    const def = findSoundDefinition(typeOrUrl, projectCustomSoundsOverride);
+    if (def && isMusicDefinition(def)) playMusic(def);
+    return;
+  }
 
   try {
     // 1. Check if typeOrUrl is a direct web URL or data URL
