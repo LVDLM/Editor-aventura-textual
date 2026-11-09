@@ -1,0 +1,1793 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index bc2db6c..11292d0 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -132,6 +132,7 @@ export default function App() {
+     appendedTextsPerScene: {} as Record<string, string[]>,
+     history: [] as { id: string; type: 'story' | 'response' | 'system'; text: string }[],
+     usedHotspotIds: [] as string[],
++    deliveredRuleKeys: [] as string[],
+     difficulty: 'normal' as 'facil' | 'normal' | 'dificil',
+   });
+ 
+@@ -224,6 +225,7 @@ export default function App() {
+       appendedTextsPerScene: {},
+       history: [],
+       usedHotspotIds: [],
++      deliveredRuleKeys: [],
+       difficulty: gameState.difficulty || 'normal',
+     });
+   };
+@@ -564,6 +566,7 @@ export default function App() {
+                 history: slotData.narrativeHistory || [],
+                 appendedTextsPerScene: slotData.appendedTextsPerScene || {},
+                 usedHotspotIds: slotData.usedHotspotIds || [],
++                deliveredRuleKeys: slotData.deliveredRuleKeys || [],
+                 difficulty: slotData.difficulty || 'facil',
+               });
+               setCurrentView('play');
+diff --git a/src/components/Editor/HotspotEditorModal.tsx b/src/components/Editor/HotspotEditorModal.tsx
+index 51ce494..c332da5 100644
+--- a/src/components/Editor/HotspotEditorModal.tsx
++++ b/src/components/Editor/HotspotEditorModal.tsx
+@@ -4,6 +4,7 @@ import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
+ import { playSound, getAllMergedSounds } from '../../utils/audio';
+ import { DialogueEditor } from './DialogueEditor';
+ import { AutoGrowTextarea } from '../common/AutoGrowTextarea';
++import { ItemQuantityDropdown } from './ItemQuantityDropdown';
+ import { X, Plus, Trash2, Sparkles, Check, ArrowRight, Sliders, Eye, EyeOff, ShieldAlert, Volume2, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+ 
+ interface HotspotEditorModalProps {
+@@ -51,7 +52,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+   // State change consequences (Conditions MET)
+   const [addItemId, setAddItemId] = useState('');
+   const [addItemsMap, setAddItemsMap] = useState<Record<string, number>>({});
+-  const [removeItemId, setRemoveItemId] = useState('');
++  const [removeItemsMap, setRemoveItemsMap] = useState<Record<string, number>>({});
+   const [flagToSet, setFlagToSet] = useState('');
+   const [flagSetValue, setFlagSetValue] = useState<boolean>(true);
+   const [setFlagsMap, setSetFlagsMap] = useState<Record<string, boolean>>({});
+@@ -66,7 +67,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+   const [failSoundEffect, setFailSoundEffect] = useState<SoundEffectType>('none');
+   const [failAddItemId, setFailAddItemId] = useState('');
+   const [failAddItemsMap, setFailAddItemsMap] = useState<Record<string, number>>({});
+-  const [failRemoveItemId, setFailRemoveItemId] = useState('');
++  const [failRemoveItemsMap, setFailRemoveItemsMap] = useState<Record<string, number>>({});
+   const [failFlagToSet, setFailFlagToSet] = useState('');
+   const [failFlagSetValue, setFailFlagSetValue] = useState<boolean>(true);
+   const [failSetFlagsMap, setFailSetFlagsMap] = useState<Record<string, boolean>>({});
+@@ -74,6 +75,26 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+   const [failAppendStoryText, setFailAppendStoryText] = useState('');
+   const [isAddItemsDropdownOpen, setIsAddItemsDropdownOpen] = useState(false);
+   const [isFailAddItemsDropdownOpen, setIsFailAddItemsDropdownOpen] = useState(false);
++  const [isRemoveItemsDropdownOpen, setIsRemoveItemsDropdownOpen] = useState(false);
++  const [isFailRemoveItemsDropdownOpen, setIsFailRemoveItemsDropdownOpen] = useState(false);
++
++  // Lee los objetos retirados de un StateChange. Acepta el formato nuevo (removeItems con cantidades)
++  // y el antiguo (removeItemId = 1 unidad), para que los proyectos ya guardados sigan abriéndose bien.
++  const readRemoveItems = (sc?: { removeItems?: Record<string, number>; removeItemId?: string }): Record<string, number> => {
++    if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) return { ...sc.removeItems };
++    if (sc?.removeItemId) return { [sc.removeItemId]: 1 };
++    return {};
++  };
++
++  // Limpia el mapa del formulario (solo cantidades enteras > 0)
++  const cleanQuantities = (map: Record<string, number>): Record<string, number> => {
++    const clean: Record<string, number> = {};
++    Object.entries(map).forEach(([itemId, qty]) => {
++      const n = Math.floor(Number(qty) || 0);
++      if (n > 0) clean[itemId] = n;
++    });
++    return clean;
++  };
+ 
+   const [duplicateConflict, setDuplicateConflict] = useState<{
+     newRule: ActionRule;
+@@ -106,7 +127,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+       setAddItemId('');
+     }
+ 
+-    setRemoveItemId(action.stateChange?.removeItemId || '');
++    setRemoveItemsMap(readRemoveItems(action.stateChange));
+     if (action.stateChange?.setFlags) {
+       const entries = Object.entries(action.stateChange.setFlags);
+       if (entries.length > 0) {
+@@ -152,7 +173,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+       setFailAddItemId('');
+     }
+ 
+-    setFailRemoveItemId(action.failStateChange?.removeItemId || '');
++    setFailRemoveItemsMap(readRemoveItems(action.failStateChange));
+     if (action.failStateChange?.setFlags) {
+       const entries = Object.entries(action.failStateChange.setFlags);
+       if (entries.length > 0) {
+@@ -199,7 +220,11 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+       stateChangeObj.addItemId = Object.keys(cleanAddItems)[0];
+     }
+ 
+-    if (removeItemId) stateChangeObj.removeItemId = removeItemId;
++    const cleanRemoveItems = cleanQuantities(removeItemsMap);
++    if (Object.keys(cleanRemoveItems).length > 0) {
++      stateChangeObj.removeItems = cleanRemoveItems;
++      stateChangeObj.removeItemId = Object.keys(cleanRemoveItems)[0]; // compatibilidad con versiones anteriores
++    }
+     if (goToSceneId) stateChangeObj.goToSceneId = goToSceneId;
+     if (appendStoryText.trim()) stateChangeObj.appendStoryText = appendStoryText.trim();
+     if (isGameOver) stateChangeObj.isGameOver = true;
+@@ -222,7 +247,11 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+       failStateChangeObj.addItemId = Object.keys(cleanFailAddItems)[0];
+     }
+ 
+-    if (failRemoveItemId) failStateChangeObj.removeItemId = failRemoveItemId;
++    const cleanFailRemoveItems = cleanQuantities(failRemoveItemsMap);
++    if (Object.keys(cleanFailRemoveItems).length > 0) {
++      failStateChangeObj.removeItems = cleanFailRemoveItems;
++      failStateChangeObj.removeItemId = Object.keys(cleanFailRemoveItems)[0]; // compatibilidad con versiones anteriores
++    }
+     if (failGoToSceneId) failStateChangeObj.goToSceneId = failGoToSceneId;
+     if (failAppendStoryText.trim()) failStateChangeObj.appendStoryText = failAppendStoryText.trim();
+     if (failIsGameOver) failStateChangeObj.isGameOver = true;
+@@ -332,7 +361,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+ 
+     setAddItemId('');
+     setAddItemsMap({});
+-    setRemoveItemId('');
++    setRemoveItemsMap({});
+     setFlagToSet('');
+     setFlagSetValue(true);
+     setSetFlagsMap({});
+@@ -346,7 +375,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+     setFailSoundEffect('none');
+     setFailAddItemId('');
+     setFailAddItemsMap({});
+-    setFailRemoveItemId('');
++    setFailRemoveItemsMap({});
+     setFailFlagToSet('');
+     setFailFlagSetValue(true);
+     setFailSetFlagsMap({});
+@@ -354,6 +383,8 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+     setFailAppendStoryText('');
+     setIsAddItemsDropdownOpen(false);
+     setIsFailAddItemsDropdownOpen(false);
++    setIsRemoveItemsDropdownOpen(false);
++    setIsFailRemoveItemsDropdownOpen(false);
+     setIsRequiredFlagsExpanded(false);
+   };
+ 
+@@ -998,21 +1029,23 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+                         )}
+                       </div>
+ 
+-                      <div>
+-                        <label className="block text-[10px] text-slate-400 mb-1">Retirar Objeto</label>
+-                        <select
+-                          value={removeItemId}
+-                          onChange={(e) => setRemoveItemId(e.target.value)}
+-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+-                        >
+-                          <option value="">-- Ninguno --</option>
+-                          {project.inventoryItems.map((item) => (
+-                            <option key={item.id} value={item.id}>
+-                              - {item.name}
+-                            </option>
+-                          ))}
+-                        </select>
+-                      </div>
++                      <ItemQuantityDropdown
++                        label="Retirar / Gastar Objeto(s)"
++                        panelTitle="Retirar Objetos"
++                        unitsTitle="Unidades a gastar de"
++                        items={project.inventoryItems}
++                        value={removeItemsMap}
++                        onChange={setRemoveItemsMap}
++                        isOpen={isRemoveItemsDropdownOpen}
++                        onToggle={() => {
++                          setIsRemoveItemsDropdownOpen((prev) => !prev);
++                          setIsAddItemsDropdownOpen(false);
++                          setIsFailAddItemsDropdownOpen(false);
++                        }}
++                        onClose={() => setIsRemoveItemsDropdownOpen(false)}
++                        sign="-"
++                        tone="rose"
++                      />
+ 
+                       <div>
+                         <label className="block text-[10px] text-slate-400 mb-1">Cambiar a Escena</label>
+@@ -1299,21 +1332,23 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+                         )}
+                       </div>
+ 
+-                      <div>
+-                        <label className="block text-[10px] text-slate-400 mb-1">Retirar Objeto al Fallar</label>
+-                        <select
+-                          value={failRemoveItemId}
+-                          onChange={(e) => setFailRemoveItemId(e.target.value)}
+-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+-                        >
+-                          <option value="">-- Ninguno --</option>
+-                          {project.inventoryItems.map((item) => (
+-                            <option key={item.id} value={item.id}>
+-                              - {item.name}
+-                            </option>
+-                          ))}
+-                        </select>
+-                      </div>
++                      <ItemQuantityDropdown
++                        label="Retirar / Gastar al Fallar"
++                        panelTitle="Retirar Objetos (Fallo)"
++                        unitsTitle="Unidades a gastar al fallar de"
++                        items={project.inventoryItems}
++                        value={failRemoveItemsMap}
++                        onChange={setFailRemoveItemsMap}
++                        isOpen={isFailRemoveItemsDropdownOpen}
++                        onToggle={() => {
++                          setIsFailRemoveItemsDropdownOpen((prev) => !prev);
++                          setIsAddItemsDropdownOpen(false);
++                          setIsFailAddItemsDropdownOpen(false);
++                        }}
++                        onClose={() => setIsFailRemoveItemsDropdownOpen(false)}
++                        sign="-"
++                        tone="rose"
++                      />
+ 
+                       <div>
+                         <label className="block text-[10px] text-slate-400 mb-1">Cambiar a Escena al Fallar</label>
+@@ -1538,9 +1573,14 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+                                     }
+                                     return null;
+                                   })()}
+-                                  {act.failStateChange.removeItemId && (
+-                                    <span>- {project.inventoryItems.find((i) => i.id === act.failStateChange.removeItemId)?.name || 'Objeto retirado'}</span>
+-                                  )}
++                                  {(() => {
++                                    const removed = readRemoveItems(act.failStateChange);
++                                    const labels = Object.entries(removed).map(([id, qty]) => {
++                                      const name = project.inventoryItems.find((i) => i.id === id)?.name || 'Objeto retirado';
++                                      return qty > 1 ? `${qty}x ${name}` : name;
++                                    });
++                                    return labels.length > 0 ? <span>- {labels.join(', ')}</span> : null;
++                                  })()}
+                                   {act.failStateChange.setFlags && <span>🚩 Banderas cambiadas</span>}
+                                   {act.failStateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
+                                   {act.failStateChange.appendStoryText && <span>📝 Párrafo añadido</span>}
+@@ -1567,9 +1607,14 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
+                                 }
+                                 return null;
+                               })()}
+-                              {act.stateChange.removeItemId && (
+-                                <span>- {project.inventoryItems.find((i) => i.id === act.stateChange.removeItemId)?.name || 'Objeto retirado'}</span>
+-                              )}
++                              {(() => {
++                                const removed = readRemoveItems(act.stateChange);
++                                const labels = Object.entries(removed).map(([id, qty]) => {
++                                  const name = project.inventoryItems.find((i) => i.id === id)?.name || 'Objeto retirado';
++                                  return qty > 1 ? `${qty}x ${name}` : name;
++                                });
++                                return labels.length > 0 ? <span>- {labels.join(', ')}</span> : null;
++                              })()}
+                               {act.stateChange.setFlags && <span>🚩 Banderas cambiadas</span>}
+                               {act.stateChange.goToSceneId && <span>🚪 Cambio de escena</span>}
+                               {act.stateChange.appendStoryText && <span>📝 Párrafo añadido</span>}
+diff --git a/src/components/Editor/InventoryManager.tsx b/src/components/Editor/InventoryManager.tsx
+index d9016af..92562c9 100644
+--- a/src/components/Editor/InventoryManager.tsx
++++ b/src/components/Editor/InventoryManager.tsx
+@@ -1,6 +1,17 @@
+ import React, { useState } from 'react';
+ import { GameProject, InventoryItem, ActionRule, SoundEffectType, SOUND_EFFECT_OPTIONS } from '../../types';
+ import { Package, Plus, Trash2, Key, BookOpen, Flashlight, Box, Sparkles, Edit2, Puzzle, ArrowRight, Zap, Check } from 'lucide-react';
++import { ItemQuantityDropdown } from './ItemQuantityDropdown';
++import { getGrants, getRemovals } from '../../utils/itemRules';
++
++// Texto corto de un mapa de cantidades: "2x Flecha, Arco"
++const describeQuantities = (map: Record<string, number>, items: InventoryItem[]): string =>
++  Object.entries(map)
++    .map(([id, n]) => {
++      const name = items.find((i) => i.id === id)?.name || id;
++      return n > 1 ? `${n}x ${name}` : name;
++    })
++    .join(', ');
+ 
+ interface InventoryManagerProps {
+   project: GameProject;
+@@ -29,10 +40,18 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+   const [editingComboRuleId, setEditingComboRuleId] = useState<string | null>(null);
+   const [comboRequiredItemId, setComboRequiredItemId] = useState('');
+   const [comboResponseMsg, setComboResponseMsg] = useState('');
+-  const [comboAddItem, setComboAddItem] = useState('');
+-  const [comboRemoveThis, setComboRemoveThis] = useState(true);
+-  const [comboRemoveRequired, setComboRemoveRequired] = useState(false);
++  // Objetos que entrega / gasta la combinación, con cantidades: { [idObjeto]: unidades }
++  const [comboAddMap, setComboAddMap] = useState<Record<string, number>>({});
++  // null = sin tocar: por defecto gasta 1 unidad del objeto que se está editando
++  const [comboRemoveMap, setComboRemoveMap] = useState<Record<string, number> | null>(null);
++  const [isComboAddOpen, setIsComboAddOpen] = useState(false);
++  const [isComboRemoveOpen, setIsComboRemoveOpen] = useState(false);
+   const [comboSetFlag, setComboSetFlag] = useState('');
++  const [comboSetFlagVal, setComboSetFlagVal] = useState(true);
++  // Condición opcional: la combinación solo funciona si esta bandera tiene este valor
++  const [comboReqFlag, setComboReqFlag] = useState('');
++  const [comboReqFlagVal, setComboReqFlagVal] = useState(true);
++  const [comboFailMsg, setComboFailMsg] = useState('');
+   const [comboSound, setComboSound] = useState<SoundEffectType>('pickup');
+ 
+   // State for Direct Use Effect on Item (e.g. Health Potion, Flashlight, Book)
+@@ -218,29 +237,72 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+     setComboRequiredItemId(comboRule.requiredItemId || '');
+     setComboSound(comboRule.soundEffect || 'pickup');
+     setComboResponseMsg(comboRule.responseMessage || '');
+-    setComboAddItem(comboRule.stateChange?.addItemId || '');
+-    setComboRemoveThis(!!comboRule.stateChange?.removeItemId);
+-    setComboRemoveRequired(!!comboRule.stateChange?.removeItem2Id);
++    // getGrants / getRemovals leen el formato nuevo (con cantidades) y el antiguo (1 unidad)
++    setComboAddMap(getGrants(comboRule.stateChange));
++    setComboRemoveMap(getRemovals(comboRule.stateChange));
++    setIsComboAddOpen(false);
++    setIsComboRemoveOpen(false);
+ 
+     const flagEntries = Object.entries(comboRule.stateChange?.setFlags || {});
+     if (flagEntries.length > 0) {
+       setComboSetFlag(flagEntries[0][0]);
++      setComboSetFlagVal(flagEntries[0][1] !== false);
+     } else {
+       setComboSetFlag('');
++      setComboSetFlagVal(true);
++    }
++
++    const reqEntries = Object.entries(comboRule.requiredFlags || {});
++    if (reqEntries.length > 0) {
++      setComboReqFlag(reqEntries[0][0]);
++      setComboReqFlagVal(reqEntries[0][1] !== false);
++    } else {
++      setComboReqFlag('');
++      setComboReqFlagVal(true);
+     }
++    setComboFailMsg(comboRule.failMessage || '');
+   };
+ 
+   const handleCancelEditCombination = () => {
+     setEditingComboRuleId(null);
+     setComboRequiredItemId('');
+     setComboResponseMsg('');
+-    setComboAddItem('');
+-    setComboRemoveThis(true);
+-    setComboRemoveRequired(false);
++    setComboAddMap({});
++    setComboRemoveMap(null);
++    setIsComboAddOpen(false);
++    setIsComboRemoveOpen(false);
+     setComboSetFlag('');
++    setComboSetFlagVal(true);
++    setComboReqFlag('');
++    setComboReqFlagVal(true);
++    setComboFailMsg('');
+     setComboSound('pickup');
+   };
+ 
++  // Construye lo que cambia la combinación a partir del formulario (solo cantidades enteras > 0)
++  const buildComboStateChange = (targetItemId: string, base?: ActionRule['stateChange']) => {
++    const clean = (map: Record<string, number>) => {
++      const out: Record<string, number> = {};
++      Object.entries(map).forEach(([id, qty]) => {
++        const n = Math.floor(Number(qty) || 0);
++        if (n > 0) out[id] = n;
++      });
++      return out;
++    };
++    const removeMap = clean(comboRemoveMap ?? { [targetItemId]: 1 });
++    const addMap = clean(comboAddMap);
++    return {
++      ...base,
++      // El formato con cantidades sustituye al antiguo (removeItemId / removeItem2Id / addItemId)
++      addItems: Object.keys(addMap).length > 0 ? addMap : undefined,
++      addItemId: undefined,
++      removeItems: Object.keys(removeMap).length > 0 ? removeMap : undefined,
++      removeItemId: undefined,
++      removeItem2Id: undefined,
++      setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: comboSetFlagVal } : undefined,
++    };
++  };
++
+   const handleSaveCombination = (targetItemId: string) => {
+     if (!comboRequiredItemId) return;
+ 
+@@ -258,13 +320,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+                     requiredItemId: comboRequiredItemId,
+                     responseMessage: comboResponseMsg.trim() || 'Has combinado los objetos con éxito.',
+                     soundEffect: comboSound,
+-                    stateChange: {
+-                      ...c.stateChange,
+-                      addItemId: comboAddItem || undefined,
+-                      removeItemId: comboRemoveThis ? targetItemId : undefined,
+-                      removeItem2Id: comboRemoveRequired ? comboRequiredItemId : undefined,
+-                      setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: true } : undefined,
+-                    },
++                    requiredFlags: comboReqFlag.trim() ? { [comboReqFlag.trim()]: comboReqFlagVal } : undefined,
++                    failMessage: comboFailMsg.trim() || undefined,
++                    stateChange: buildComboStateChange(targetItemId, c.stateChange),
+                   };
+                 }),
+               }
+@@ -278,12 +336,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+         requiredItemId: comboRequiredItemId,
+         responseMessage: comboResponseMsg.trim() || 'Has combinado los objetos con éxito.',
+         soundEffect: comboSound,
+-        stateChange: {
+-          addItemId: comboAddItem || undefined,
+-          removeItemId: comboRemoveThis ? targetItemId : undefined,
+-          removeItem2Id: comboRemoveRequired ? comboRequiredItemId : undefined,
+-          setFlags: comboSetFlag.trim() ? { [comboSetFlag.trim()]: true } : undefined,
+-        },
++        requiredFlags: comboReqFlag.trim() ? { [comboReqFlag.trim()]: comboReqFlagVal } : undefined,
++        failMessage: comboFailMsg.trim() || undefined,
++        stateChange: buildComboStateChange(targetItemId),
+       };
+ 
+       updateProject((prev) => ({
+@@ -859,9 +914,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+                       <div className="space-y-1.5">
+                         {existingCombos.map((combo) => {
+                           const reqItem = project.inventoryItems.find((i) => i.id === combo.requiredItemId);
+-                          const addedItem = combo.stateChange?.addItemId
+-                            ? project.inventoryItems.find((i) => i.id === combo.stateChange?.addItemId)
+-                            : null;
++                          const comboGrants = getGrants(combo.stateChange);
++                          const comboRemovals = getRemovals(combo.stateChange);
+                           const isThisComboEditing = isManagingCombos && editingComboRuleId === combo.id;
+ 
+                           return (
+@@ -886,24 +940,28 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+                                   )}
+                                 </div>
+                                 <div className="flex flex-wrap gap-2 text-[10px] text-slate-400">
+-                                  {addedItem && (
++                                  {Object.keys(comboGrants).length > 0 && (
+                                     <span className="text-emerald-300 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-500/30">
+-                                      + Obtiene: {addedItem.name}
+-                                    </span>
+-                                  )}
+-                                  {combo.stateChange?.removeItemId && (
+-                                    <span className="text-rose-300 bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-500/30">
+-                                      - Retira: {item.name}
++                                      + Obtiene: {describeQuantities(comboGrants, project.inventoryItems)}
+                                     </span>
+                                   )}
+-                                  {combo.stateChange?.removeItem2Id && (
++                                  {Object.keys(comboRemovals).length > 0 && (
+                                     <span className="text-rose-300 bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-500/30">
+-                                      - Retira: {reqItem?.name || combo.requiredItemId}
++                                      - Gasta: {describeQuantities(comboRemovals, project.inventoryItems)}
+                                     </span>
+                                   )}
+                                   {combo.stateChange?.setFlags && (
+                                     <span className="text-sky-300 bg-sky-950/40 px-1.5 py-0.5 rounded border border-sky-500/30">
+-                                      🚩 Bandera: {Object.keys(combo.stateChange.setFlags).join(', ')}
++                                      🚩 {Object.entries(combo.stateChange.setFlags)
++                                        .map(([k, v]) => `${k} → ${v === false ? 'desactivada' : 'activada'}`)
++                                        .join(', ')}
++                                    </span>
++                                  )}
++                                  {combo.requiredFlags && Object.keys(combo.requiredFlags).length > 0 && (
++                                    <span className="text-amber-300 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/30">
++                                      ⛔ Requiere: {Object.entries(combo.requiredFlags)
++                                        .map(([k, v]) => `${k} ${v === false ? 'desactivada' : 'activada'}`)
++                                        .join(', ')}
+                                     </span>
+                                   )}
+                                 </div>
+@@ -1015,36 +1073,48 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+                       </div>
+ 
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+-                        <div>
+-                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+-                            4. Objeto resultante a entregar (Opcional)
+-                          </label>
+-                          <select
+-                            value={comboAddItem}
+-                            onChange={(e) => setComboAddItem(e.target.value)}
+-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500"
+-                          >
+-                            <option value="">-- Ninguno --</option>
+-                            {project.inventoryItems.map((inv) => (
+-                              <option key={inv.id} value={inv.id}>
+-                                + Entregar: {inv.name}
+-                              </option>
+-                            ))}
+-                          </select>
+-                        </div>
++                        <ItemQuantityDropdown
++                          label="4. Objeto(s) resultante(s) a entregar (Opcional)"
++                          labelClassName="block text-[11px] font-semibold text-slate-300 mb-1"
++                          panelTitle="Entregar Objetos"
++                          unitsTitle="Unidades a entregar de"
++                          items={project.inventoryItems}
++                          value={comboAddMap}
++                          onChange={setComboAddMap}
++                          isOpen={isComboAddOpen}
++                          onToggle={() => {
++                            setIsComboAddOpen((prev) => !prev);
++                            setIsComboRemoveOpen(false);
++                          }}
++                          onClose={() => setIsComboAddOpen(false)}
++                          sign="+"
++                          tone="emerald"
++                        />
+ 
+                         <div>
+                           <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+-                            5. Activar Bandera / Flag (Opcional)
++                            5. Cambiar Bandera / Flag (Opcional)
+                           </label>
+-                          <input
+-                            type="text"
+-                            list="combo-flags-datalist"
+-                            value={comboSetFlag}
+-                            onChange={(e) => setComboSetFlag(e.target.value)}
+-                            placeholder="Ej: papel_recortado"
+-                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500 font-mono"
+-                          />
++                          <div className="flex gap-2">
++                            <input
++                              type="text"
++                              list="combo-flags-datalist"
++                              value={comboSetFlag}
++                              onChange={(e) => setComboSetFlag(e.target.value)}
++                              placeholder="Ej: arco_cargado"
++                              className="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500 font-mono"
++                            />
++                            <select
++                              value={comboSetFlagVal ? 'on' : 'off'}
++                              onChange={(e) => setComboSetFlagVal(e.target.value === 'on')}
++                              disabled={!comboSetFlag.trim()}
++                              className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-slate-100 focus:border-amber-500 disabled:opacity-40"
++                              title="Valor que toma la bandera al combinar"
++                            >
++                              <option value="on">Activar</option>
++                              <option value="off">Desactivar</option>
++                            </select>
++                          </div>
+                           <datalist id="combo-flags-datalist">
+                             {Object.keys(project.globalFlags || {}).map((flagKey) => (
+                               <option key={flagKey} value={flagKey} />
+@@ -1053,26 +1123,73 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
+                         </div>
+                       </div>
+ 
+-                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+-                        <label className="flex items-center gap-2 cursor-pointer">
+-                          <input
+-                            type="checkbox"
+-                            checked={comboRemoveThis}
+-                            onChange={(e) => setComboRemoveThis(e.target.checked)}
+-                            className="rounded border-slate-800 text-amber-500 focus:ring-amber-500"
+-                          />
+-                          <span>Retirar "{item.name}" del inventario</span>
+-                        </label>
++                      {(() => {
++                        const otherItem = project.inventoryItems.find((i) => i.id === comboRequiredItemId);
++                        const consumable = otherItem ? [item, otherItem] : [item];
++                        return (
++                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
++                            <ItemQuantityDropdown
++                              label="6. Objetos que se gastan al combinar (con unidades)"
++                              labelClassName="block text-[11px] font-semibold text-slate-300 mb-1"
++                              panelTitle="Gastar al combinar"
++                              unitsTitle="Unidades a gastar de"
++                              items={consumable}
++                              value={comboRemoveMap ?? { [item.id]: 1 }}
++                              onChange={setComboRemoveMap}
++                              isOpen={isComboRemoveOpen}
++                              onToggle={() => {
++                                setIsComboRemoveOpen((prev) => !prev);
++                                setIsComboAddOpen(false);
++                              }}
++                              onClose={() => setIsComboRemoveOpen(false)}
++                              sign="-"
++                              tone="rose"
++                            />
++                            <p className="text-[10px] text-slate-500 mt-1.5">
++                              Si el jugador no tiene las unidades indicadas, la combinación no se realiza.
++                            </p>
++                          </div>
++                        );
++                      })()}
+ 
+-                        <label className="flex items-center gap-2 cursor-pointer">
++                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
++                        <div>
++                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
++                            7. Solo se puede combinar si la bandera... (Opcional)
++                          </label>
++                          <div className="flex gap-2">
++                            <input
++                              type="text"
++                              list="combo-flags-datalist"
++                              value={comboReqFlag}
++                              onChange={(e) => setComboReqFlag(e.target.value)}
++                              placeholder="Ej: arco_cargado"
++                              className="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500 font-mono"
++                            />
++                            <select
++                              value={comboReqFlagVal ? 'on' : 'off'}
++                              onChange={(e) => setComboReqFlagVal(e.target.value === 'on')}
++                              disabled={!comboReqFlag.trim()}
++                              className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-xs text-slate-100 focus:border-amber-500 disabled:opacity-40"
++                              title="Estado que debe tener la bandera"
++                            >
++                              <option value="on">está activada</option>
++                              <option value="off">está desactivada</option>
++                            </select>
++                          </div>
++                        </div>
++                        <div>
++                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
++                            Mensaje si no se cumple / faltan unidades (Opcional)
++                          </label>
+                           <input
+-                            type="checkbox"
+-                            checked={comboRemoveRequired}
+-                            onChange={(e) => setComboRemoveRequired(e.target.checked)}
+-                            className="rounded border-slate-800 text-amber-500 focus:ring-amber-500"
++                            type="text"
++                            value={comboFailMsg}
++                            onChange={(e) => setComboFailMsg(e.target.value)}
++                            placeholder="Ej: El arco ya está cargado."
++                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500"
+                           />
+-                          <span>Retirar también el otro objeto de la combinación</span>
+-                        </label>
++                        </div>
+                       </div>
+ 
+                       <div className="flex items-center justify-between pt-1">
+diff --git a/src/components/Editor/ItemQuantityDropdown.tsx b/src/components/Editor/ItemQuantityDropdown.tsx
+new file mode 100644
+index 0000000..d0cfdec
+--- /dev/null
++++ b/src/components/Editor/ItemQuantityDropdown.tsx
+@@ -0,0 +1,164 @@
++import React from 'react';
++import { ChevronDown } from 'lucide-react';
++import { InventoryItem } from '../../types';
++
++interface ItemQuantityDropdownProps {
++  label: string;
++  /** Clases de la etiqueta (por defecto, la del editor de escenas) */
++  labelClassName?: string;
++  /** Texto de la cabecera del desplegable (p. ej. "Retirar Objetos") */
++  panelTitle: string;
++  /** Texto del tooltip del campo de unidades: se completa con el nombre del objeto */
++  unitsTitle: string;
++  items: InventoryItem[];
++  value: Record<string, number>;
++  onChange: (next: Record<string, number>) => void;
++  isOpen: boolean;
++  onToggle: () => void;
++  onClose: () => void;
++  /** '+' para entregar, '-' para retirar/gastar */
++  sign: '+' | '-';
++  /** 'emerald' para efectos de éxito, 'rose' para efectos de fallo / gasto */
++  tone?: 'emerald' | 'rose';
++}
++
++const TONES = {
++  emerald: {
++    summary: 'text-emerald-300',
++    chevron: 'text-emerald-400',
++    checked: 'bg-emerald-950/70 text-emerald-200 border border-emerald-500/40',
++    checkbox: 'text-emerald-500',
++  },
++  rose: {
++    summary: 'text-rose-300',
++    chevron: 'text-rose-400',
++    checked: 'bg-rose-950/70 text-rose-200 border border-rose-500/40',
++    checkbox: 'text-rose-500',
++  },
++} as const;
++
++/**
++ * Desplegable con una casilla por objeto del inventario y un campo numérico de unidades.
++ * Es el mismo patrón que "Entregar Objeto(s)", pero reutilizable para "Retirar / Gastar".
++ */
++export const ItemQuantityDropdown: React.FC<ItemQuantityDropdownProps> = ({
++  label,
++  labelClassName = 'block text-[10px] text-slate-400 mb-1',
++  panelTitle,
++  unitsTitle,
++  items,
++  value,
++  onChange,
++  isOpen,
++  onToggle,
++  onClose,
++  sign,
++  tone = 'emerald',
++}) => {
++  const t = TONES[tone];
++  const entries = Object.entries(value).filter(([, q]) => Number(q) > 0);
++
++  return (
++    <div className="relative">
++      <label className={labelClassName}>{label}</label>
++      <button
++        type="button"
++        onClick={onToggle}
++        className="w-full bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 flex items-center justify-between gap-1 text-left cursor-pointer transition-colors"
++      >
++        <span className="truncate">
++          {entries.length === 0 ? (
++            <span className="text-slate-400">-- Ninguno --</span>
++          ) : (
++            <span className={`${t.summary} font-medium`}>
++              {sign}{' '}
++              {entries
++                .map(([id, qty]) => {
++                  const name = items.find((i) => i.id === id)?.name || id;
++                  return Number(qty) > 1 ? `${qty}x ${name}` : name;
++                })
++                .join(', ')}
++            </span>
++          )}
++        </span>
++        <ChevronDown
++          className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${isOpen ? `rotate-180 ${t.chevron}` : ''}`}
++        />
++      </button>
++
++      {isOpen && (
++        <>
++          <div className="fixed inset-0 z-40" onClick={onClose} />
++          <div className="absolute left-0 top-full mt-1.5 w-72 z-50 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl p-2 max-h-56 overflow-y-auto space-y-1.5">
++            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 px-1">
++              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{panelTitle}</span>
++              {entries.length > 0 && (
++                <button
++                  type="button"
++                  onClick={() => onChange({})}
++                  className="text-[10px] text-rose-400 hover:underline cursor-pointer font-medium"
++                >
++                  Quitar todos
++                </button>
++              )}
++            </div>
++
++            {items.length === 0 ? (
++              <p className="text-[11px] text-slate-500 italic p-2">Sin objetos creados en el juego.</p>
++            ) : (
++              items.map((item) => {
++                const qty = value[item.id] || 0;
++                const isChecked = qty > 0;
++                return (
++                  <div
++                    key={item.id}
++                    className={`flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${
++                      isChecked ? t.checked : 'text-slate-300 hover:bg-slate-900 border border-transparent'
++                    }`}
++                  >
++                    <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer select-none">
++                      <input
++                        type="checkbox"
++                        checked={isChecked}
++                        onChange={(e) => {
++                          const next = { ...value };
++                          if (e.target.checked) next[item.id] = 1;
++                          else delete next[item.id];
++                          onChange(next);
++                        }}
++                        className={`rounded border-slate-700 bg-slate-900 ${t.checkbox} focus:ring-0 cursor-pointer w-3.5 h-3.5`}
++                      />
++                      <span className="truncate text-xs font-medium" title={item.name}>
++                        {item.name}
++                      </span>
++                    </label>
++
++                    <div className="flex items-center gap-1 shrink-0">
++                      <input
++                        type="number"
++                        min="0"
++                        max="999"
++                        value={qty > 0 ? qty : ''}
++                        placeholder="0"
++                        onChange={(e) => {
++                          const val = parseInt(e.target.value, 10);
++                          const next = { ...value };
++                          if (isNaN(val) || val <= 0) delete next[item.id];
++                          else next[item.id] = val;
++                          onChange(next);
++                        }}
++                        className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-center font-mono font-bold text-amber-300 focus:border-amber-400 outline-none"
++                        title={`${unitsTitle} ${item.name}`}
++                      />
++                      <span className="text-[10px] text-slate-500 font-mono">uds</span>
++                    </div>
++                  </div>
++                );
++              })
++            )}
++          </div>
++        </>
++      )}
++    </div>
++  );
++};
+diff --git a/src/components/Editor/SceneEditor.tsx b/src/components/Editor/SceneEditor.tsx
+index 6965f88..77d5f87 100644
+--- a/src/components/Editor/SceneEditor.tsx
++++ b/src/components/Editor/SceneEditor.tsx
+@@ -164,6 +164,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
+       appendedTextsPerScene: {},
+       history: [],
+       usedHotspotIds: [],
++      deliveredRuleKeys: [],
+       difficulty: 'facil',
+     });
+     setIsPreviewingActiveScene(true);
+diff --git a/src/components/GamePlayer.tsx b/src/components/GamePlayer.tsx
+index 81dd509..52857be 100644
+--- a/src/components/GamePlayer.tsx
++++ b/src/components/GamePlayer.tsx
+@@ -4,6 +4,7 @@ import { THEME_CONFIGS } from '../utils/themeStyles';
+ import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
+ import { ALL_VERBS, getProjectVerbs, renderVerbIcon } from '../utils/verbs';
+ import { playSound } from '../utils/audio';
++import { applyItemEffects, canAfford, deliveryKey, getGrants, getRemovals, isDelivered, missingItems } from '../utils/itemRules';
+ import {
+   Eye,
+   Zap,
+@@ -53,6 +54,7 @@ interface GamePlayerProps {
+     appendedTextsPerScene: Record<string, AppendedTextEntry[]>;
+     history: { id: string; type: 'story' | 'response' | 'system'; text: string }[];
+     usedHotspotIds?: string[];
++    deliveredRuleKeys?: string[]; // Fuentes de entrega de escena que ya entregaron sus objetos
+     difficulty?: 'facil' | 'normal' | 'dificil';
+   };
+   setGameState: React.Dispatch<React.SetStateAction<any>>;
+@@ -92,7 +94,8 @@ const isItemNeededInScene = (item: InventoryItem, scene?: Scene): boolean => {
+     (hs.actions || []).some(
+       (act) =>
+         act.stateChange?.removeItemId === item.id ||
+-        act.stateChange?.removeItem2Id === item.id
++        act.stateChange?.removeItem2Id === item.id ||
++        (act.stateChange?.removeItems?.[item.id] ?? 0) > 0
+     )
+   );
+   if (touchesItemState) return true;
+@@ -468,12 +471,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       }));
+     }
+ 
+-    const itemIdsToGrant = (config?.onSuccessItemIds || []).filter(Boolean);
++    // Entrega única: si este evento ya se superó antes (aunque el jugador haya gastado los objetos),
++    // no se vuelven a entregar al repetirlo o al volver a la escena.
++    const qteKey = deliveryKey(currentScene?.id, 'qte');
++    const qteAlreadyDelivered = (gameState.deliveredRuleKeys || []).includes(qteKey);
++    const itemIdsToGrant = qteAlreadyDelivered ? [] : (config?.onSuccessItemIds || []).filter(Boolean);
+     if (itemIdsToGrant.length > 0) {
+-      setGameState((prev: any) => ({
+-        ...prev,
+-        inventory: Array.from(new Set([...(prev.inventory || []), ...itemIdsToGrant])),
+-      }));
++      setGameState((prev: any) => {
++        if ((prev.deliveredRuleKeys || []).includes(qteKey)) return prev;
++        return {
++          ...prev,
++          inventory: [...(prev.inventory || []), ...itemIdsToGrant],
++          deliveredRuleKeys: [...(prev.deliveredRuleKeys || []), qteKey],
++        };
++      });
+     }
+ 
+     const itemsToGrant = itemIdsToGrant
+@@ -606,7 +617,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+         });
+       }
+ 
+-      if (rule && flagsMatch) {
++      // No se puede combinar si faltan unidades de lo que la combinación gasta
++      const comboMissing = rule && flagsMatch ? missingItems(rule.stateChange, gameState.inventory) : {};
++      const comboAffordable = Object.keys(comboMissing).length === 0;
++
++      if (rule && flagsMatch && comboAffordable) {
+         const sc = rule.stateChange;
+         const soundToPlay = rule.soundEffect || 'pickup';
+         playSound(soundToPlay);
+@@ -616,39 +631,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+           let newInventory = [...prev.inventory];
+           let nextSceneId = prev.currentSceneId;
+ 
+-          if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+-            Object.entries(sc.addItems).forEach(([id, qty]) => {
+-              const count = Math.max(0, Math.floor(Number(qty) || 0));
+-              if (!newInventory.includes(id)) {
+-                for (let i = 0; i < count; i++) {
+-                  newInventory.push(id);
+-                }
+-              }
+-            });
+-          } else if (sc?.addItemId) {
+-            if (!newInventory.includes(sc.addItemId)) {
+-              newInventory.push(sc.addItemId);
+-            }
+-          }
+-
+-          if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
+-            Object.entries(sc.removeItems).forEach(([id, qty]) => {
+-              const count = Math.max(0, Math.floor(Number(qty) || 0));
+-              for (let i = 0; i < count; i++) {
+-                const idx = newInventory.indexOf(id);
+-                if (idx !== -1) newInventory.splice(idx, 1);
+-              }
+-            });
+-          } else {
+-            if (sc?.removeItemId) {
+-              const idx = newInventory.indexOf(sc.removeItemId);
+-              if (idx !== -1) newInventory.splice(idx, 1);
+-            }
+-            if (sc?.removeItem2Id) {
+-              const idx = newInventory.indexOf(sc.removeItem2Id);
++          // Combinar objetos no es una entrega de escena: no lleva la protección anti-duplicados.
++          // Gasta primero (con las cantidades indicadas) y entrega después.
++          Object.entries(getRemovals(sc)).forEach(([id, count]) => {
++            for (let i = 0; i < count; i++) {
++              const idx = newInventory.indexOf(id);
+               if (idx !== -1) newInventory.splice(idx, 1);
+             }
+-          }
++          });
++          Object.entries(getGrants(sc)).forEach(([id, count]) => {
++            for (let i = 0; i < count; i++) newInventory.push(id);
++          });
+ 
+           if (sc?.goToSceneId) {
+             nextSceneId = sc.goToSceneId;
+@@ -688,6 +681,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+           verbIconName: 'Info',
+           message: rule.failMessage,
+         });
++      } else if (rule && flagsMatch && !comboAffordable) {
++        const missingText = Object.entries(comboMissing)
++          .map(([id, n]) => `${n}x ${project.inventoryItems.find((i) => i.id === id)?.name || id}`)
++          .join(', ');
++        setModalFeedback({
++          type: 'item',
++          title: 'Combinación no disponible',
++          verbIconName: 'Info',
++          message: rule.failMessage || `No tienes suficientes unidades. Te faltan: ${missingText}.`,
++        });
+       } else {
+         setModalFeedback({
+           type: 'item',
+@@ -773,19 +776,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       let newInventory = [...prev.inventory];
+       let nextSceneId = prev.currentSceneId;
+ 
++      // Usar un objeto del inventario no es una entrega de escena: no lleva la protección anti-duplicados
+       if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+         Object.entries(sc.addItems).forEach(([id, qty]) => {
+           const count = Math.max(0, Math.floor(Number(qty) || 0));
+-          if (!newInventory.includes(id)) {
+-            for (let i = 0; i < count; i++) {
+-              newInventory.push(id);
+-            }
++          for (let i = 0; i < count; i++) {
++            newInventory.push(id);
+           }
+         });
+       } else if (sc?.addItemId) {
+-        if (!newInventory.includes(sc.addItemId)) {
+-          newInventory.push(sc.addItemId);
+-        }
++        newInventory.push(sc.addItemId);
+       }
+ 
+       if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
+@@ -927,6 +927,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       // Check required flags & conditions
+       if (a.requiredFlags && !checkConditions(a.requiredFlags)) return false;
+       if (!checkConditions(a.visibleIfFlags, a.hiddenIfFlags)) return false;
++      // No se puede gastar más de lo que se tiene: si faltan unidades, la acción no se cumple
++      // (pasa a la rama "Si NO cumple requisitos"). Una acción que ya entregó sus objetos no vuelve a gastar.
++      const alreadyDone = isDelivered(
++        gameState.deliveredRuleKeys,
++        a.stateChange,
++        deliveryKey(gameState.currentSceneId, hotspot.id, a.id)
++      );
++      if (!alreadyDone && !canAfford(a.stateChange, gameState.inventory)) return false;
+       return true;
+     });
+ 
+@@ -1053,12 +1061,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       const itemObj = firstAddedItemId ? project.inventoryItems.find((i) => i.id === firstAddedItemId) : null;
+       const hasItemGains = itemIdsFromRule.length > 0;
+ 
+-      // Check if ALL granted items are ALREADY in the player's inventory
+-      const alreadyHasItems = hasItemGains && itemIdsFromRule.every((id) => (gameState.inventory || []).includes(id));
++      // Esta acción de escena ya entregó sus objetos antes (hace un momento o en una visita anterior).
++      // Lo que cuenta es la fuente de la entrega, no que el jugador conserve o no el objeto.
++      const ruleDeliveryKey = deliveryKey(gameState.currentSceneId, hotspot.id, rule.id);
++      const alreadyDelivered = isDelivered(gameState.deliveredRuleKeys, sc, ruleDeliveryKey);
+ 
+       if (rule.soundEffect && rule.soundEffect !== 'none') {
+         playSound(rule.soundEffect);
+-      } else if (rule.stateChange?.addItemId && !alreadyHasItems) {
++      } else if (rule.stateChange?.addItemId && !alreadyDelivered) {
+         playSound('pickup');
+       } else if (rule.stateChange?.goToSceneId) {
+         playSound('door');
+@@ -1066,7 +1076,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+         playSound('select');
+       }
+ 
+-      if (alreadyHasItems) {
++      if (alreadyDelivered) {
+         // Player already has the object(s) in inventory:
+         // Do not repeat the pickup modal or duplicate the item.
+         // Instead, display the object's description extracted from its item card.
+@@ -1076,7 +1086,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+         } else if (rule.responseMessage) {
+           messageToShow = rule.responseMessage;
+         } else {
+-          messageToShow = `Ya tienes ${itemObj?.name || 'este objeto'} en tu inventario.`;
++          messageToShow = `Ya has recogido ${itemObj?.name || 'este objeto'}.`;
+         }
+       } else if (rule.stateChange?.appendStoryText) {
+         // If action appends text to paragraph, display full paragraph directly in story (no response popup message)
+@@ -1085,7 +1095,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+         messageToShow = rule.responseMessage;
+       }
+ 
+-      const willPickupItem = hasItemGains && !alreadyHasItems;
++      const willPickupItem = hasItemGains && !alreadyDelivered;
+       const isAutosaveTriggered = willPickupItem || !!sc?.goToSceneId;
+       const isRuleGameOver = !!rule.isGameOver || !!rule.stateChange?.isGameOver || /\[Terminar|\[Cargar partida|\[Fin de partida\]/i.test(rule.responseMessage || '');
+ 
+@@ -1105,40 +1115,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+           [useKey]: (prev.verbUseCounts?.[useKey] || 0) + 1,
+         };
+ 
+-        if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
+-          Object.entries(sc.addItems).forEach(([id, qty]) => {
+-            const count = Math.max(0, Math.floor(Number(qty) || 0));
+-            // Prevent duplicate acquisitions if item is already in inventory
+-            if (!newInventory.includes(id)) {
+-              for (let i = 0; i < count; i++) {
+-                newInventory.push(id);
+-              }
+-            }
+-          });
+-        } else if (sc?.addItemId) {
+-          if (!newInventory.includes(sc.addItemId)) {
+-            newInventory.push(sc.addItemId);
+-          }
+-        }
+-
+-        if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
+-          Object.entries(sc.removeItems).forEach(([id, qty]) => {
+-            const count = Math.max(0, Math.floor(Number(qty) || 0));
+-            for (let i = 0; i < count; i++) {
+-              const idx = newInventory.indexOf(id);
+-              if (idx !== -1) newInventory.splice(idx, 1);
+-            }
+-          });
+-        } else {
+-          if (sc?.removeItemId) {
+-            const idx = newInventory.indexOf(sc.removeItemId);
+-            if (idx !== -1) newInventory.splice(idx, 1);
+-          }
+-          if (sc?.removeItem2Id) {
+-            const idx = newInventory.indexOf(sc.removeItem2Id);
+-            if (idx !== -1) newInventory.splice(idx, 1);
+-          }
+-        }
++        // Gasta y entrega con la lógica compartida. Se vuelve a comprobar con el estado más reciente (prev)
++        // para que un doble clic rápido no pueda entregar dos veces.
++        const itemResult = applyItemEffects(newInventory, prev.deliveredRuleKeys, sc, ruleDeliveryKey);
++        newInventory = itemResult.inventory;
++        const newDeliveredKeys = itemResult.deliveredRuleKeys;
+ 
+         if (sc?.appendStoryText) {
+           const currentList = newAppended[prev.currentSceneId] || [];
+@@ -1189,6 +1170,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+             narrativeHistory: newHistory,
+             appendedTextsPerScene: newAppended,
+             usedHotspotIds: newUsedHotspots,
++            deliveredRuleKeys: newDeliveredKeys,
+             difficulty: prev.difficulty || 'facil',
+           };
+           try {
+@@ -1208,6 +1190,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+           currentSceneId: nextSceneId,
+           appendedTextsPerScene: newAppended,
+           usedHotspotIds: newUsedHotspots,
++          deliveredRuleKeys: newDeliveredKeys,
+           verbUseCounts: newVerbUseCounts,
+           isGameOver: prev.isGameOver || isRuleGameOver,
+           history: newHistory,
+@@ -1248,10 +1231,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       } else if (messageToShow) {
+         setModalFeedback({
+           type: 'action',
+-          title: (alreadyHasItems && itemObj?.name) ? itemObj.name : actionTitle,
+-          showTitle: alreadyHasItems,
+-          verbIconName: (alreadyHasItems && !verbIconName) ? 'Eye' : verbIconName,
+-          itemImageUrl: (alreadyHasItems && itemObj) ? (itemObj.imageFileData || itemObj.imageUrl) : undefined,
++          title: (alreadyDelivered && itemObj?.name) ? itemObj.name : actionTitle,
++          showTitle: alreadyDelivered,
++          verbIconName: (alreadyDelivered && !verbIconName) ? 'Eye' : verbIconName,
++          itemImageUrl: (alreadyDelivered && itemObj) ? (itemObj.imageFileData || itemObj.imageUrl) : undefined,
+           message: messageToShow.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
+         });
+       }
+@@ -1305,39 +1288,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+         let nextSceneId = prev.currentSceneId;
+         const newAppended = { ...prev.appendedTextsPerScene };
+ 
+-        if (fsc?.addItems && Object.keys(fsc.addItems).length > 0) {
+-          Object.entries(fsc.addItems).forEach(([id, qty]) => {
+-            const count = Math.max(0, Math.floor(Number(qty) || 0));
+-            if (!newInventory.includes(id)) {
+-              for (let i = 0; i < count; i++) {
+-                newInventory.push(id);
+-              }
+-            }
+-          });
+-        } else if (fsc?.addItemId) {
+-          if (!newInventory.includes(fsc.addItemId)) {
+-            newInventory.push(fsc.addItemId);
+-          }
+-        }
+-
+-        if (fsc?.removeItems && Object.keys(fsc.removeItems).length > 0) {
+-          Object.entries(fsc.removeItems).forEach(([id, qty]) => {
+-            const count = Math.max(0, Math.floor(Number(qty) || 0));
+-            for (let i = 0; i < count; i++) {
+-              const idx = newInventory.indexOf(id);
+-              if (idx !== -1) newInventory.splice(idx, 1);
+-            }
+-          });
+-        } else {
+-          if (fsc?.removeItemId) {
+-            const idx = newInventory.indexOf(fsc.removeItemId);
+-            if (idx !== -1) newInventory.splice(idx, 1);
+-          }
+-          if (fsc?.removeItem2Id) {
+-            const idx = newInventory.indexOf(fsc.removeItem2Id);
+-            if (idx !== -1) newInventory.splice(idx, 1);
+-          }
+-        }
++        // Las consecuencias del fallo también entregan una sola vez por escena y acción.
++        // Aquí el gasto no bloquea nada: ya estamos en la rama de fallo, así que se retira lo que haya.
++        const failResult = applyItemEffects(
++          newInventory,
++          prev.deliveredRuleKeys,
++          fsc,
++          deliveryKey(prev.currentSceneId, hotspot.id, failedRule?.id, 'fail')
++        );
++        newInventory = failResult.inventory;
++        const newDeliveredKeys = failResult.deliveredRuleKeys;
+ 
+         if (fsc?.appendStoryText) {
+           const currentList = newAppended[prev.currentSceneId] || [];
+@@ -1375,6 +1335,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+           currentSceneId: nextSceneId,
+           appendedTextsPerScene: newAppended,
+           usedHotspotIds: newUsedHotspots,
++          deliveredRuleKeys: newDeliveredKeys,
+           isGameOver: prev.isGameOver || isFailGameOver,
+           history: newHistory,
+         };
+@@ -1555,7 +1516,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+     } else if (option.giveItemId) {
+       dialogueItemIds.push(option.giveItemId);
+     }
+-    const playerAlreadyHasDialogueItem = dialogueItemIds.length > 0 && dialogueItemIds.every((id) => (gameState.inventory || []).includes(id));
++    // Cada opción de diálogo entrega sus objetos una sola vez por escena (aunque el jugador ya los haya gastado)
++    const dialogueDeliveryKey = deliveryKey(gameState.currentSceneId, 'dialogue', option.id);
++    const dialogueAlreadyDelivered = dialogueItemIds.length > 0 && (gameState.deliveredRuleKeys || []).includes(dialogueDeliveryKey);
+ 
+     // Item consuming (-Objeto)
+     const consumeItemObj =
+@@ -1572,7 +1535,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       responseText += `${character.name}: ${option.npcResponse}`;
+     }
+ 
+-    if (!playerAlreadyHasDialogueItem) {
++    if (!dialogueAlreadyDelivered) {
+       if (option.giveItems && Object.keys(option.giveItems).length > 0) {
+         const summary = Object.entries(option.giveItems)
+           .map(([id, qty]) => {
+@@ -1586,13 +1549,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+         responseText += `\n\n[Recibido: ${giveItemObj.name}]`;
+       }
+     }
+-    if (consumeItemObj) {
++    if (consumeItemObj && !dialogueAlreadyDelivered) {
+       responseText += `\n\n[Entregado: ${consumeItemObj.name}]`;
+     }
+ 
+     // Track items received during this dialogue session
+     const currentReceived = activeDialogue?.receivedItemIds || [];
+-    const itemsToAdd = !playerAlreadyHasDialogueItem
++    const itemsToAdd = !dialogueAlreadyDelivered
+       ? dialogueItemIds
+       : [];
+     const updatedReceived = [...currentReceived, ...itemsToAdd];
+@@ -1602,25 +1565,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       let newInventory = [...prev.inventory];
+       let nextSceneId = prev.currentSceneId;
+ 
+-      if (option.giveItems && Object.keys(option.giveItems).length > 0) {
+-        Object.entries(option.giveItems).forEach(([id, qty]) => {
+-          const count = Math.max(0, Math.floor(Number(qty) || 0));
+-          if (!newInventory.includes(id)) {
+-            for (let i = 0; i < count; i++) {
+-              newInventory.push(id);
+-            }
+-          }
+-        });
+-      } else if (option.giveItemId) {
+-        if (!newInventory.includes(option.giveItemId)) {
+-          newInventory.push(option.giveItemId);
+-        }
+-      }
+-
+-      if (option.requiredItemId && option.consumeRequiredItem) {
+-        const idx = newInventory.indexOf(option.requiredItemId);
+-        if (idx !== -1) newInventory.splice(idx, 1);
+-      }
++      // Entrega y consumo con la lógica compartida (entrega única por opción y escena)
++      const dialogueResult = applyItemEffects(
++        newInventory,
++        prev.deliveredRuleKeys,
++        {
++          addItems: option.giveItems,
++          addItemId: option.giveItemId,
++          removeItemId: option.requiredItemId && option.consumeRequiredItem ? option.requiredItemId : undefined,
++        },
++        dialogueDeliveryKey
++      );
++      newInventory = dialogueResult.inventory;
++      const newDeliveredKeys = dialogueResult.deliveredRuleKeys;
+ 
+       if (option.goToSceneId) {
+         nextSceneId = option.goToSceneId;
+@@ -1654,6 +1611,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+         inventory: newInventory,
+         currentSceneId: nextSceneId,
+         usedDialogueOptionIds,
++        deliveredRuleKeys: newDeliveredKeys,
+         appendedTextsPerScene: newAppended,
+         isGameOver: option.isGameOver || prev.isGameOver,
+       };
+@@ -1685,7 +1643,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
+       );
+     }
+ 
+-    if ((giveItemObj && !playerAlreadyHasDialogueItem) || option.goToSceneId) {
++    if ((giveItemObj && !dialogueAlreadyDelivered) || option.goToSceneId) {
+       setShowSaveNotification(true);
+       setTimeout(() => setShowSaveNotification(false), 2500);
+     }
+diff --git a/src/components/SaveLoadModal.tsx b/src/components/SaveLoadModal.tsx
+index 6620733..54c65ea 100644
+--- a/src/components/SaveLoadModal.tsx
++++ b/src/components/SaveLoadModal.tsx
+@@ -74,6 +74,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
+       narrativeHistory: currentGameState.history || [],
+       appendedTextsPerScene: currentGameState.appendedTextsPerScene || {},
+       usedHotspotIds: currentGameState.usedHotspotIds || [],
++      deliveredRuleKeys: currentGameState.deliveredRuleKeys || [],
+       difficulty: currentGameState.difficulty || 'facil',
+     };
+ 
+@@ -94,6 +95,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
+       history: slot.narrativeHistory,
+       appendedTextsPerScene: slot.appendedTextsPerScene || {},
+       usedHotspotIds: slot.usedHotspotIds || [],
++      deliveredRuleKeys: slot.deliveredRuleKeys || [],
+       difficulty: slot.difficulty || 'facil',
+     });
+     showNotification(`¡Partida cargada correctamente!`);
+@@ -127,6 +129,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
+       narrativeHistory: currentGameState.history || [],
+       appendedTextsPerScene: currentGameState.appendedTextsPerScene || {},
+       usedHotspotIds: currentGameState.usedHotspotIds || [],
++      deliveredRuleKeys: currentGameState.deliveredRuleKeys || [],
+       difficulty: currentGameState.difficulty || 'facil',
+     };
+ 
+@@ -156,6 +159,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
+             history: parsed.narrativeHistory || [],
+             appendedTextsPerScene: parsed.appendedTextsPerScene || {},
+             usedHotspotIds: parsed.usedHotspotIds || [],
++            deliveredRuleKeys: parsed.deliveredRuleKeys || [],
+             difficulty: parsed.difficulty || 'facil',
+           });
+           showNotification('¡Partida importada y cargada con éxito!');
+diff --git a/src/types.ts b/src/types.ts
+index ea83237..ae57f38 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -359,6 +359,7 @@ export interface SaveSlotData {
+   narrativeHistory: { id: string; type: 'story' | 'response' | 'system'; text: string; timestamp?: string }[];
+   appendedTextsPerScene: Record<string, AppendedTextEntry[]>;
+   usedHotspotIds?: string[];
++  deliveredRuleKeys?: string[]; // Fuentes de entrega de escena que ya entregaron sus objetos (no repetir al volver)
+   difficulty?: 'facil' | 'normal' | 'dificil';
+ }
+ 
+diff --git a/src/utils/htmlExporter.ts b/src/utils/htmlExporter.ts
+index b8ebc44..bd11586 100644
+--- a/src/utils/htmlExporter.ts
++++ b/src/utils/htmlExporter.ts
+@@ -422,6 +422,7 @@ ${jsonProject}
+       flags: Object.assign({}, PROJECT.globalFlags || {}),
+       appendedTexts: {},
+       usedHotspotIds: [],
++      deliveredRuleKeys: [],
+       verbUseCounts: {},
+       difficulty: PROJECT.difficultyMode || 'easy',
+       isGameOver: false
+@@ -905,17 +906,17 @@ ${VOICE_ENGINE_EMBED}
+ 
+     function formatTextWithLinks(str) {
+       if (!str) return '';
+-      if (/<[a-z][\s\S]*>/i.test(str)) {
+-        return str.replace(/<a\s+(?:[^>]*?\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$2</a>');
++      if (/<[a-z][\\s\\S]*>/i.test(str)) {
++        return str.replace(/<a\\s+(?:[^>]*?\\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\\/a>/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$2</a>');
+       }
+       const escaped = escapeHTML(str);
+-      return escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$1</a>');
++      return escaped.replace(/(https?:\\/\\/[^\\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline;">$1</a>');
+     }
+ 
+     function toggleDetailsModal() {
+       const syn = PROJECT.synopsis || PROJECT.description || 'Sin sinopsis registrada.';
+-      const creds = PROJECT.credits ? ('<div style="margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 0.8rem;"><strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Créditos y Fuentes:</strong>' + formatTextWithLinks(PROJECT.credits).replace(/\n/g, '<br/>') + '</div>') : '';
+-      showPopupModal('📖 Detalles de la Historia', '<div style="font-size: 0.95rem; line-height: 1.6;"><strong>' + escapeHTML(PROJECT.title) + '</strong> por <em>' + escapeHTML(PROJECT.author) + '</em></div><div style="margin-top: 0.75rem; font-size: 0.9rem; color: #cbd5e1;">' + escapeHTML(syn).replace(/\n/g, '<br/>') + '</div>' + creds, null, '✨');
++      const creds = PROJECT.credits ? ('<div style="margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); font-family: monospace; font-size: 0.8rem;"><strong style="color: #fbbf24; display: block; margin-bottom: 0.25rem;">Créditos y Fuentes:</strong>' + formatTextWithLinks(PROJECT.credits).replace(/\\n/g, '<br/>') + '</div>') : '';
++      showPopupModal('📖 Detalles de la Historia', '<div style="font-size: 0.95rem; line-height: 1.6;"><strong>' + escapeHTML(PROJECT.title) + '</strong> por <em>' + escapeHTML(PROJECT.author) + '</em></div><div style="margin-top: 0.75rem; font-size: 0.9rem; color: #cbd5e1;">' + escapeHTML(syn).replace(/\\n/g, '<br/>') + '</div>' + creds, null, '✨');
+     }
+ 
+     function closePopupOnBackdrop(e) {
+@@ -967,21 +968,35 @@ ${VOICE_ENGINE_EMBED}
+           }
+         }
+ 
++        // No se puede combinar si faltan unidades de lo que la combinacion gasta
++        var comboMissing = [];
+         if (rule && flagsMatch) {
++          var comboRemovals = getRemovals(rule.stateChange);
++          for (var mk in comboRemovals) {
++            var haveQty = countItem(mk);
++            if (haveQty < comboRemovals[mk]) {
++              var missItem = PROJECT.inventoryItems.find(function(i) { return i.id === mk; });
++              comboMissing.push((comboRemovals[mk] - haveQty) + 'x ' + (missItem ? missItem.name : mk));
++            }
++          }
++        }
++
++        if (rule && flagsMatch && comboMissing.length === 0) {
+           var sc = rule.stateChange || {};
+           if (sc.setFlags) {
+             for (var k in sc.setFlags) {
+               gameState.flags[k] = sc.setFlags[k];
+             }
+           }
+-          if (sc.addItemId && gameState.inventory.indexOf(sc.addItemId) === -1) {
+-            gameState.inventory.push(sc.addItemId);
++          // Combinar no es una entrega de escena: sin proteccion anti-duplicados.
++          // Gasta primero (con las cantidades indicadas) y entrega despues.
++          var comboRem = getRemovals(sc);
++          for (var rk in comboRem) {
++            for (var ri = 0; ri < comboRem[rk]; ri++) removeOneUnit(rk);
+           }
+-          if (sc.removeItemId) {
+-            gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItemId; });
+-          }
+-          if (sc.removeItem2Id) {
+-            gameState.inventory = gameState.inventory.filter(function(i) { return i !== sc.removeItem2Id; });
++          var comboGrants = getGrants(sc);
++          for (var gk in comboGrants) {
++            for (var gi2 = 0; gi2 < comboGrants[gk]; gi2++) gameState.inventory.push(gk);
+           }
+           if (sc.goToSceneId) {
+             gameState.currentSceneId = sc.goToSceneId;
+@@ -1010,6 +1025,8 @@ ${VOICE_ENGINE_EMBED}
+ 
+         if (rule && !flagsMatch && rule.failMessage) {
+           showPopupModal('Combinación no disponible', escapeHTML(rule.failMessage), null, 'ℹ️');
++        } else if (rule && flagsMatch && comboMissing.length > 0) {
++          showPopupModal('Combinación no disponible', escapeHTML(rule.failMessage || ('No tienes suficientes unidades. Te faltan: ' + comboMissing.join(', ') + '.')), null, 'ℹ️');
+         } else {
+           showPopupModal('Sin efecto', 'No parece ocurrir nada al usar ' + (sourceItem ? sourceItem.name : 'este objeto') + ' con ' + (targetItem ? targetItem.name : 'este objeto') + '.', null, 'ℹ️');
+         }
+@@ -1194,6 +1211,88 @@ ${VOICE_ENGINE_EMBED}
+       updateSentenceBar();
+     }
+ 
++    // ---- Reglas de objetos: copia en JS de src/utils/itemRules.ts (si cambias una, cambia la otra) ----
++    // 1) No se puede gastar más de lo que se tiene.
++    // 2) Cada fuente de entrega de una escena entrega sus objetos UNA sola vez (aunque se repita la acción,
++    //    se gasten los objetos o se vuelva a la escena). Se registra en gameState.deliveredRuleKeys.
++    function countItem(id) {
++      var n = 0;
++      for (var i = 0; i < gameState.inventory.length; i++) {
++        if (gameState.inventory[i] === id) n++;
++      }
++      return n;
++    }
++
++    function getRemovals(sc) {
++      var out = {};
++      if (!sc) return out;
++      if (sc.removeItems && Object.keys(sc.removeItems).length > 0) {
++        for (var k in sc.removeItems) {
++          var n = Math.floor(Number(sc.removeItems[k]) || 0);
++          if (n > 0) out[k] = n;
++        }
++        return out;
++      }
++      if (sc.removeItemId) out[sc.removeItemId] = 1;
++      if (sc.removeItem2Id) out[sc.removeItem2Id] = (out[sc.removeItem2Id] || 0) + 1;
++      return out;
++    }
++
++    function getGrants(sc) {
++      var out = {};
++      if (!sc) return out;
++      if (sc.addItems && Object.keys(sc.addItems).length > 0) {
++        for (var k in sc.addItems) {
++          var n = Math.floor(Number(sc.addItems[k]) || 0);
++          if (n > 0) out[k] = n;
++        }
++        return out;
++      }
++      if (sc.addItemId) out[sc.addItemId] = 1;
++      return out;
++    }
++
++    function canAfford(sc) {
++      var removals = getRemovals(sc);
++      for (var k in removals) {
++        if (countItem(k) < removals[k]) return false;
++      }
++      return true;
++    }
++
++    function deliveryKey(sceneId, hotspotId, ruleId, suffix) {
++      return [sceneId, hotspotId, ruleId].concat(suffix ? [suffix] : []).join('::');
++    }
++
++    function isDelivered(sc, key) {
++      return Object.keys(getGrants(sc)).length > 0 && (gameState.deliveredRuleKeys || []).indexOf(key) !== -1;
++    }
++
++    function removeOneUnit(id) {
++      var idx = gameState.inventory.indexOf(id);
++      if (idx !== -1) gameState.inventory.splice(idx, 1);
++    }
++
++    // Gasta y entrega. Si la fuente ya entregó antes, no hace nada con los objetos (ni entrega ni gasta).
++    function applyItemEffects(sc, key) {
++      if (!gameState.deliveredRuleKeys) gameState.deliveredRuleKeys = [];
++      var grants = getGrants(sc);
++      var grantsSomething = Object.keys(grants).length > 0;
++      if (grantsSomething && gameState.deliveredRuleKeys.indexOf(key) !== -1) {
++        return { alreadyDelivered: true };
++      }
++      var removals = getRemovals(sc);
++      for (var rk in removals) {
++        for (var i = 0; i < removals[rk]; i++) removeOneUnit(rk);
++      }
++      for (var gk in grants) {
++        for (var j = 0; j < grants[gk]; j++) gameState.inventory.push(gk);
++      }
++      if (grantsSomething) gameState.deliveredRuleKeys.push(key);
++      return { alreadyDelivered: false };
++    }
++    // ---- fin reglas de objetos ----
++
+     function clickHotspot(hotspotId, event) {
+       if (event) event.stopPropagation();
+       if (isGameOverState()) return;
+@@ -1225,19 +1324,24 @@ ${VOICE_ENGINE_EMBED}
+         if (!checkConditions(a.visibleIfFlags, a.hiddenIfFlags)) {
+           return false;
+         }
++        // No se puede gastar más de lo que se tiene: si faltan unidades la acción no se cumple
++        // (pasa a la rama de fallo). Una acción que ya entregó sus objetos no vuelve a gastar.
++        if (!isDelivered(a.stateChange, deliveryKey(scene.id, hs.id, a.id)) && !canAfford(a.stateChange)) {
++          return false;
++        }
+         return true;
+       });
+ 
+-      function getRuleScore(r: any) {
++      function getRuleScore(r) {
+         return (r.requiredFlags ? Object.keys(r.requiredFlags).length : 0) + (r.requiredItemId ? 1 : 0);
+       }
+ 
+-      matchingRules.sort(function(r1: any, r2: any) {
++      matchingRules.sort(function(r1, r2) {
+         return getRuleScore(r2) - getRuleScore(r1);
+       });
+ 
+       const maxScore = matchingRules.length > 0 ? getRuleScore(matchingRules[0]) : 0;
+-      const topRules = matchingRules.filter(function(r: any) {
++      const topRules = matchingRules.filter(function(r) {
+         return getRuleScore(r) === maxScore;
+       });
+ 
+@@ -1261,13 +1365,13 @@ ${VOICE_ENGINE_EMBED}
+         } else if (sc && sc.addItemId) {
+           ruleItemIds.push(sc.addItemId);
+         }
+-        var alreadyHasItems = ruleItemIds.length > 0 && ruleItemIds.every(function(id) {
+-          return gameState.inventory.indexOf(id) !== -1;
+-        });
++        // Esta acción de escena ya entregó sus objetos antes (ahora o en una visita anterior a la escena)
++        var ruleDeliveryKey = deliveryKey(scene.id, hs.id, rule.id);
++        var alreadyDelivered = isDelivered(sc, ruleDeliveryKey);
+ 
+         if (rule.soundEffect && rule.soundEffect !== 'none') {
+           playSound(rule.soundEffect);
+-        } else if (sc && sc.addItemId && !alreadyHasItems) {
++        } else if (sc && sc.addItemId && !alreadyDelivered) {
+           playSound('pickup');
+         } else if (sc && sc.goToSceneId) {
+           playSound('door');
+@@ -1278,13 +1382,13 @@ ${VOICE_ENGINE_EMBED}
+         var firstItem = ruleItemIds.length > 0 ? PROJECT.inventoryItems.find(function(i) { return i.id === ruleItemIds[0]; }) : null;
+ 
+         let msg = '';
+-        if (alreadyHasItems) {
++        if (alreadyDelivered) {
+           if (firstItem && firstItem.description && firstItem.description.trim()) {
+             msg = firstItem.description.trim();
+           } else if (rule.responseMessage) {
+             msg = stripGameOverTag(rule.responseMessage);
+           } else {
+-            msg = 'Ya tienes ' + (firstItem ? firstItem.name : 'este objeto') + ' en tu inventario.';
++            msg = 'Ya has recogido ' + (firstItem ? firstItem.name : 'este objeto') + '.';
+           }
+         } else {
+           msg = stripGameOverTag(rule.responseMessage || '');
+@@ -1293,7 +1397,7 @@ ${VOICE_ENGINE_EMBED}
+         let addedImgHtml = '';
+         let itemImgSrc = '';
+ 
+-        if (alreadyHasItems && firstItem) {
++        if (alreadyDelivered && firstItem) {
+           itemImgSrc = getImageSrc(firstItem);
+           if (itemImgSrc) {
+             addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(firstItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+@@ -1307,44 +1411,17 @@ ${VOICE_ENGINE_EMBED}
+ 
+         if (rule.stateChange) {
+           if (sc.setFlags) Object.assign(gameState.flags, sc.setFlags);
+-          if (sc.addItems && Object.keys(sc.addItems).length > 0) {
+-            for (var ak in sc.addItems) {
+-              var an = Math.floor(Number(sc.addItems[ak]) || 0);
+-              if (gameState.inventory.indexOf(ak) === -1) {
+-                for (var ac = 0; ac < an; ac++) gameState.inventory.push(ak);
+-              }
+-              const addedItem = PROJECT.inventoryItems.find(i => i.id === ak);
+-              if (addedItem && !itemImgSrc && !alreadyHasItems) {
++          applyItemEffects(sc, ruleDeliveryKey);
++          if (!alreadyDelivered) {
++            for (var gi = 0; gi < ruleItemIds.length && !itemImgSrc; gi++) {
++              var addedItem = PROJECT.inventoryItems.find(function(i) { return i.id === ruleItemIds[gi]; });
++              if (addedItem) {
+                 itemImgSrc = getImageSrc(addedItem);
+                 if (itemImgSrc) {
+                   addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+                 }
+               }
+             }
+-          } else if (sc.addItemId) {
+-            if (gameState.inventory.indexOf(sc.addItemId) === -1) {
+-              gameState.inventory.push(sc.addItemId);
+-            }
+-            const addedItem = PROJECT.inventoryItems.find(i => i.id === sc.addItemId);
+-            if (addedItem && !itemImgSrc && !alreadyHasItems) {
+-              itemImgSrc = getImageSrc(addedItem);
+-              if (itemImgSrc) {
+-                addedImgHtml = '<div style="margin-top: 0.75rem; text-align: center;"><img src="' + escapeHTML(itemImgSrc) + '" alt="' + escapeHTML(addedItem.name) + '" style="max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--accent); margin: 0 auto; display: block;" /></div>';
+-              }
+-            }
+-          }
+-
+-          if (sc.removeItems && Object.keys(sc.removeItems).length > 0) {
+-            for (var rk in sc.removeItems) {
+-              var rn = Math.floor(Number(sc.removeItems[rk]) || 0);
+-              for (var rc = 0; rc < rn; rc++) {
+-                var ridx = gameState.inventory.indexOf(rk);
+-                if (ridx !== -1) gameState.inventory.splice(ridx, 1);
+-              }
+-            }
+-          } else if (sc.removeItemId) {
+-            var rmidx = gameState.inventory.indexOf(sc.removeItemId);
+-            if (rmidx !== -1) gameState.inventory.splice(rmidx, 1);
+           }
+           if (sc.appendStoryText) {
+             if (!gameState.appendedTexts[gameState.currentSceneId]) {
+@@ -1454,30 +1531,15 @@ ${VOICE_ENGINE_EMBED}
+         if (failedRule && failedRule.failStateChange) {
+           const fsc = failedRule.failStateChange;
+           if (fsc.setFlags) Object.assign(gameState.flags, fsc.setFlags);
+-          if (fsc.addItems && Object.keys(fsc.addItems).length > 0) {
+-            for (var fak in fsc.addItems) {
+-              var fan = Math.floor(Number(fsc.addItems[fak]) || 0);
+-              for (var fac = 0; fac < fan; fac++) gameState.inventory.push(fak);
+-              const addedItem = PROJECT.inventoryItems.find(i => i.id === fak);
+-              if (addedItem && !failImgSrc) failImgSrc = getImageSrc(addedItem);
+-            }
+-          } else if (fsc.addItemId) {
+-            gameState.inventory.push(fsc.addItemId);
+-            const addedItem = PROJECT.inventoryItems.find(i => i.id === fsc.addItemId);
+-            if (addedItem) failImgSrc = getImageSrc(addedItem);
+-          }
+-
+-          if (fsc.removeItems && Object.keys(fsc.removeItems).length > 0) {
+-            for (var frk in fsc.removeItems) {
+-              var frn = Math.floor(Number(fsc.removeItems[frk]) || 0);
+-              for (var frc = 0; frc < frn; frc++) {
+-                var fridx = gameState.inventory.indexOf(frk);
+-                if (fridx !== -1) gameState.inventory.splice(fridx, 1);
+-              }
++          // Las consecuencias del fallo tambien entregan una sola vez por escena y accion;
++          // el gasto aqui retira lo que haya (ya estamos en la rama de fallo).
++          var failResult = applyItemEffects(fsc, deliveryKey(scene.id, hs.id, failedRule.id, 'fail'));
++          if (!failResult.alreadyDelivered) {
++            var failGrantIds = Object.keys(getGrants(fsc));
++            for (var fgi = 0; fgi < failGrantIds.length && !failImgSrc; fgi++) {
++              var failItem = PROJECT.inventoryItems.find(function(i) { return i.id === failGrantIds[fgi]; });
++              if (failItem) failImgSrc = getImageSrc(failItem);
+             }
+-          } else if (fsc.removeItemId) {
+-            var frmidx = gameState.inventory.indexOf(fsc.removeItemId);
+-            if (frmidx !== -1) gameState.inventory.splice(frmidx, 1);
+           }
+           if (fsc.appendStoryText) {
+             if (!gameState.appendedTexts[gameState.currentSceneId]) {
+@@ -1544,6 +1606,7 @@ ${VOICE_ENGINE_EMBED}
+           gameState = JSON.parse(data);
+           if (!gameState.verbUseCounts) gameState.verbUseCounts = {};
+           if (!gameState.usedHotspotIds) gameState.usedHotspotIds = [];
++          if (!gameState.deliveredRuleKeys) gameState.deliveredRuleKeys = [];
+           if (!gameState.difficulty) gameState.difficulty = PROJECT.difficultyMode || 'easy';
+           if (gameState.isGameOver === undefined) gameState.isGameOver = false;
+           showPopupModal('📂 Cargar Partida', '¡Partida cargada correctamente!');
+@@ -1564,6 +1627,7 @@ ${VOICE_ENGINE_EMBED}
+           flags: Object.assign({}, PROJECT.globalFlags || {}),
+           appendedTexts: {},
+           usedHotspotIds: [],
++          deliveredRuleKeys: [],
+           verbUseCounts: {},
+           difficulty: PROJECT.difficultyMode || 'easy',
+           isGameOver: false
+diff --git a/src/utils/itemRules.ts b/src/utils/itemRules.ts
+new file mode 100644
+index 0000000..3fbade4
+--- /dev/null
++++ b/src/utils/itemRules.ts
+@@ -0,0 +1,116 @@
++import { StateChange } from '../types';
++
++/**
++ * Reglas de inventario compartidas por el reproductor del editor.
++ *
++ * El inventario es una lista de ids con repeticiones: 3 balas = ['bala', 'bala', 'bala'].
++ *
++ * Dos reglas:
++ *  1. No se puede gastar más de lo que se tiene (canAfford).
++ *  2. Cada fuente de entrega de una escena (una acción, un QTE, una opción de diálogo) entrega
++ *     sus objetos UNA sola vez, también si el jugador repite la acción o vuelve a la escena después.
++ *     Se registra con una clave en `deliveredRuleKeys` (que se guarda con la partida). Entregar el
++ *     mismo objeto desde otra fuente sí se acumula (más balas en otra escena).
++ *
++ * El HTML exportado (utils/htmlExporter.ts) lleva una copia en JavaScript de esta lógica:
++ * si cambias una, cambia la otra.
++ */
++
++export const countItem = (inventory: string[], itemId: string): number =>
++  inventory.reduce((n, id) => (id === itemId ? n + 1 : n), 0);
++
++/** Objetos que retira un StateChange, como { id: unidades }. Acepta el formato antiguo (1 unidad). */
++export const getRemovals = (sc?: StateChange): Record<string, number> => {
++  const out: Record<string, number> = {};
++  if (sc?.removeItems && Object.keys(sc.removeItems).length > 0) {
++    Object.entries(sc.removeItems).forEach(([id, qty]) => {
++      const n = Math.floor(Number(qty) || 0);
++      if (n > 0) out[id] = n;
++    });
++    return out;
++  }
++  if (sc?.removeItemId) out[sc.removeItemId] = 1;
++  if (sc?.removeItem2Id) out[sc.removeItem2Id] = (out[sc.removeItem2Id] || 0) + 1;
++  return out;
++};
++
++/** Objetos que entrega un StateChange, como { id: unidades }. */
++export const getGrants = (sc?: StateChange): Record<string, number> => {
++  const out: Record<string, number> = {};
++  if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
++    Object.entries(sc.addItems).forEach(([id, qty]) => {
++      const n = Math.floor(Number(qty) || 0);
++      if (n > 0) out[id] = n;
++    });
++    return out;
++  }
++  if (sc?.addItemId) out[sc.addItemId] = 1;
++  return out;
++};
++
++/** ¿Tiene el jugador las unidades que el StateChange pide gastar? */
++export const canAfford = (sc: StateChange | undefined, inventory: string[]): boolean =>
++  Object.entries(getRemovals(sc)).every(([id, n]) => countItem(inventory, id) >= n);
++
++/** Unidades que faltan, para mensajes: { bala: 1 } si pide 2 y solo hay 1. Vacío si alcanza. */
++export const missingItems = (sc: StateChange | undefined, inventory: string[]): Record<string, number> => {
++  const out: Record<string, number> = {};
++  Object.entries(getRemovals(sc)).forEach(([id, n]) => {
++    const missing = n - countItem(inventory, id);
++    if (missing > 0) out[id] = missing;
++  });
++  return out;
++};
++
++/** Clave de una fuente de entrega: escena + fuente (+ sufijo). Ej.: 'sala::hs_cajon::act_1::fail'. */
++export const deliveryKey = (...parts: (string | undefined)[]): string => parts.map((p) => p || '').join('::');
++
++export const hasGrants = (sc?: StateChange): boolean => Object.keys(getGrants(sc)).length > 0;
++
++export const isDelivered = (deliveredKeys: string[] | undefined, sc: StateChange | undefined, key: string): boolean =>
++  hasGrants(sc) && (deliveredKeys || []).includes(key);
++
++export interface ItemEffectsResult {
++  inventory: string[];
++  deliveredRuleKeys: string[];
++  /** true si esta fuente ya había entregado sus objetos: no se entrega ni se gasta nada */
++  alreadyDelivered: boolean;
++}
++
++/**
++ * Aplica al inventario lo que gasta y entrega un StateChange.
++ *  - Si la fuente ya entregó sus objetos antes, no hace nada con los objetos (ni entrega ni gasta):
++ *    la operación ya se hizo, repetirla no debe duplicar objetos ni cobrar dos veces.
++ *  - Gasta primero y entrega después. Nunca deja una cantidad negativa.
++ */
++export const applyItemEffects = (
++  inventory: string[],
++  deliveredKeys: string[] | undefined,
++  sc: StateChange | undefined,
++  key: string
++): ItemEffectsResult => {
++  const delivered = deliveredKeys || [];
++  const grants = getGrants(sc);
++  const grantsSomething = Object.keys(grants).length > 0;
++
++  if (grantsSomething && delivered.includes(key)) {
++    return { inventory: [...inventory], deliveredRuleKeys: delivered, alreadyDelivered: true };
++  }
++
++  const next = [...inventory];
++  Object.entries(getRemovals(sc)).forEach(([id, n]) => {
++    for (let i = 0; i < n; i++) {
++      const idx = next.indexOf(id);
++      if (idx !== -1) next.splice(idx, 1);
++    }
++  });
++  Object.entries(grants).forEach(([id, n]) => {
++    for (let i = 0; i < n; i++) next.push(id);
++  });
++
++  return {
++    inventory: next,
++    deliveredRuleKeys: grantsSomething ? [...delivered, key] : delivered,
++    alreadyDelivered: false,
++  };
++};
