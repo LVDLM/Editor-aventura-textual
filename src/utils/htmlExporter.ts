@@ -351,6 +351,7 @@ export function generateStandaloneHTML(project: GameProject, isForZip: boolean =
       <button class="btn" onclick="saveGame()">💾 Guardar</button>
       <button class="btn" onclick="loadGame()">📂 Cargar</button>
       <button class="btn" onclick="toggleDetailsModal()" style="border-color: rgba(245, 158, 11, 0.4); color: #fde047; background: rgba(245, 158, 11, 0.1);">ℹ️ Detalles y Créditos</button>
+      <button class="btn" id="sound-btn" onclick="toggleSound()" title="Activar / silenciar el sonido y la música">🔊 Sonido</button>
       <button class="btn" onclick="resetGame()">🔄 Reiniciar</button>
     </div>
   </header>
@@ -440,6 +441,10 @@ ${VOICE_ENGINE_EMBED}
     var musicAudio = null;
     var musicId = null;
     var musicTimer = null;
+    var musicDef = null;
+    var soundOn = true;
+    var mutedMusic = null; // música que debe volver al reactivar el sonido
+    try { if (localStorage.getItem('html_adventure_sound_' + PROJECT.id) === 'off') soundOn = false; } catch (e) {}
 
     function isMusicDef(def) {
       if (!def || def.category !== 'music') return false;
@@ -454,12 +459,15 @@ ${VOICE_ENGINE_EMBED}
         musicAudio = null;
       }
       musicId = null;
+      musicDef = null;
     }
 
     function playMusic(type, def) {
+      if (!soundOn) { mutedMusic = { type: type, def: def }; return; }
       if (musicId === type && (musicAudio || musicTimer)) return;
       stopMusic();
       musicId = type;
+      musicDef = def;
       var src = def.url || def.audioUrl;
       if (def.sourceType === 'url' && src) {
         var a = new Audio(src);
@@ -489,7 +497,29 @@ ${VOICE_ENGINE_EMBED}
       if (!type || type === 'none') return;
       var def = (PROJECT.customSounds || []).find(function(s) { return s.id === type; });
       if (isMusicDef(def)) { playMusic(type, def); return; }
+      if (!soundOn) return;
       playSfx(type);
+    }
+
+    function updateSoundButton() {
+      var b = document.getElementById('sound-btn');
+      if (b) b.textContent = soundOn ? '🔊 Sonido' : '🔇 Sin sonido';
+    }
+
+    // Botón de sonido: al silenciar se corta todo; al activarlo vuelve la música de la escena actual
+    function toggleSound() {
+      soundOn = !soundOn;
+      try { localStorage.setItem('html_adventure_sound_' + PROJECT.id, soundOn ? 'on' : 'off'); } catch (e) {}
+      if (!soundOn) {
+        mutedMusic = musicId ? { type: musicId, def: musicDef } : null;
+        stopMusic();
+        if (audioCtx) { try { audioCtx.close(); } catch (e) {} audioCtx = null; }
+      } else if (mutedMusic) {
+        var m = mutedMusic;
+        mutedMusic = null;
+        playMusic(m.type, m.def);
+      }
+      updateSoundButton();
     }
 
     // Sonidos al entrar en una escena: la música de la escena sigue sonando entre escenas
@@ -1709,11 +1739,13 @@ ${VOICE_ENGINE_EMBED}
         document.getElementById('response-box').style.display = 'none';
         clearSentence();
         stopMusic();
+        mutedMusic = null;
         lastRenderedSceneId = null;
         render();
       }
     }
 
+    updateSoundButton();
     render();
   </script>
 </body>
