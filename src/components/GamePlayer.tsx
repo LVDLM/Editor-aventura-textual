@@ -3,7 +3,7 @@ import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS, getProjectVerbs, renderVerbIcon } from '../utils/verbs';
-import { playSound, playSceneSounds } from '../utils/audio';
+import { playSound, playSceneSounds, setActiveProjectSounds, stopMusic } from '../utils/audio';
 import { applyItemEffects, canAfford, deliveryKey, getGrants, getRemovals, isDelivered, missingItems } from '../utils/itemRules';
 import {
   Eye,
@@ -375,9 +375,23 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     }
   }, [project?.id]);
 
+  // Mantener sincronizada la biblioteca de sonidos del proyecto en el motor de audio
+  useEffect(() => {
+    setActiveProjectSounds(project.customSounds || []);
+  }, [project.customSounds]);
+
+  const playedBlockSoundIdsRef = useRef<Set<string>>(new Set());
+  const lastAudioSceneIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     setQteMistakeMsg(null);
     if (currentScene) {
+      const isNewScene = lastAudioSceneIdRef.current !== gameState.currentSceneId;
+      if (isNewScene) {
+        lastAudioSceneIdRef.current = gameState.currentSceneId;
+        playedBlockSoundIdsRef.current.clear();
+      }
+
       const visibleBlocks = (currentScene.textBlocks || []).filter((b) => {
         if (b.visibleIfFlags && Object.entries(b.visibleIfFlags).some(([k, v]) => !!gameState.flags[k] !== v)) return false;
         if (b.hiddenIfFlags && Object.entries(b.hiddenIfFlags).some(([k, v]) => !!gameState.flags[k] === v)) return false;
@@ -386,9 +400,23 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         return true;
       });
 
-      const blockWithSound = visibleBlocks.find((b) => b.soundEffect && b.soundEffect !== 'none');
-      // La música de una escena sigue sonando hasta que otra escena inicie otra música
-      playSceneSounds(blockWithSound?.soundEffect, currentScene.sfx, project.customSounds);
+      if (isNewScene) {
+        const blockWithSound = visibleBlocks.find((b) => b.soundEffect && b.soundEffect !== 'none');
+        if (blockWithSound) {
+          playedBlockSoundIdsRef.current.add(blockWithSound.id);
+        }
+        // Al entrar en una nueva escena se evalúa la música de la escena o el primer párrafo con sonido
+        playSceneSounds(blockWithSound?.soundEffect, currentScene.sfx, project.customSounds);
+      } else {
+        // Dentro de la misma escena: si un nuevo párrafo se ha revelado por flags o inventario y tiene sonido,
+        // reproducirlo dinámicamente sin necesidad de cambiar de escena
+        visibleBlocks.forEach((b) => {
+          if (b.soundEffect && b.soundEffect !== 'none' && !playedBlockSoundIdsRef.current.has(b.id)) {
+            playedBlockSoundIdsRef.current.add(b.id);
+            playSound(b.soundEffect, project.customSounds);
+          }
+        });
+      }
     }
     if (currentScene && (currentScene.type === 'qte' || currentScene.qteConfig) && currentScene.qteConfig?.sequence?.length) {
       const timeLimit = currentScene.qteConfig.timeLimitSeconds || 10;
@@ -398,7 +426,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     } else {
       setQteStatus('idle');
     }
-  }, [gameState.currentSceneId, currentScene?.id]);
+  }, [gameState.currentSceneId, currentScene?.id, gameState.flags, gameState.inventory, project.customSounds]);
 
   useEffect(() => {
     if (qteStatus !== 'active' || !currentScene?.qteConfig) return;
@@ -634,7 +662,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (rule && flagsMatch && comboAffordable) {
         const sc = rule.stateChange;
         const soundToPlay = rule.soundEffect || 'pickup';
-        playSound(soundToPlay);
+        playSound(soundToPlay, project.customSounds);
 
         setGameState((prev: any) => {
           const newFlags = { ...prev.flags, ...(sc?.setFlags || {}) };
@@ -779,7 +807,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     // Effect conditions met!
     const sc = rule.stateChange;
     const soundToPlay = rule.soundEffect || 'pickup';
-    playSound(soundToPlay);
+    playSound(soundToPlay, project.customSounds);
 
     setGameState((prev: any) => {
       const newFlags = { ...prev.flags, ...(sc?.setFlags || {}) };
@@ -1077,7 +1105,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       const alreadyDelivered = isDelivered(gameState.deliveredRuleKeys, sc, ruleDeliveryKey);
 
       if (rule.soundEffect && rule.soundEffect !== 'none') {
-        playSound(rule.soundEffect);
+        playSound(rule.soundEffect, project.customSounds);
       } else if (rule.stateChange?.addItemId && !alreadyDelivered) {
         playSound('pickup');
       } else if (rule.stateChange?.goToSceneId) {
@@ -1218,7 +1246,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           message: rawMsg.replace(/\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/gi, '').trim(),
         });
       } else if (willPickupItem && (itemObj || (sc?.addItems && Object.keys(sc.addItems).length > 0))) {
-        playSound('pickup');
+        if (!rule.soundEffect || rule.soundEffect === 'none') {
+          playSound('pickup');
+        }
         let itemMsg = '';
         if (sc?.addItems && Object.keys(sc.addItems).length > 0) {
           const list = Object.entries(sc.addItems).map(([id, qty]) => {
@@ -1282,7 +1312,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         /\[(?:Terminar \/ Cargar partida|Terminar|Cargar partida|Fin de partida)\]/i.test(failedRule?.failMessage || '');
 
       if (failedRule?.failSoundEffect && failedRule.failSoundEffect !== 'none') {
-        playSound(failedRule.failSoundEffect);
+        playSound(failedRule.failSoundEffect, project.customSounds);
       } else {
         playSound('error');
       }
@@ -1511,7 +1541,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     character: GameCharacter,
     blockId?: string
   ) => {
-    playSound(option.soundEffect || 'select');
+    playSound(option.soundEffect || 'select', project.customSounds);
 
     // Item giving (+Objeto)
     const giveItemObj = option.giveItemId

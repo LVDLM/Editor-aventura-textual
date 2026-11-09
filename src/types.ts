@@ -125,6 +125,8 @@ export type SoundEffectType = string;
 
 export const SOUND_EFFECT_OPTIONS: { id: SoundEffectType; label: string; category?: string }[] = [
   { id: 'none', label: 'Sin Sonido', category: 'ui' },
+  { id: 'stop_music', label: '⏹ Detener música de fondo', category: 'music' },
+  { id: 'creepy_ambient', label: 'Tensión y misterio ambiental (Música)', category: 'music' },
   { id: 'fanfare', label: 'Fanfarria breve (Triunfo / Descubrimiento)', category: 'music' },
   { id: 'door_squeak', label: 'Chirrido de puerta / Mueble', category: 'environment' },
   { id: 'damage', label: 'Recibir daño / Impacto', category: 'action' },
@@ -145,7 +147,6 @@ export const SOUND_EFFECT_OPTIONS: { id: SoundEffectType; label: string; categor
   { id: 'sword_clash', label: 'Choque de espadas metálico', category: 'action' },
   { id: 'coin_drop', label: 'Tintineo de monedas de oro', category: 'action' },
   { id: 'laser_retro', label: 'Rayo láser arcade sintetizado', category: 'action' },
-  { id: 'creepy_ambient', label: 'Tensión y misterio ambiental', category: 'horror' },
 ];
 
 export interface StateChange {

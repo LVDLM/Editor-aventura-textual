@@ -589,6 +589,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:border-amber-500 outline-none"
                 >
                   <option value="none">Sin Sonido</option>
+                  <option value="stop_music">⏹ Detener música de fondo</option>
                   {projectSounds && projectSounds.length > 0 && (
                     <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
                       {projectSounds.map((cs) => (
@@ -1137,6 +1138,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ project, upd
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:border-amber-500"
                           >
                             <option value="none">Sin Sonido</option>
+                            <option value="stop_music">⏹ Detener música de fondo</option>
                             {projectSounds && projectSounds.length > 0 && (
                               <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
                                 {projectSounds.map((cs) => (

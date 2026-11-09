@@ -665,6 +665,7 @@ export const DialogueEditor: React.FC<DialogueEditorProps> = ({
                               className="w-full px-2.5 py-1 rounded-md text-xs border border-slate-700 bg-slate-900 text-slate-100"
                             >
                               <option value="none">Sin Sonido</option>
+                              <option value="stop_music">⏹ Detener música de fondo</option>
                               {project.customSounds && project.customSounds.length > 0 && (
                                 <optgroup label={`📁 Sonidos de ${project.title || 'este proyecto'}`}>
                                   {project.customSounds.map((cs) => (

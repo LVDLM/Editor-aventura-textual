@@ -18,6 +18,8 @@ import {
   Music,
   Globe,
   Lock,
+  ChevronDown,
+  X,
 } from 'lucide-react';
 import {
   GameProject,
@@ -280,6 +282,9 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
   const [isSavingGlobal, setIsSavingGlobal] = useState(false);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
   const saveMenuRef = useRef<HTMLDivElement>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateTargetDocId, setDuplicateTargetDocId] = useState('');
+  const [duplicateSoundName, setDuplicateSoundName] = useState('');
 
   // Cierra el menú Guardar con Escape o al pulsar fuera de él
   useEffect(() => {
@@ -539,6 +544,68 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
     handleSelectSound(copySound);
     setSelectedFilter('project');
     setGlobalFeedback(`Copia del sonido guardada en el proyecto "${trimmedTitle}".`);
+    setTimeout(() => setGlobalFeedback(null), 3500);
+  };
+
+  const handleOpenDuplicateModal = () => {
+    if (!activeSoundForm) return;
+    setDuplicateTargetDocId('');
+    setDuplicateSoundName(`${activeSoundForm.name} (Copia)`);
+    setShowDuplicateModal(true);
+  };
+
+  const handleExecuteDuplicate = async () => {
+    if (!activeSoundForm) return;
+    const targetDocId = duplicateTargetDocId;
+    const cleanName = duplicateSoundName.trim() || activeSoundForm.name;
+    const newId = `sound_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+    const newSound: SoundDefinition = {
+      ...activeSoundForm,
+      id: newId,
+      name: cleanName,
+      isGlobal: false,
+      isDefault: false,
+      projectTitle: targetDocId
+        ? userProjectsList.find((p) => p.id === targetDocId)?.title || 'Proyecto'
+        : (project.title || 'Mi Proyecto'),
+    };
+
+    if (targetDocId && targetDocId !== project.id) {
+      const targetDoc = userProjectsList.find((p) => p.id === targetDocId);
+      if (targetDoc) {
+        try {
+          const existingList = targetDoc.projectData?.customSounds || [];
+          const updatedProjectData: GameProject = {
+            ...(targetDoc.projectData || project),
+            customSounds: [...existingList, newSound],
+          };
+          if (currentUser) {
+            await saveProjectToCloud(
+              targetDoc.id,
+              updatedProjectData,
+              { uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email },
+              'preserve'
+            );
+          }
+          setUserProjectsList((prev) =>
+            prev.map((p) => (p.id === targetDoc.id ? { ...p, projectData: updatedProjectData } : p))
+          );
+          setGlobalFeedback(`¡Sonido duplicado con éxito en "${targetDoc.title || 'Proyecto'}"!`);
+        } catch (err) {
+          console.error('Error duplicating sound to cloud project:', err);
+        }
+      }
+    } else {
+      updateProject((prev) => ({
+        ...prev,
+        customSounds: [...(prev.customSounds || []).filter((s) => s.id !== newSound.id), newSound],
+      }));
+      handleSelectSound(newSound);
+      setSelectedFilter('project');
+      setGlobalFeedback(`¡Sonido duplicado con éxito en "${project.title || 'este proyecto'}"!`);
+    }
+
+    setShowDuplicateModal(false);
     setTimeout(() => setGlobalFeedback(null), 3500);
   };
 
@@ -923,57 +990,66 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                 <Shield className="w-3 h-3 text-amber-300" />
                 <span>Oficiales ({globalSounds.length})</span>
               </button>
-              <div className="flex-1 flex items-center gap-1 min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedFilter('project')}
-                  className={`flex-1 py-1.5 px-2 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1 min-w-0 ${
+              <div className="flex-1 min-w-0 relative">
+                <select
+                  value={selectedProjectDocId}
+                  onChange={(e) => {
+                    const newDocId = e.target.value;
+                    setSelectedProjectDocId(newDocId);
+                    setSelectedFilter('project');
+                    const targetProj = newDocId ? userProjectsList.find((p) => p.id === newDocId) : null;
+                    const sounds = targetProj ? (targetProj.projectData?.customSounds || []) : (project.customSounds || []);
+                    if (sounds.length > 0) {
+                      handleSelectSound(sounds[0]);
+                    }
+                  }}
+                  onClick={() => {
+                    if (selectedFilter !== 'project') {
+                      setSelectedFilter('project');
+                    }
+                  }}
+                  title="Filtrar por proyecto y ver sus sonidos"
+                  className={`w-full py-1.5 pl-2.5 pr-7 rounded-lg text-[11px] font-bold border transition-all cursor-pointer outline-none truncate appearance-none ${
                     selectedFilter === 'project'
                       ? isClean
-                        ? 'bg-[#A4332A] text-white font-bold shadow-sm'
-                        : 'bg-amber-600 text-white font-bold shadow-sm'
+                        ? 'bg-[#A4332A] text-white border-[#872820] shadow-sm'
+                        : 'bg-amber-600 text-white border-amber-500 shadow-sm'
                       : isClean
-                      ? 'text-[#6B5C46] hover:text-[#2A2118]'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#F4EFE3] text-[#6B5C46] border-[#E5DCB8] hover:text-[#2A2118]'
+                      : 'bg-black/30 text-slate-300 border-white/10 hover:text-white'
                   }`}
-                  title={`Sonidos exclusivos de: ${activeProjectTitle}`}
                 >
-                  <FolderPlus className="w-3 h-3 shrink-0 text-amber-300" />
-                  <span className="truncate max-w-[110px]">{activeProjectTitle}</span>
-                  <span className="shrink-0">({activeProjectCustomSounds.length})</span>
-                </button>
-                {userProjectsList.length > 0 && (
-                  <select
-                    value={selectedProjectDocId}
-                    onChange={(e) => {
-                      const newDocId = e.target.value;
-                      setSelectedProjectDocId(newDocId);
-                      setSelectedFilter('project');
-                      const targetProj = newDocId ? userProjectsList.find((p) => p.id === newDocId) : null;
-                      const sounds = targetProj ? (targetProj.projectData?.customSounds || []) : (project.customSounds || []);
-                      if (sounds.length > 0) {
-                        handleSelectSound(sounds[0]);
-                      }
-                    }}
-                    title="Seleccionar proyecto para ver y editar sus sonidos"
-                    className={`py-1 px-1.5 rounded-lg text-[10px] font-bold border cursor-pointer outline-none shrink-0 ${
-                      isClean
-                        ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]'
-                        : 'bg-[#1F1913] border-[#42362B] text-amber-300'
-                    }`}
+                  <option
+                    value=""
+                    className={isClean ? 'bg-[#FFFDF6] text-[#2A2118]' : 'bg-[#1F1913] text-amber-200'}
                   >
-                    <option value="">{project.title || 'Proyecto actual'}</option>
-                    {userProjectsList.map((p) => {
+                    📁 {project.title || 'Proyecto en edición'} ({(project.customSounds || []).length})
+                  </option>
+                  {userProjectsList
+                    .filter((p) => p.id !== project.id && (p.title || p.projectData?.title) !== (project.title || ''))
+                    .map((p) => {
                       const pTitle = p.title || p.projectData?.title || 'Sin título';
-                      if (p.id === project.id || pTitle === (project.title || '')) return null;
+                      const count = p.projectData?.customSounds?.length || 0;
                       return (
-                        <option key={p.id} value={p.id}>
-                          {pTitle}
+                        <option
+                          key={p.id}
+                          value={p.id}
+                          className={isClean ? 'bg-[#FFFDF6] text-[#2A2118]' : 'bg-[#1F1913] text-amber-200'}
+                        >
+                          📁 {pTitle} ({count})
                         </option>
                       );
                     })}
-                  </select>
-                )}
+                </select>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${
+                    selectedFilter === 'project'
+                      ? 'text-white'
+                      : isClean
+                      ? 'text-[#6B5C46]'
+                      : 'text-slate-400'
+                  }`}
+                />
               </div>
             </div>
 
@@ -1144,13 +1220,13 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                 isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
               }`}
             >
-              {/* Studio Header & Live Preview Bar (fija al hacer scroll, para probar mientras se editan las barras) */}
+              {/* Studio Header & Live Preview Bar */}
               <div
                 className={`sticky top-[46px] sm:top-[58px] z-20 -mx-1 p-3 sm:p-4 rounded-xl border shadow-md ${
                   isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1b150f] border-white/10'
                 }`}
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
                       className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center font-bold ${
@@ -1163,13 +1239,27 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                       <h4 className={`text-sm font-bold truncate ${isClean ? 'text-[#2A2118]' : 'text-white'}`}>
                         {activeSoundForm.name}
                       </h4>
-                      <p className={`text-[11px] font-mono truncate ${isClean ? 'text-[#872820] font-semibold' : 'text-amber-400'}`}>
-                        ID: {activeSoundForm.id}
-                      </p>
+                      <div className="flex items-center gap-2 text-[11px] font-mono">
+                        <span className={isClean ? 'text-[#872820] font-semibold' : 'text-amber-400'}>
+                          ID: {activeSoundForm.id}
+                        </span>
+                        <span className="text-slate-400">•</span>
+                        <span
+                          className={`px-1.5 py-0.2 rounded text-[10px] font-sans font-bold ${
+                            activeSoundForm.isGlobal
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                          }`}
+                        >
+                          {activeSoundForm.isGlobal
+                            ? 'Oficial (Global)'
+                            : activeSoundForm.projectTitle || activeProjectTitle}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={isPlayingTesting ? handleStopPreview : handleTestActiveForm}
@@ -1183,216 +1273,125 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
                       title={isPlayingTesting ? 'Detener reproducción' : 'Probar sonido'}
                     >
                       {isPlayingTesting ? <Square className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
-                      <span className="hidden sm:inline">{isPlayingTesting ? 'Parar Sonido' : 'Probar Sonido'}</span>
-                      <span className="sm:hidden">{isPlayingTesting ? 'Parar' : 'Probar'}</span>
+                      <span>{isPlayingTesting ? 'Parar' : 'Probar Sonido'}</span>
                     </button>
+
                     <button
                       type="button"
-                      onClick={() => setShowSaveMenu((v) => !v)}
-                      aria-expanded={showSaveMenu}
-                      aria-haspopup="dialog"
-                      className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 text-white shadow-md transition-all cursor-pointer touch-manipulation ${
-                        isClean ? 'bg-[#A4332A] hover:bg-[#872820]' : 'bg-amber-600 hover:bg-amber-500'
+                      onClick={handleSaveToProject}
+                      className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 text-white shadow-md transition-all cursor-pointer touch-manipulation ${
+                        isClean ? 'bg-[#2E7D32] hover:bg-[#1B5E20]' : 'bg-emerald-600 hover:bg-emerald-500'
                       }`}
+                      title="Guardar todos los cambios de este sonido"
                     >
                       <Save className="w-4 h-4" />
-                      <span>Guardar</span>
+                      <span>Guardar Cambios</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDuplicateModal()}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isClean
+                          ? 'bg-[#FFFDF6] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
+                          : 'bg-white/10 hover:bg-white/20 text-amber-200 border-white/10'
+                      }`}
+                      title="Duplicar este sonido a otro proyecto diferente"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="hidden sm:inline">Duplicar a Proyecto</span>
+                      <span className="sm:hidden">Duplicar</span>
+                    </button>
+
+                    {!activeSoundForm.isGlobal && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFromProject(activeSoundForm.id)}
+                        className="px-2.5 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                        title="Eliminar este sonido del proyecto"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Menú de guardado: flota sobre el editor */}
-                {showSaveMenu && (
-                  <div
-                    ref={saveMenuRef}
-                    role="dialog"
-                    aria-label="Opciones de guardado"
-                    className={`absolute right-0 left-0 sm:left-auto sm:w-[480px] top-full mt-2 z-30 p-4 rounded-2xl border shadow-2xl space-y-4 ${
-                      isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#2C241C] border-[#42362B]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <h5 className={`text-xs font-black uppercase tracking-wide ${isClean ? 'text-[#872820]' : 'text-amber-400'}`}>
-                        Guardar sonido en proyecto
-                      </h5>
-                      <button
-                        type="button"
-                        onClick={() => setShowSaveMenu(false)}
-                        aria-label="Cerrar"
-                        className={`w-7 h-7 rounded-lg text-sm font-black cursor-pointer ${
-                          isClean ? 'text-[#6B5C46] hover:bg-[#EBE3CD]' : 'text-slate-400 hover:bg-white/10'
-                        }`}
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <div className="space-y-4">
-                      {/* Destino y Nombre del Proyecto */}
-                      <div
-                        className={`p-3 rounded-xl border space-y-2.5 ${
-                          isClean ? 'bg-[#F4EFE3] border-[#E5DCB8]' : 'bg-[#1F1913] border-[#42362B]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <label className={`text-xs font-bold flex items-center gap-1.5 ${isClean ? 'text-[#872820]' : 'text-amber-400'}`}>
-                            <FolderPlus className="w-3.5 h-3.5" />
-                            <span>Proyecto de destino</span>
-                          </label>
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                              isClean ? 'bg-[#E5DCB8] text-[#2A2118]' : 'bg-white/10 text-slate-300'
-                            }`}
-                          >
-                            {userProjectsList.length > 0 ? `${userProjectsList.length} proyectos de tu autoría` : 'Proyecto actual'}
-                          </span>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className={`text-[11px] block font-medium ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
-                            {userProjectsList.length > 0 ? 'Seleccionar proyecto:' : 'Proyecto de destino:'}
-                          </label>
-                          {userProjectsList.length > 0 ? (
-                            <select
-                              value={selectedTargetDocId}
-                              onChange={(e) => handleTargetProjectChange(e.target.value)}
-                              className={`w-full px-3 py-1.5 rounded-xl text-xs border font-semibold ${
-                                isClean
-                                  ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
-                                  : 'bg-[#2C241C] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
-                              }`}
-                            >
-                              <option value="">{project.title || 'Proyecto activo en edición'}</option>
-                              {userProjectsList.map((p) => {
-                                const pTitle = p.title || p.projectData?.title || 'Sin título';
-                                if (pTitle === (project.title || '')) return null;
-                                return (
-                                  <option key={p.id} value={p.id}>
-                                    {pTitle}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                          ) : (
-                            <div
-                              className={`px-3 py-2 rounded-xl text-xs border font-bold ${
-                                isClean ? 'bg-[#FFFDF6] border-[#E5DCB8] text-[#2A2118]' : 'bg-[#2C241C] border-[#42362B] text-amber-200'
-                              }`}
-                            >
-                              {project.title || 'Proyecto en edición'}
-                            </div>
-                          )}
-                          <p className={`text-[10px] mt-1 ${isClean ? 'text-[#6B5C46]' : 'text-slate-400'}`}>
-                            Solo tú tienes acceso a tus proyectos y a la biblioteca oficial.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
-                            Nombre del Sonido:
-                          </label>
-                          <input
-                            type="text"
-                            value={activeSoundForm.name}
-                            onChange={(e) => setActiveSoundForm({ ...activeSoundForm, name: e.target.value })}
-                            className={`w-full px-3 py-2 rounded-xl text-xs border ${
-                              isClean
-                                ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
-                                : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
-                            }`}
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
-                            Categoría Temática:
-                          </label>
-                          <select
-                            value={activeSoundForm.category}
-                            onChange={(e) =>
-                              setActiveSoundForm({ ...activeSoundForm, category: e.target.value as SoundCategory })
-                            }
-                            className={`w-full px-3 py-2 rounded-xl text-xs border ${
-                              isClean
-                                ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
-                                : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
-                            }`}
-                          >
-                            {(['ui', 'action', 'movement', 'environment', 'magic', 'horror', 'music', 'custom'] as SoundCategory[]).map(
-                              (cat) => (
-                                <option key={cat} value={cat}>
-                                  {CATEGORY_LABELS[cat]?.label}
-                                </option>
-                              )
-                            )}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
-                          Descripción y Uso:
-                        </label>
-                        <input
-                          type="text"
-                          value={activeSoundForm.description || ''}
-                          onChange={(e) => setActiveSoundForm({ ...activeSoundForm, description: e.target.value })}
-                          placeholder="Ej: Sonido de cerradura al usar la llave dorada..."
-                          className={`w-full px-3 py-2 rounded-xl text-xs border ${
-                            isClean
-                              ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
-                              : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
-                          }`}
-                        />
-                      </div>
-                    </div>
-
-                    {activeSoundForm.isGlobal && !isAdmin && (
-                      <p className={`text-[11px] flex items-start gap-1.5 ${isClean ? 'text-[#6B5C46]' : 'text-slate-300'}`}>
-                        <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500" />
-                        <span>Es un sonido de la Biblioteca Oficial (solo lectura): al guardar se creará una copia editable en tu proyecto.</span>
-                      </p>
-                    )}
-
-                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { handleSaveToProject(); setShowSaveMenu(false); }}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
-                        title={`Guardar en "${projectNameInput || project.title}"`}
-                      >
-                        <Save className="w-4 h-4" />
-                        <span>Guardar en el Proyecto</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { handleDuplicateToProject(activeSoundForm); setShowSaveMenu(false); }}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                {/* Direct Editing Details: Name, Category, Description */}
+                <div
+                  className={`p-3.5 sm:p-4 rounded-xl border space-y-3 ${
+                    isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-black/30 border-white/10'
+                  }`}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-200'}`}>
+                        Nombre del Sonido:
+                      </label>
+                      <input
+                        type="text"
+                        value={activeSoundForm.name}
+                        onChange={(e) => setActiveSoundForm({ ...activeSoundForm, name: e.target.value })}
+                        className={`w-full px-3 py-2 rounded-xl text-xs border font-semibold ${
                           isClean
-                            ? 'bg-[#F4EFE3] hover:bg-[#E5DCB8] text-[#2A2118] border-[#E5DCB8]'
-                            : 'bg-[#1F1913] hover:bg-[#2A2118] text-amber-200 border-amber-500/30'
+                            ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                            : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
                         }`}
-                        title={`Crear una copia editable de este sonido en "${projectNameInput || project.title}"`}
+                        placeholder="Nombre descriptivo del sonido..."
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-200'}`}>
+                        Categoría Temática:
+                      </label>
+                      <select
+                        value={activeSoundForm.category}
+                        onChange={(e) =>
+                          setActiveSoundForm({ ...activeSoundForm, category: e.target.value as SoundCategory })
+                        }
+                        className={`w-full px-3 py-2 rounded-xl text-xs border font-semibold ${
+                          isClean
+                            ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                            : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+                        }`}
                       >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Duplicar en mi Proyecto</span>
-                      </button>
-                      {!activeSoundForm.isGlobal && (
-                        <button
-                          type="button"
-                          onClick={() => { handleDeleteFromProject(activeSoundForm.id); setShowSaveMenu(false); }}
-                          className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                          title="Eliminar este sonido del proyecto"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span>Eliminar del Proyecto</span>
-                        </button>
-                      )}
+                        {(['ui', 'action', 'movement', 'environment', 'magic', 'horror', 'music', 'custom'] as SoundCategory[]).map(
+                          (cat) => (
+                            <option key={cat} value={cat}>
+                              {CATEGORY_LABELS[cat]?.label}
+                            </option>
+                          )
+                        )}
+                      </select>
                     </div>
                   </div>
-                )}
+
+                  <div className="space-y-1">
+                    <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-200'}`}>
+                      Descripción y Uso:
+                    </label>
+                    <input
+                      type="text"
+                      value={activeSoundForm.description || ''}
+                      onChange={(e) => setActiveSoundForm({ ...activeSoundForm, description: e.target.value })}
+                      placeholder="Ej: Sonido de cerradura al usar la llave dorada..."
+                      className={`w-full px-3 py-2 rounded-xl text-xs border ${
+                        isClean
+                          ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                          : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+                      }`}
+                    />
+                  </div>
+
+                  {activeSoundForm.isGlobal && !isAdmin && (
+                    <p className={`text-[11px] pt-1 flex items-start gap-1.5 ${isClean ? 'text-[#872820]' : 'text-amber-300'}`}>
+                      <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        Este es un sonido oficial predeterminado de la plataforma (solo lectura global). Al pulsar <strong>Guardar Cambios</strong> se guardará automáticamente como copia editable personalizada en tu proyecto.
+                      </span>
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Motor de síntesis (solo sintetizador) */}
@@ -2017,6 +2016,102 @@ export const SoundManager: React.FC<SoundManagerProps> = ({
           )}
         </div>
       </div>
+
+      {/* Modal Duplicar a otro Proyecto */}
+      {showDuplicateModal && activeSoundForm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+        >
+          <div
+            className={`w-full max-w-md p-5 rounded-2xl border shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 ${
+              isClean ? 'bg-[#FFFDF6] border-[#E5DCB8]' : 'bg-[#241C14] border-[#42362B]'
+            }`}
+          >
+            <div className="flex items-center justify-between border-b pb-3 border-amber-500/20">
+              <div className="flex items-center gap-2">
+                <Copy className="w-4 h-4 text-amber-500" />
+                <h4 className={`text-sm font-bold ${isClean ? 'text-[#2A2118]' : 'text-white'}`}>
+                  Duplicar sonido a otro proyecto
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDuplicateModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg text-sm cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
+                  Proyecto de destino:
+                </label>
+                <select
+                  value={duplicateTargetDocId}
+                  onChange={(e) => setDuplicateTargetDocId(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-xl text-xs border font-semibold cursor-pointer ${
+                    isClean
+                      ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                      : 'bg-[#1F1913] border-[#42362B] text-amber-200 focus:border-amber-500'
+                  }`}
+                >
+                  <option value="">{project.title || 'Proyecto actual en edición'}</option>
+                  {userProjectsList.map((p) => {
+                    const pTitle = p.title || p.projectData?.title || 'Sin título';
+                    if (p.id === project.id || pTitle === (project.title || '')) return null;
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {pTitle}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className={`text-xs font-bold block ${isClean ? 'text-[#2A2118]' : 'text-slate-300'}`}>
+                  Nombre en el proyecto de destino:
+                </label>
+                <input
+                  type="text"
+                  value={duplicateSoundName}
+                  onChange={(e) => setDuplicateSoundName(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-xl text-xs border font-semibold ${
+                    isClean
+                      ? 'bg-[#F4EFE3] border-[#E5DCB8] text-[#2A2118] focus:border-[#A4332A]'
+                      : 'bg-[#1F1913] border-[#42362B] text-[#F4EFE3] focus:border-amber-500'
+                  }`}
+                  placeholder="Nombre del sonido duplicado..."
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-500/10">
+              <button
+                type="button"
+                onClick={() => setShowDuplicateModal(false)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                  isClean ? 'border-[#E5DCB8] text-[#6B5C46] hover:bg-[#EBE3CD]' : 'border-white/10 text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDuplicate}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Duplicar Sonido</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

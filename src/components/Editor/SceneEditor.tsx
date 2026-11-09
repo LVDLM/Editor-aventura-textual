@@ -1841,6 +1841,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-amber-200 font-medium focus:border-amber-500 outline-none"
               >
                 <option value="none">Sin Sonido</option>
+                <option value="stop_music">⏹ Detener música de fondo</option>
                 {projectSounds && projectSounds.length > 0 && (
                   <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
                     {projectSounds.map((cs) => (
@@ -2517,6 +2518,7 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                           title="Sonido a reproducir al mostrar este párrafo"
                         >
                           <option value="none" className="bg-[#1F1913] text-slate-300">Sin sonido</option>
+                          <option value="stop_music" className="bg-[#1F1913] text-amber-300 font-semibold">⏹ Detener música de fondo</option>
                           {projectSounds && projectSounds.length > 0 && (
                             <optgroup label={`Sonidos de ${projectName}`} className="bg-[#1F1913] text-indigo-300 font-bold">
                               {projectSounds.map((cs) => (

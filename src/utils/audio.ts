@@ -534,10 +534,19 @@ export const DEFAULT_SOUND_LIBRARY: SoundDefinition[] = [
     },
   },
   {
+    id: 'stop_music',
+    name: '⏹ Detener música de fondo',
+    description: 'Detiene cualquier pista o música ambiental que esté sonando',
+    category: 'music',
+    sourceType: 'synth',
+    isGlobal: true,
+    isDefault: true,
+  },
+  {
     id: 'creepy_ambient',
     name: 'Tensión y misterio ambiental',
     description: 'Zumbido siniestro con batimiento de bajas frecuencias',
-    category: 'horror',
+    category: 'music',
     sourceType: 'synth',
     isGlobal: true,
     isDefault: true,
@@ -546,7 +555,7 @@ export const DEFAULT_SOUND_LIBRARY: SoundDefinition[] = [
       startFreq: 75,
       endFreq: 60,
       rampType: 'linear',
-      duration: 1.5,
+      duration: 3.0,
       volume: 0.25,
       lfoFreq: 4,
       lfoGain: 15,
@@ -1316,9 +1325,16 @@ export function previewSynthSound(config: SynthSoundConfig) {
  * Las fanfarrias y jingles cortos siguen siendo efectos de un solo disparo.
  */
 export function isMusicDefinition(def?: SoundDefinition | null): boolean {
-  if (!def || def.category !== 'music') return false;
-  if (def.sourceType === 'url') return !!def.url;
-  return (def.synthConfig?.duration ?? 0) >= 3;
+  if (!def || def.id === 'stop_music') return false;
+  if (def.category === 'music' || def.id === 'creepy_ambient') {
+    if (def.sourceType === 'url') return !!def.url;
+    return (def.synthConfig?.duration ?? 0) >= 1.0;
+  }
+  // Audio externo subido o enlazado clasificado como entorno o personalizado
+  if (def.sourceType === 'url' && def.url && (def.category === 'environment' || def.category === 'custom')) {
+    return true;
+  }
+  return false;
 }
 
 function findSoundDefinition(id: string, projectSounds?: SoundDefinition[]): SoundDefinition | undefined {
@@ -1332,7 +1348,7 @@ function findSoundDefinition(id: string, projectSounds?: SoundDefinition[]): Sou
 
 /** ¿Este id de sonido es una música de fondo? */
 export function isMusicSound(id?: string, projectSounds?: SoundDefinition[]): boolean {
-  if (!id || id === 'none') return false;
+  if (!id || id === 'none' || id === 'stop_music') return false;
   return isMusicDefinition(findSoundDefinition(id, projectSounds));
 }
 
@@ -1448,6 +1464,11 @@ export const playSound = (
   projectCustomSoundsOverride?: SoundDefinition[]
 ) => {
   if (!typeOrUrl || typeOrUrl === 'none') return;
+
+  if (typeOrUrl === 'stop_music') {
+    stopMusic();
+    return;
+  }
 
   if (!soundEnabled) {
     // En silencio no suena nada, pero la música de la escena queda anotada para cuando se reactive el sonido

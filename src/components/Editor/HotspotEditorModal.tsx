@@ -881,6 +881,7 @@ export const HotspotEditorModal: React.FC<HotspotEditorModalProps> = ({
                         className="bg-black/60 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-200 outline-none focus:border-amber-500 font-semibold"
                       >
                         <option value="none">Sin Sonido</option>
+                        <option value="stop_music">⏹ Detener música de fondo</option>
                         {project.customSounds && project.customSounds.length > 0 && (
                           <optgroup label={`Sonidos de ${project.title || 'este proyecto'}`}>
                             {project.customSounds.map((cs) => (
