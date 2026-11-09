@@ -483,7 +483,7 @@ export default function App() {
             isHeaderCollapsed={isHeaderCollapsed}
             setIsHeaderCollapsed={setIsHeaderCollapsed}
             soundEnabled={soundEnabled}
-            toggleSound={() => setSoundState(!soundEnabled)}
+            toggleSound={toggleSound}
             asistirResaltado={asistirResaltado}
             toggleAsistirResaltado={toggleAsistirResaltado}
             showDetailsModal={showDetailsModal}

@@ -3,7 +3,7 @@ import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS, getProjectVerbs, renderVerbIcon } from '../utils/verbs';
-import { playSound } from '../utils/audio';
+import { playSound, playSceneSounds } from '../utils/audio';
 import { applyItemEffects, canAfford, deliveryKey, getGrants, getRemovals, isDelivered, missingItems } from '../utils/itemRules';
 import {
   Eye,
@@ -387,11 +387,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       });
 
       const blockWithSound = visibleBlocks.find((b) => b.soundEffect && b.soundEffect !== 'none');
-      if (blockWithSound?.soundEffect) {
-        playSound(blockWithSound.soundEffect, project.customSounds);
-      } else if (currentScene.sfx) {
-        playSound(currentScene.sfx, project.customSounds);
-      }
+      // La música de una escena sigue sonando hasta que otra escena inicie otra música
+      playSceneSounds(blockWithSound?.soundEffect, currentScene.sfx, project.customSounds);
     }
     if (currentScene && (currentScene.type === 'qte' || currentScene.qteConfig) && currentScene.qteConfig?.sequence?.length) {
       const timeLimit = currentScene.qteConfig.timeLimitSeconds || 10;

@@ -16,6 +16,14 @@ const stopListeners = new Set<() => void>();
 let activePreviewTimer: ReturnType<typeof setTimeout> | null = null;
 let activePreviewResolver: (() => void) | null = null;
 
+// Canal de música de fondo: solo hay una pista a la vez y se mantiene entre escenas
+let musicAudio: HTMLAudioElement | null = null;
+let musicSoundId: string | null = null;
+let musicSynthTimer: ReturnType<typeof setInterval> | null = null;
+let musicRetryBound = false;
+let currentMusicDef: SoundDefinition | null = null; // pista que suena ahora
+let mutedMusicDef: SoundDefinition | null = null; // pista que debe volver al reactivar el sonido
+
 export function onAudioStop(listener: () => void): () => void {
   stopListeners.add(listener);
   return () => {
@@ -55,9 +63,17 @@ export function getAudioContext(): AudioContext | null {
 }
 
 export function setSoundEnabled(enabled: boolean) {
+  if (enabled === soundEnabled) return;
+  const musicToResume = currentMusicDef;
   soundEnabled = enabled;
   if (!enabled) {
     stopAllAudio();
+    // Al silenciar se corta la música, pero vuelve al reactivar el sonido
+    mutedMusicDef = musicToResume;
+  } else if (mutedMusicDef) {
+    const def = mutedMusicDef;
+    mutedMusicDef = null;
+    playMusic(def);
   }
 }
 
@@ -66,6 +82,9 @@ export function isSoundEnabled(): boolean {
 }
 
 export function stopAllAudio() {
+  mutedMusicDef = null;
+  stopMusic();
+
   // Cancel active preview timer and promise
   if (activePreviewTimer) {
     clearTimeout(activePreviewTimer);
@@ -1292,6 +1311,135 @@ export function previewSynthSound(config: SynthSoundConfig) {
 }
 
 /**
+ * Una "música" es un sonido de categoría Música que dura lo bastante como para sonar de fondo:
+ * cualquier archivo de audio (URL / subido) o un sintetizado de 3 s o más.
+ * Las fanfarrias y jingles cortos siguen siendo efectos de un solo disparo.
+ */
+export function isMusicDefinition(def?: SoundDefinition | null): boolean {
+  if (!def || def.category !== 'music') return false;
+  if (def.sourceType === 'url') return !!def.url;
+  return (def.synthConfig?.duration ?? 0) >= 3;
+}
+
+function findSoundDefinition(id: string, projectSounds?: SoundDefinition[]): SoundDefinition | undefined {
+  const list = projectSounds || projectCustomSounds;
+  return (
+    list.find((s) => s.id === id) ||
+    globalSoundLibrary.find((s) => s.id === id) ||
+    DEFAULT_SOUND_LIBRARY.find((s) => s.id === id)
+  );
+}
+
+/** ¿Este id de sonido es una música de fondo? */
+export function isMusicSound(id?: string, projectSounds?: SoundDefinition[]): boolean {
+  if (!id || id === 'none') return false;
+  return isMusicDefinition(findSoundDefinition(id, projectSounds));
+}
+
+/** Id de la música que está sonando ahora (o null) */
+export function getCurrentMusicId(): string | null {
+  return musicSoundId;
+}
+
+/** Detiene solo la música de fondo (los efectos en curso no se tocan) */
+export function stopMusic() {
+  if (musicSynthTimer) {
+    clearInterval(musicSynthTimer);
+    musicSynthTimer = null;
+  }
+  if (musicAudio) {
+    try {
+      musicAudio.onerror = null;
+      musicAudio.pause();
+      musicAudio.src = '';
+    } catch {
+      // Ignore
+    }
+    musicAudio = null;
+  }
+  musicSoundId = null;
+  currentMusicDef = null;
+}
+
+// Los navegadores bloquean el sonido hasta que el jugador interactúa: se reintenta en el primer gesto
+function retryMusicOnGesture(audio: HTMLAudioElement) {
+  if (musicRetryBound || typeof window === 'undefined') return;
+  musicRetryBound = true;
+  const retry = () => {
+    window.removeEventListener('pointerdown', retry);
+    window.removeEventListener('keydown', retry);
+    musicRetryBound = false;
+    if (musicAudio === audio && soundEnabled) audio.play().catch(() => {});
+  };
+  window.addEventListener('pointerdown', retry);
+  window.addEventListener('keydown', retry);
+}
+
+/**
+ * Inicia una música de fondo. Si ya está sonando esa misma pista no se reinicia;
+ * si suena otra, se detiene y empieza la nueva. Se repite hasta que otra música la sustituya.
+ */
+export function playMusic(def: SoundDefinition) {
+  if (!def) return;
+  if (!soundEnabled) {
+    // Con el sonido silenciado, la música de la escena queda anotada y suena al reactivarlo
+    mutedMusicDef = def;
+    return;
+  }
+  if (musicSoundId === def.id && (musicAudio || musicSynthTimer)) return;
+
+  stopMusic();
+  musicSoundId = def.id;
+  currentMusicDef = def;
+
+  if (def.sourceType === 'url' && def.url) {
+    const audio = new Audio(def.url);
+    audio.loop = true;
+    audio.volume = Math.max(0, Math.min(1, def.synthConfig?.volume ?? 0.5));
+    audio.onerror = () => {
+      if (musicAudio === audio) {
+        console.warn(`No se pudo cargar la música: ${def.url}`);
+        stopMusic();
+      }
+    };
+    musicAudio = audio;
+    audio.play().catch(() => retryMusicOnGesture(audio));
+    return;
+  }
+
+  if (def.synthConfig) {
+    const config = def.synthConfig;
+    const periodMs = Math.max(500, Math.round((config.duration || 3) * 1000));
+    const playLoop = () => {
+      const ctx = getAudioContext();
+      if (ctx) playSynthWithConfig(ctx, config);
+    };
+    playLoop();
+    musicSynthTimer = setInterval(playLoop, periodMs);
+  }
+}
+
+/**
+ * Sonidos al entrar en una escena. Una música de la escena sigue sonando entre escenas;
+ * el sonido de un párrafo (si lo hay) se reproduce como efecto encima.
+ * Sin música de escena se mantiene el comportamiento de siempre: el del párrafo, o si no el de la escena.
+ */
+export function playSceneSounds(
+  blockSound: string | undefined,
+  sceneSound: string | undefined,
+  projectSounds?: SoundDefinition[]
+) {
+  const hasBlock = !!blockSound && blockSound !== 'none';
+  if (sceneSound && isMusicSound(sceneSound, projectSounds)) {
+    playSound(sceneSound, projectSounds);
+    if (hasBlock) playSound(blockSound, projectSounds);
+    return;
+  }
+  if (hasBlock) playSound(blockSound, projectSounds);
+  else if (sceneSound) playSound(sceneSound, projectSounds);
+}
+
+/**
  * Main playSound function used by the game engine, scenes, hotspot actions and dialogue options.
  * Seamlessly resolves built-in sound names, custom project sound IDs, or direct audio URLs.
  */
@@ -1299,7 +1447,14 @@ export const playSound = (
   typeOrUrl?: string,
   projectCustomSoundsOverride?: SoundDefinition[]
 ) => {
-  if (!soundEnabled || !typeOrUrl || typeOrUrl === 'none') return;
+  if (!typeOrUrl || typeOrUrl === 'none') return;
+
+  if (!soundEnabled) {
+    // En silencio no suena nada, pero la música de la escena queda anotada para cuando se reactive el sonido
+    const def = findSoundDefinition(typeOrUrl, projectCustomSoundsOverride);
+    if (def && isMusicDefinition(def)) playMusic(def);
+    return;
+  }
 
   try {
     // 1. Check if typeOrUrl is a direct web URL or data URL
@@ -1317,21 +1472,24 @@ export const playSound = (
     const projectList = projectCustomSoundsOverride || projectCustomSounds;
     const customMatch = projectList.find((s) => s.id === typeOrUrl);
     if (customMatch) {
-      previewSoundDefinition(customMatch);
+      if (isMusicDefinition(customMatch)) playMusic(customMatch);
+      else previewSoundDefinition(customMatch);
       return;
     }
 
     // 3. Look for sound in global sound library
     const globalMatch = globalSoundLibrary.find((s) => s.id === typeOrUrl);
     if (globalMatch) {
-      previewSoundDefinition(globalMatch);
+      if (isMusicDefinition(globalMatch)) playMusic(globalMatch);
+      else previewSoundDefinition(globalMatch);
       return;
     }
 
     // 4. Look in default built-in presets
     const defaultMatch = DEFAULT_SOUND_LIBRARY.find((s) => s.id === typeOrUrl);
     if (defaultMatch) {
-      previewSoundDefinition(defaultMatch);
+      if (isMusicDefinition(defaultMatch)) playMusic(defaultMatch);
+      else previewSoundDefinition(defaultMatch);
       return;
     }
 
