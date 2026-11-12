@@ -338,10 +338,16 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
 
   // Filtered users list
   const filteredUsers = usersList.filter((u) => {
+    const sTerm = (userSearchTerm || '').toLowerCase().trim();
+    const dName = (u.displayName || '').toLowerCase();
+    const uEmail = (u.email || '').toLowerCase();
+    const uId = (u.uid || '').toLowerCase();
+
     const matchesSearch = 
-      u.displayName.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-      u.uid.toLowerCase().includes(userSearchTerm.toLowerCase());
+      !sTerm ||
+      dName.includes(sTerm) ||
+      uEmail.includes(sTerm) ||
+      uId.includes(sTerm);
 
     if (!matchesSearch) return false;
     if (userRoleFilter === 'author') return u.role === 'author' && !u.isSuspended;

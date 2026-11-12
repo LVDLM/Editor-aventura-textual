@@ -147,16 +147,22 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
   // Filter projects by search term and selected genre tag
   const filtered = publishedProjects.filter((doc) => {
+    const sTerm = (searchTerm || '').toLowerCase().trim();
+    const dTitle = (doc.title || '').toLowerCase();
+    const dDesc = (doc.description || doc.projectData?.description || '').toLowerCase();
+    const dAuthor = (doc.authorName || doc.projectData?.author || '').toLowerCase();
+
     const matchesSearch =
-      doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.authorName.toLowerCase().includes(searchTerm.toLowerCase());
+      !sTerm ||
+      dTitle.includes(sTerm) ||
+      dDesc.includes(sTerm) ||
+      dAuthor.includes(sTerm);
 
     const docTags = doc.genreTags || doc.projectData?.genreTags || [];
     const matchesGenre =
       selectedGenre === 'all' ||
       docTags.includes(selectedGenre) ||
-      (doc.genre && doc.genre.toLowerCase() === selectedGenre.toLowerCase());
+      (doc.genre && doc.genre.toLowerCase() === (selectedGenre || '').toLowerCase());
 
     return matchesSearch && matchesGenre;
   });
