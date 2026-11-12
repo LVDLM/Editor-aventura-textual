@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameProject, UserProfile, CloudProjectDoc, PublicationStatus } from '../../types';
-import { getUserProjects, saveProjectToCloud, updateProjectStatusInCloud, deleteProjectFromCloud, toggleProjectVisibilityInGallery } from '../../lib/firebase';
+import { auth, getUserProjects, saveProjectToCloud, updateProjectStatusInCloud, deleteProjectFromCloud, toggleProjectVisibilityInGallery } from '../../lib/firebase';
 import { exportProjectAsZip } from '../../utils/zipExporter';
 import { Plus, Edit3, Play, CloudUpload, Send, Trash2, Package, AlertCircle, Clock, CheckCircle2, Shield, Sparkles, FolderOpen, Upload, FileJson } from 'lucide-react';
 import { EditStoryModal } from './EditStoryModal';
@@ -50,6 +50,13 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({
     );
     setCloudProjects(list);
     setLoading(false);
+    // Aviso visible: sin email real en el token, Firestore no entrega los borradores aunque la UI diga "Administrador".
+    if (currentUser.role === 'admin' && !auth.currentUser?.email) {
+      setMessage({
+        type: 'error',
+        text: 'Esta sesión no tiene un email verificado (sesión anónima), por lo que solo se muestran las historias publicadas. Cierra sesión e inicia con Google para ver tus borradores.',
+      });
+    }
   };
 
   const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {

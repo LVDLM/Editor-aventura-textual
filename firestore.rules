@@ -5,7 +5,7 @@ service cloud.firestore {
     // Helper function: check if user is admin
     function isAdmin() {
       return request.auth != null && (
-        request.auth.token.email == 'lavozdelosmuertos@gmail.com' ||
+        (request.auth.token.email == 'lavozdelosmuertos@gmail.com' && request.auth.token.email_verified == true) ||
         request.auth.uid == 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2' ||
         request.auth.uid == 'DhxW6Oy0QtQK3ghH5XYi3l6cWxJ2' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -17,15 +17,25 @@ service cloud.firestore {
     function isOwner(data) {
       return request.auth != null && (
         request.auth.uid == data.authorId ||
-        (request.auth.token.email != null && data.authorEmail != null && request.auth.token.email == data.authorEmail) ||
+        (request.auth.token.email != null && request.auth.token.email_verified == true && data.authorEmail != null && request.auth.token.email == data.authorEmail) ||
         (request.auth.uid in ['ANwT8oJ21QdyQ54Oj5iodAA7B0J2', 'DhxW6Oy0QtQK3ghH5XYi3l6cWxJ2'] && data.authorEmail == 'lavozdelosmuertos@gmail.com')
       );
     }
 
     // Users collection
+    // IMPORTANT: a user can never grant themselves the 'admin' role from the client.
+    // isAdmin() trusts users/{uid}.role == 'admin', so letting anyone write their own role
+    // would turn every visitor (even anonymous) into an administrator.
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create: if request.auth != null && (
+        isAdmin() ||
+        (request.auth.uid == userId && request.resource.data.role != 'admin')
+      );
+      allow update: if request.auth != null && (
+        isAdmin() ||
+        (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+      );
       allow delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
     }
 
