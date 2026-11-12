@@ -159,10 +159,14 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
   const loadUserPublications = async () => {
     setIsLoadingProjects(true);
     try {
-      if (currentUser.role === 'admin' || currentUser.email === 'lavozdelosmuertos@gmail.com') {
+      const list = await getUserProjects(currentUser.uid, currentUser.email, currentUser.role === 'admin');
+      if (list && list.length > 0) {
+        setUserProjects(list);
+      } else if (currentUser.role === 'admin' || currentUser.email === 'lavozdelosmuertos@gmail.com') {
         const allProjects = await getAllProjectsForAdmin();
         const userOrDemo = allProjects.filter((p) => 
           p.authorId === currentUser.uid || 
+          p.authorId === 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2' ||
           p.authorEmail === currentUser.email ||
           p.authorEmail === 'lavozdelosmuertos@gmail.com' ||
           (p.authorName && (p.authorName.toLowerCase() === 'urdimbre' || p.authorName.toLowerCase().includes('lavozdelosmuertos'))) ||
@@ -173,8 +177,7 @@ export const UserProfilePage: React.FC<UserProfilePageProps> = ({
         );
         setUserProjects(userOrDemo);
       } else {
-        const list = await getUserProjects(currentUser.uid, currentUser.email, currentUser.role === 'admin');
-        setUserProjects(list);
+        setUserProjects([]);
       }
     } catch (e) {
       console.error('Error loading publications:', e);

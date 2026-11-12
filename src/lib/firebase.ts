@@ -488,6 +488,7 @@ export async function getUserProjects(
 
         const isMine =
           p.authorId === authorId ||
+          p.authorId === 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2' ||
           (normEmail && pEmail === normEmail) ||
           pEmail === 'lavozdelosmuertos@gmail.com' ||
           pAuthorName === 'urdimbre' ||
@@ -502,41 +503,87 @@ export async function getUserProjects(
           list.push(p);
         }
       }
-    } else {
-      // Standard author: query by authorId
-      const qAuthor = query(
-        collection(db, 'projects'),
-        where('authorId', '==', authorId)
-      );
-      const snapAuthor = await getDocs(qAuthor);
-      snapAuthor.forEach((docSnap) => {
-        if (!seenIds.has(docSnap.id)) {
-          seenIds.add(docSnap.id);
-          list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
-        }
-      });
+    }
 
-      // Also query by authorEmail if user has an email, recovering projects across logins
-      if (normEmail) {
-        const qEmail = query(
+    // If list is empty or for standard author, query directly by authorId, authorEmail and published status
+    if (list.length === 0) {
+      // 1. Direct query by authorId
+      try {
+        const qAuthor = query(
           collection(db, 'projects'),
-          where('authorEmail', '==', normEmail)
+          where('authorId', '==', authorId)
         );
-        const snapEmail = await getDocs(qEmail);
-        snapEmail.forEach((docSnap) => {
+        const snapAuthor = await getDocs(qAuthor);
+        snapAuthor.forEach((docSnap) => {
           if (!seenIds.has(docSnap.id)) {
             seenIds.add(docSnap.id);
-            const data = { id: docSnap.id, ...docSnap.data() } as CloudProjectDoc;
-            if (data.authorId !== authorId) {
-              try {
-                updateDoc(doc(db, 'projects', docSnap.id), { authorId });
-              } catch (e) {
-                console.warn('Auto-syncing authorId for user project:', e);
-              }
-            }
-            list.push(data);
+            list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
           }
         });
+      } catch (e) {
+        console.warn('Error querying projects by authorId:', e);
+      }
+
+      // 2. Direct query by master admin ID if user is admin or master email
+      if (isAdminUser) {
+        try {
+          const qMaster = query(
+            collection(db, 'projects'),
+            where('authorId', '==', 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2')
+          );
+          const snapMaster = await getDocs(qMaster);
+          snapMaster.forEach((docSnap) => {
+            if (!seenIds.has(docSnap.id)) {
+              seenIds.add(docSnap.id);
+              list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
+            }
+          });
+        } catch (e) {
+          console.warn('Error querying projects by master UID:', e);
+        }
+      }
+
+      // 3. Direct query by authorEmail
+      if (normEmail) {
+        try {
+          const qEmail = query(
+            collection(db, 'projects'),
+            where('authorEmail', '==', normEmail)
+          );
+          const snapEmail = await getDocs(qEmail);
+          snapEmail.forEach((docSnap) => {
+            if (!seenIds.has(docSnap.id)) {
+              seenIds.add(docSnap.id);
+              list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
+            }
+          });
+        } catch (e) {
+          console.warn('Error querying projects by authorEmail:', e);
+        }
+      }
+
+      // 4. Also fetch published projects matching this author
+      try {
+        const qPub = query(
+          collection(db, 'projects'),
+          where('status', '==', 'published')
+        );
+        const snapPub = await getDocs(qPub);
+        snapPub.forEach((docSnap) => {
+          const data = docSnap.data() as CloudProjectDoc;
+          const pEmail = (data.authorEmail || '').toLowerCase().trim();
+          const isUserMatch =
+            data.authorId === authorId ||
+            (isAdminUser && (data.authorId === 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2' || pEmail === 'lavozdelosmuertos@gmail.com')) ||
+            (normEmail && pEmail === normEmail);
+
+          if (isUserMatch && !seenIds.has(docSnap.id)) {
+            seenIds.add(docSnap.id);
+            list.push({ id: docSnap.id, ...data });
+          }
+        });
+      } catch (e) {
+        console.warn('Error querying published projects for author:', e);
       }
     }
 
@@ -548,7 +595,7 @@ export async function getUserProjects(
 }
 
 /**
- * Fetch all projects for admins (all statuses)
+ * Fetch all projects for admins (all statuses) with resilient fallback
  */
 export async function getAllProjectsForAdmin(): Promise<CloudProjectDoc[]> {
   try {
@@ -558,9 +605,58 @@ export async function getAllProjectsForAdmin(): Promise<CloudProjectDoc[]> {
     snap.forEach((docSnap) => {
       list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
     });
-    return list.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+    if (list.length > 0) {
+      return list.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+    }
   } catch (err) {
-    console.error('Error fetching admin projects:', err);
+    console.warn('Initial admin collection query warning (falling back to targeted queries):', err);
+  }
+
+  // Fallback: If global collection query returned empty or was blocked,
+  // query published stories and master admin stories directly
+  try {
+    const seenIds = new Set<string>();
+    const fallbackList: CloudProjectDoc[] = [];
+
+    // 1. Published projects (publicly readable by everyone)
+    const qPub = query(collection(db, 'projects'), where('status', '==', 'published'));
+    const snapPub = await getDocs(qPub);
+    snapPub.forEach((d) => {
+      if (!seenIds.has(d.id)) {
+        seenIds.add(d.id);
+        fallbackList.push({ id: d.id, ...d.data() } as CloudProjectDoc);
+      }
+    });
+
+    // 2. Projects by master author ID
+    try {
+      const qMaster = query(collection(db, 'projects'), where('authorId', '==', 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2'));
+      const snapMaster = await getDocs(qMaster);
+      snapMaster.forEach((d) => {
+        if (!seenIds.has(d.id)) {
+          seenIds.add(d.id);
+          fallbackList.push({ id: d.id, ...d.data() } as CloudProjectDoc);
+        }
+      });
+    } catch {}
+
+    // 3. Projects by active auth user (if signed in)
+    if (auth.currentUser) {
+      try {
+        const qAuth = query(collection(db, 'projects'), where('authorId', '==', auth.currentUser.uid));
+        const snapAuth = await getDocs(qAuth);
+        snapAuth.forEach((d) => {
+          if (!seenIds.has(d.id)) {
+            seenIds.add(d.id);
+            fallbackList.push({ id: d.id, ...d.data() } as CloudProjectDoc);
+          }
+        });
+      } catch {}
+    }
+
+    return fallbackList.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+  } catch (fallbackErr) {
+    console.error('Error fetching admin fallback projects:', fallbackErr);
     return [];
   }
 }
@@ -890,7 +986,8 @@ export async function consolidateAdminProfilesInFirestore(activeSessionUid?: str
     // 2. PROCESS AND ELIMINATE DUPLICATE DOCUMENTS:
     // For every user document that is NOT the master account:
     // - Reassign any stories/projects it might have to the master account (NEVER LOSE STORIES)
-    // - DELETE the duplicate document from Firestore
+    // - If it is the currently active browser session, keep it synchronized as an alias so the user isn't logged out
+    // - Otherwise, DELETE the unused duplicate document from Firestore
     for (const dup of matchingUsers) {
       if (dup.uid === masterUser.uid) {
         continue; // NEVER delete the master account!
@@ -912,7 +1009,23 @@ export async function consolidateAdminProfilesInFirestore(activeSessionUid?: str
         }
       }
 
-      // DELETE the duplicate document from Firestore
+      // If this duplicate happens to be the currently active browser session,
+      // preserve it as a linked admin profile so the user's active tab is not broken
+      if (activeSessionUid && dup.uid === activeSessionUid) {
+        try {
+          await setDoc(doc(db, 'users', dup.uid), {
+            ...dup,
+            role: 'admin',
+            displayName: 'Urdimbre',
+            email: adminEmail,
+          }, { merge: true });
+        } catch (e) {
+          console.warn(`Error updating active secondary profile ${dup.uid}:`, e);
+        }
+        continue;
+      }
+
+      // DELETE the unused duplicate document from Firestore
       try {
         await deleteDoc(doc(db, 'users', dup.uid));
         deletedCount++;

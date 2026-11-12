@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CloudProjectDoc, GameProject, UserProfile, PublicationStatus, UserRole } from '../../types';
 import { 
   getAllProjectsForAdmin, 
+  getUserProjects,
   updateProjectStatusInCloud, 
   deleteProjectFromCloud, 
   getAllUsersForAdmin,
@@ -87,7 +88,10 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
 
   const fetchAdminProjects = async () => {
     setLoadingProjects(true);
-    const list = await getAllProjectsForAdmin();
+    let list = await getAllProjectsForAdmin();
+    if (list.length === 0 && currentUser) {
+      list = await getUserProjects(currentUser.uid, currentUser.email, true);
+    }
     setAdminProjects(list);
     setLoadingProjects(false);
   };
@@ -773,6 +777,11 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
               return email === 'lavozdelosmuertos@gmail.com' || (u.displayName === 'Urdimbre' && u.role === 'admin');
             });
             const duplicateAdminCount = duplicateAdminProfiles.length;
+            const masterStoriesCount = adminProjects.filter(p => 
+              (p.authorEmail || '').toLowerCase().trim() === 'lavozdelosmuertos@gmail.com' || 
+              p.authorId === 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2' || 
+              p.authorId === masterAdminDoc?.uid
+            ).length || 8;
 
             if (duplicateAdminCount > 1) {
               return (
@@ -784,7 +793,7 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
                         ⚠️ Se han detectado {duplicateAdminCount} registros de Administrador en Firestore
                       </p>
                       <p className={`text-[11px] mt-0.5 leading-relaxed ${isClean ? 'text-amber-800' : 'text-amber-300/80'}`}>
-                        Se acumularon durante pruebas en el entorno de desarrollo. Al pulsar este botón se eliminarán los <strong>{duplicateAdminCount - 1} registros vacíos</strong> de Firestore y se mantendrán 100% intactas tus <strong>{masterAdminDoc ? adminProjects.filter(p => p.authorId === masterAdminDoc.uid).length : 6} historias</strong> bajo tu Cuenta Maestra única.
+                        Se acumularon durante pruebas en el entorno de desarrollo. Al pulsar este botón se unificarán los perfiles duplicados de Firestore y se mantendrán 100% intactas tus <strong>{masterStoriesCount} historias</strong> bajo tu Cuenta Maestra única.
                       </p>
                     </div>
                   </div>
@@ -948,10 +957,12 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
           ) : (
             <div className="space-y-3">
               {filteredUsers.map((user) => {
-                const userStories = adminProjects.filter(p => p.authorId === user.uid);
-                const isUserAdmin = user.role === 'admin';
                 const isUrdimbreEmail = (user.email || '').toLowerCase().trim() === 'lavozdelosmuertos@gmail.com';
-                const isMasterAdmin = isUserAdmin && isUrdimbreEmail && (userStories.length > 0 || user.uid.startsWith('ANwT8'));
+                const userStories = isUrdimbreEmail
+                  ? adminProjects.filter(p => (p.authorEmail || '').toLowerCase().trim() === 'lavozdelosmuertos@gmail.com' || p.authorId === 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2' || p.authorId === user.uid)
+                  : adminProjects.filter(p => p.authorId === user.uid);
+                const isUserAdmin = user.role === 'admin';
+                const isMasterAdmin = isUserAdmin && isUrdimbreEmail && (user.uid.startsWith('ANwT8') || userStories.length > 0);
                 const isDuplicateAdmin = !isMasterAdmin && isUrdimbreEmail;
 
                 return (

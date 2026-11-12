@@ -6,14 +6,20 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && (
         request.auth.token.email == 'lavozdelosmuertos@gmail.com' ||
+        request.auth.uid == 'ANwT8oJ21QdyQ54Oj5iodAA7B0J2' ||
+        request.auth.uid == 'DhxW6Oy0QtQK3ghH5XYi3l6cWxJ2' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
     }
 
-    // Helper function: check if user is owner of document
-    function isOwner(authorId) {
-      return request.auth != null && request.auth.uid == authorId;
+    // Helper function: check if user is owner of document (by UID or Email)
+    function isOwner(data) {
+      return request.auth != null && (
+        request.auth.uid == data.authorId ||
+        (request.auth.token.email != null && data.authorEmail != null && request.auth.token.email == data.authorEmail) ||
+        (request.auth.uid in ['ANwT8oJ21QdyQ54Oj5iodAA7B0J2', 'DhxW6Oy0QtQK3ghH5XYi3l6cWxJ2'] && data.authorEmail == 'lavozdelosmuertos@gmail.com')
+      );
     }
 
     // Users collection
@@ -27,11 +33,11 @@ service cloud.firestore {
     match /projects/{projectId} {
       // Anyone (even unauthenticated visitors) can read published games
       // Allow read when resource is null (when checking non-existent document with getDoc before creation)
-      // Authors can read their own games
+      // Authors can read their own games (by UID or Email)
       // Admins can read all games
       allow read: if resource == null || 
                      resource.data.status == 'published' || 
-                     (request.auth != null && (isOwner(resource.data.authorId) || isAdmin()));
+                     (request.auth != null && (isOwner(resource.data) || isAdmin()));
 
       // Authenticated users can create projects owned by themselves
       allow create: if request.auth != null && (
@@ -44,7 +50,7 @@ service cloud.firestore {
       allow update: if (
         (request.auth != null && (
           isAdmin() || 
-          (isOwner(resource.data.authorId) && (request.resource.data.status != 'published' || resource.data.status == 'published'))
+          (isOwner(resource.data) && (request.resource.data.status != 'published' || resource.data.status == 'published'))
         )) ||
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratingCount', 'ratingTotal', 'ratingAverage']) &&
@@ -55,7 +61,7 @@ service cloud.firestore {
       );
 
       // Authors can delete their own drafts/projects, Admins can delete any
-      allow delete: if (resource != null && isOwner(resource.data.authorId)) || isAdmin();
+      allow delete: if (resource != null && isOwner(resource.data)) || isAdmin();
     }
 
     // Story ratings collection (1-5 stars submitted upon completing a story)
