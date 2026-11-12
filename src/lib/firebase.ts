@@ -477,10 +477,13 @@ export async function getUserProjects(
 
     const normEmail = (userEmail || '').toLowerCase().trim();
     const isAdminUser = isAdmin || normEmail === 'lavozdelosmuertos@gmail.com' || normEmail.includes('lavozdelosmuertos');
+    let fullReadComplete = false;
 
     if (isAdminUser) {
       // For administrator / editorial account, fetch and filter all relevant stories
-      const allProjects = await getAllProjectsForAdmin();
+      const detailed = await getAllProjectsForAdminDetailed();
+      fullReadComplete = detailed.complete;
+      const allProjects = detailed.projects;
       for (const p of allProjects) {
         const pEmail = (p.authorEmail || '').toLowerCase().trim();
         const pAuthorName = (p.authorName || '').toLowerCase().trim();
@@ -505,8 +508,10 @@ export async function getUserProjects(
       }
     }
 
-    // If list is empty or for standard author, query directly by authorId, authorEmail and published status
-    if (list.length === 0) {
+    // Always complete the list with direct queries (authorId, authorEmail, published) unless the admin
+    // full read succeeded. Previously this only ran when the list was empty, so a partial result
+    // (e.g. only the published stories) hid every draft.
+    if (!fullReadComplete) {
       // 1. Direct query by authorId
       try {
         const qAuthor = query(
@@ -598,6 +603,16 @@ export async function getUserProjects(
  * Fetch all projects for admins (all statuses) with resilient fallback
  */
 export async function getAllProjectsForAdmin(): Promise<CloudProjectDoc[]> {
+  return (await getAllProjectsForAdminDetailed()).projects;
+}
+
+/**
+ * Same as getAllProjectsForAdmin, but also reports whether the full-collection read succeeded.
+ * complete === false means Firestore denied the full read (e.g. anonymous / non-admin session)
+ * and the list only contains published stories plus whatever matched the fallback queries,
+ * so it must NOT be used to take destructive decisions (reassign / delete).
+ */
+export async function getAllProjectsForAdminDetailed(): Promise<{ projects: CloudProjectDoc[]; complete: boolean }> {
   try {
     const q = query(collection(db, 'projects'));
     const snap = await getDocs(q);
@@ -605,9 +620,10 @@ export async function getAllProjectsForAdmin(): Promise<CloudProjectDoc[]> {
     snap.forEach((docSnap) => {
       list.push({ id: docSnap.id, ...docSnap.data() } as CloudProjectDoc);
     });
-    if (list.length > 0) {
-      return list.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-    }
+    return {
+      projects: list.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()),
+      complete: true,
+    };
   } catch (err) {
     console.warn('Initial admin collection query warning (falling back to targeted queries):', err);
   }
@@ -654,10 +670,13 @@ export async function getAllProjectsForAdmin(): Promise<CloudProjectDoc[]> {
       } catch {}
     }
 
-    return fallbackList.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+    return {
+      projects: fallbackList.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()),
+      complete: false,
+    };
   } catch (fallbackErr) {
     console.error('Error fetching admin fallback projects:', fallbackErr);
-    return [];
+    return { projects: [], complete: false };
   }
 }
 
@@ -919,10 +938,24 @@ export async function consolidateAdminProfilesInFirestore(activeSessionUid?: str
   reassignedProjectsCount: number;
   deletedCount: number;
   primaryProfile: UserProfile | null;
+  aborted?: boolean;
+  reason?: string;
 }> {
   try {
     const allUsers = await getAllUsersForAdmin();
-    const allProjects = await getAllProjectsForAdmin();
+    const detailedProjects = await getAllProjectsForAdminDetailed();
+    if (!detailedProjects.complete) {
+      // Partial view of the database: reassigning or deleting based on it could orphan stories.
+      return {
+        updatedCount: 0,
+        reassignedProjectsCount: 0,
+        deletedCount: 0,
+        primaryProfile: null,
+        aborted: true,
+        reason: 'No se pudo leer la colección completa de proyectos (permisos). Inicia sesión con Google con tu cuenta de administrador y vuelve a intentarlo.',
+      };
+    }
+    const allProjects = detailedProjects.projects;
     const adminEmail = 'lavozdelosmuertos@gmail.com';
     const targetEmailLower = adminEmail.toLowerCase();
 

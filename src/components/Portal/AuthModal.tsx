@@ -36,21 +36,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
       onUserChanged(profile);
       onClose();
     } catch (err: any) {
-      console.warn('Google Popup falló o está bloqueado por el iframe preview:', err);
-      // Fallback para entorno de vista previa / sandbox: Iniciar sesión de Administrador con la cuenta del usuario
-      try {
-        const cred = await signInAnonymously(auth);
-        const profile = await createOrUpdateUserProfile(
-          cred.user.uid,
-          'lavozdelosmuertos@gmail.com',
-          'Urdimbre',
-          'admin'
-        );
-        onUserChanged(profile);
-        onClose();
-      } catch (fallbackErr: any) {
-        console.error(fallbackErr);
-        setError('No se pudo autenticar. Usa las opciones de acceso directo de la parte inferior.');
+      console.warn('Google Popup falló o está bloqueado:', err);
+      // NO se hace fallback a sesión anónima "como administrador": una sesión anónima no lleva email,
+      // Firestore no la reconoce como admin y la app acabaría mostrando solo las historias publicadas.
+      const code = err?.code || '';
+      if (code === 'auth/unauthorized-domain') {
+        setError('Este dominio no está autorizado en Firebase (Authentication → Settings → Authorized domains).');
+      } else if (code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setError('El popup de Google se bloqueó o se cerró. Permite ventanas emergentes o abre la versión publicada en una pestaña normal.');
+      } else {
+        setError(`No se pudo iniciar sesión con Google${code ? ` (${code})` : ''}.`);
       }
     } finally {
       setLoading(false);
@@ -105,17 +100,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ currentUser, onClose, onUs
     setLoading(true);
     try {
       const cred = await signInAnonymously(auth);
+      // Sesión de invitado: autor normal. Nunca usa el email ni el rol del administrador.
       const profile = await createOrUpdateUserProfile(
         cred.user.uid,
-        'lavozdelosmuertos@gmail.com',
-        'Urdimbre',
-        'admin'
+        '',
+        'Invitado',
+        'author'
       );
       onUserChanged(profile);
       onClose();
     } catch (err: any) {
       console.error(err);
-      setError('Error al iniciar sesión como Administrador.');
+      setError('Error al iniciar la sesión de invitado.');
     } finally {
       setLoading(false);
     }

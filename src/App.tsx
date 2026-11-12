@@ -194,10 +194,11 @@ export default function App() {
         }
 
         if (!profile || (isAdminEmail && (profile.role !== 'admin' || !profile.displayName || ['usuario', 'administrador', 'lector'].includes(profile.displayName.toLowerCase().trim())))) {
+          // Una sesión sin email (anónima) NUNCA hereda la identidad del administrador.
           profile = await createOrUpdateUserProfile(
             user.uid,
-            userEmail || 'lavozdelosmuertos@gmail.com',
-            isAdminEmail ? 'Urdimbre' : (user.displayName || userEmail.split('@')[0] || 'Usuario'),
+            userEmail,
+            isAdminEmail ? 'Urdimbre' : (user.displayName || userEmail.split('@')[0] || 'Invitado'),
             isAdminEmail ? 'admin' : 'author'
           );
         }

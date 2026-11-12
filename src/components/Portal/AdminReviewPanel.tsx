@@ -264,6 +264,10 @@ export const AdminReviewPanel: React.FC<AdminReviewPanelProps> = ({
     setMessage(null);
     try {
       const res = await consolidateAdminProfilesInFirestore(currentUser?.uid);
+      if (res.aborted) {
+        setMessage({ type: 'error', text: res.reason || 'Unificación cancelada: no se modificó nada.' });
+        return;
+      }
       await fetchAdminUsers();
       await fetchAdminProjects();
       setMessage({
