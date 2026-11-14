@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
+import { GameProject, Scene, Hotspot, SceneTextBlock, VerbType, QTEStep, SoundEffectType, SoundMode, SOUND_EFFECT_OPTIONS, DialogueBlock } from '../../types';
 import { ALL_VERBS, getProjectVerbs } from '../../utils/verbs';
-import { playSound, getSoundOptionsGrouped, stopAllAudio } from '../../utils/audio';
+import { playSound, playBlockSound, isMusicSound, getSoundOptionsGrouped, stopAllAudio } from '../../utils/audio';
 import { isWordMatchInText, isWordChar } from '../../utils/textUtils';
 import { HotspotEditorModal } from './HotspotEditorModal';
 import { DialogueEditor } from './DialogueEditor';
@@ -679,6 +679,29 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
         return {
           ...s,
           textBlocks: s.textBlocks.map((b) => (b.id === blockId ? { ...b, soundEffect: sfxVal } : b)),
+        };
+      }),
+    }));
+  };
+
+  // Modo efectivo de un párrafo: el elegido o, si no hay, el automático de siempre
+  // (música => bucle; cualquier otro sonido => efecto superpuesto)
+  const getBlockSoundMode = (block: SceneTextBlock): SoundMode => {
+    if (block.soundMode) return block.soundMode;
+    return isMusicSound(block.soundEffect, project.customSounds) ? 'loop' : 'sfx';
+  };
+
+  // El botón rota entre Loop -> 1 -> SFX -> Loop
+  const handleCycleBlockSoundMode = (block: SceneTextBlock) => {
+    const order: SoundMode[] = ['loop', 'once', 'sfx'];
+    const next = order[(order.indexOf(getBlockSoundMode(block)) + 1) % order.length];
+    updateProject((prev) => ({
+      ...prev,
+      scenes: prev.scenes.map((s) => {
+        if (s.id !== activeScene.id) return s;
+        return {
+          ...s,
+          textBlocks: s.textBlocks.map((b) => (b.id === block.id ? { ...b, soundMode: next } : b)),
         };
       }),
     }));
@@ -2536,13 +2559,37 @@ export const SceneEditor: React.FC<SceneEditorProps> = ({ project, updateProject
                             ))}
                           </optgroup>
                         </select>
+                        {block.soundEffect && block.soundEffect !== 'none' && block.soundEffect !== 'stop_music' && (
+                          <button
+                            type="button"
+                            onClick={() => handleCycleBlockSoundMode(block)}
+                            className={`px-1.5 py-0.5 rounded border text-[10px] font-bold cursor-pointer shrink-0 transition-colors ${
+                              getBlockSoundMode(block) === 'loop'
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
+                                : getBlockSoundMode(block) === 'once'
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30'
+                                : 'bg-sky-500/20 text-sky-300 border-sky-500/50 hover:bg-sky-500/30'
+                            }`}
+                            title={
+                              getBlockSoundMode(block) === 'loop'
+                                ? 'Loop: suena en bucle hasta que otro párrafo lo detenga o lo sustituya. Pulsa para cambiar.'
+                                : getBlockSoundMode(block) === 'once'
+                                ? '1: suena una sola vez y sustituye a la música que hubiera. Pulsa para cambiar.'
+                                : 'SFX: suena una vez por encima de lo que ya esté sonando, sin cortarlo. Pulsa para cambiar.'
+                            }
+                          >
+                            {getBlockSoundMode(block) === 'loop' ? '🔁 Loop' : getBlockSoundMode(block) === 'once' ? '1 vez' : '✨ SFX'}
+                          </button>
+                        )}
                         {block.soundEffect && block.soundEffect !== 'none' && (
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
                               onClick={() => {
-                                stopAllAudio();
-                                playSound(block.soundEffect!, project.customSounds);
+                                const mode = block.soundEffect === 'stop_music' ? undefined : getBlockSoundMode(block);
+                                // Un SFX se prueba por encima de lo que esté sonando (p. ej. un Loop ya iniciado)
+                                if (mode !== 'sfx') stopAllAudio();
+                                playBlockSound(block.soundEffect!, mode, project.customSounds);
                               }}
                               className="text-[10px] text-amber-400 hover:text-amber-200 hover:underline cursor-pointer flex items-center gap-0.5 shrink-0 font-bold"
                               title="Probar sonido del párrafo"

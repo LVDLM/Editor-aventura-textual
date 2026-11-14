@@ -123,6 +123,15 @@ export interface SoundDefinition {
 
 export type SoundEffectType = string;
 
+/**
+ * Cómo suena el sonido de un párrafo:
+ * - 'loop': pista principal en bucle; sustituye a la anterior y suena hasta que otro párrafo la detiene o la sustituye.
+ * - 'once': pista principal que suena una sola vez (corta la que hubiera) y no se repite.
+ * - 'sfx':  efecto que suena UNA vez por encima de lo que ya esté sonando, sin cortar nada.
+ * Si un párrafo no tiene modo, se mantiene el comportamiento de siempre (música => bucle, efecto => superpuesto).
+ */
+export type SoundMode = 'loop' | 'once' | 'sfx';
+
 export const SOUND_EFFECT_OPTIONS: { id: SoundEffectType; label: string; category?: string }[] = [
   { id: 'none', label: 'Sin Sonido', category: 'ui' },
   { id: 'stop_music', label: '⏹ Detener música de fondo', category: 'music' },
@@ -254,6 +263,7 @@ export interface SceneTextBlock {
   imageFileName?: string; // Filename for ZIP export (e.g. img/escena_bosque.png)
   coverMode?: 'full' | 'with_text'; // 'full' = Portada completa, 'with_text' = Acompañada de texto
   soundEffect?: SoundEffectType; // Sound effect played when this paragraph block is revealed
+  soundMode?: SoundMode; // Cómo suena: 'loop' (bucle), 'once' (una vez) o 'sfx' (superpuesto). Vacío = automático
   visibleIfFlags?: Record<string, boolean>;
   hiddenIfFlags?: Record<string, boolean>;
   requiredItemId?: string; // Single required inventory item for backwards compatibility

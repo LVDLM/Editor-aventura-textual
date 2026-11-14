@@ -3,7 +3,7 @@ import { GameProject, Hotspot, VerbType, ActionRule, InventoryItem, SaveSlotData
 import { THEME_CONFIGS } from '../utils/themeStyles';
 import { renderTextWithLinks, isWordMatchInText } from '../utils/textUtils';
 import { ALL_VERBS, getProjectVerbs, renderVerbIcon } from '../utils/verbs';
-import { playSound, playSceneSounds, setActiveProjectSounds, stopMusic } from '../utils/audio';
+import { playSound, playBlockSound, playSceneSounds, setActiveProjectSounds, stopMusic } from '../utils/audio';
 import { applyItemEffects, canAfford, deliveryKey, getGrants, getRemovals, isDelivered, missingItems } from '../utils/itemRules';
 import {
   Eye,
@@ -405,15 +405,29 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         if (blockWithSound) {
           playedBlockSoundIdsRef.current.add(blockWithSound.id);
         }
-        // Al entrar en una nueva escena se evalúa la música de la escena o el primer párrafo con sonido
-        playSceneSounds(blockWithSound?.soundEffect, currentScene.sfx, project.customSounds);
+        // Al entrar en una nueva escena se evalúa la música de la escena o el primer párrafo con sonido.
+        // Si ese primer párrafo tiene modo propio (Loop / 1 / SFX) se reproduce justo después, con su modo.
+        playSceneSounds(
+          blockWithSound?.soundEffect,
+          currentScene.sfx,
+          project.customSounds,
+          blockWithSound?.soundMode
+        );
+        // El resto de párrafos visibles con modo explícito también suenan al entrar, en orden
+        // (así una escena puede llevar, por ejemplo, un Loop de fondo y un SFX de goteo).
+        visibleBlocks.forEach((b) => {
+          if (b !== blockWithSound && b.soundMode && b.soundEffect && b.soundEffect !== 'none') {
+            playedBlockSoundIdsRef.current.add(b.id);
+            playBlockSound(b.soundEffect, b.soundMode, project.customSounds);
+          }
+        });
       } else {
         // Dentro de la misma escena: si un nuevo párrafo se ha revelado por flags o inventario y tiene sonido,
         // reproducirlo dinámicamente sin necesidad de cambiar de escena
         visibleBlocks.forEach((b) => {
           if (b.soundEffect && b.soundEffect !== 'none' && !playedBlockSoundIdsRef.current.has(b.id)) {
             playedBlockSoundIdsRef.current.add(b.id);
-            playSound(b.soundEffect, project.customSounds);
+            playBlockSound(b.soundEffect, b.soundMode, project.customSounds);
           }
         });
       }

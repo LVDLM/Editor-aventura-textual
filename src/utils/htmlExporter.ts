@@ -495,8 +495,28 @@ ${VOICE_ENGINE_EMBED}
 
     function playSound(type) {
       if (!type || type === 'none') return;
+      if (type === 'stop_music') { mutedMusic = null; stopMusic(); return; }
       var def = (PROJECT.customSounds || []).find(function(s) { return s.id === type; });
       if (isMusicDef(def)) { playMusic(type, def); return; }
+      if (!soundOn) return;
+      playSfx(type);
+    }
+
+    // Sonido de un párrafo según su modo:
+    //  'loop' = pista principal en bucle (sustituye a la anterior, dura hasta que otro párrafo la detiene)
+    //  'once' = pista principal de una sola vez (corta la música en curso, no se repite)
+    //  'sfx'  = efecto de una sola vez por encima de lo que suene, sin cortar nada
+    // Sin modo se conserva el comportamiento automático de siempre.
+    function playBlockSound(type, mode) {
+      if (!type || type === 'none') return;
+      if (!mode || type === 'stop_music') { playSound(type); return; }
+      if (mode === 'loop') {
+        var def = (PROJECT.customSounds || []).find(function(s) { return s.id === type; });
+        if (!def) def = { id: type, sourceType: 'synth', synthConfig: { duration: 3 } };
+        playMusic(type, def);
+        return;
+      }
+      if (mode === 'once') { mutedMusic = null; stopMusic(); }
       if (!soundOn) return;
       playSfx(type);
     }
@@ -524,15 +544,15 @@ ${VOICE_ENGINE_EMBED}
 
     // Sonidos al entrar en una escena: la música de la escena sigue sonando entre escenas
     // y el sonido de un párrafo (si lo hay) se reproduce como efecto encima.
-    function playSceneSounds(blockSound, sceneSound) {
+    function playSceneSounds(blockSound, sceneSound, blockMode) {
       var hasBlock = !!blockSound && blockSound !== 'none';
       var sceneDef = sceneSound ? (PROJECT.customSounds || []).find(function(s) { return s.id === sceneSound; }) : null;
       if (isMusicDef(sceneDef)) {
         playSound(sceneSound);
-        if (hasBlock) playSound(blockSound);
+        if (hasBlock) playBlockSound(blockSound, blockMode);
         return;
       }
-      if (hasBlock) playSound(blockSound);
+      if (hasBlock) playBlockSound(blockSound, blockMode);
       else if (sceneSound) playSound(sceneSound);
     }
 
@@ -876,7 +896,14 @@ ${VOICE_ENGINE_EMBED}
           return (typeof isBlockVisible === 'function' ? isBlockVisible(b) : true) && b.soundEffect && b.soundEffect !== 'none';
         });
         lastRenderedSceneId = scene.id;
-        playSceneSounds(pBlock ? pBlock.soundEffect : null, scene.sfx);
+        playSceneSounds(pBlock ? pBlock.soundEffect : null, scene.sfx, pBlock ? pBlock.soundMode : null);
+        // El resto de párrafos visibles con modo explícito (Loop / 1 / SFX) también suenan al entrar, en orden
+        (scene.textBlocks || []).forEach(function(b) {
+          if (b !== pBlock && b.soundMode && b.soundEffect && b.soundEffect !== 'none' &&
+              (typeof isBlockVisible === 'function' ? isBlockVisible(b) : true)) {
+            playBlockSound(b.soundEffect, b.soundMode);
+          }
+        });
       }
 
       let combinedHTML = '';
