@@ -1,4 +1,4 @@
-import { SoundDefinition, SynthSoundConfig, GameProject, InstrumentType } from '../types';
+import { SoundDefinition, SynthSoundConfig, GameProject, InstrumentType, SoundMode } from '../types';
 import { playVoiceSynth } from './voiceEngine.js';
 
 /**
@@ -1443,16 +1443,78 @@ export function playMusic(def: SoundDefinition) {
 export function playSceneSounds(
   blockSound: string | undefined,
   sceneSound: string | undefined,
-  projectSounds?: SoundDefinition[]
+  projectSounds?: SoundDefinition[],
+  blockMode?: SoundMode
 ) {
   const hasBlock = !!blockSound && blockSound !== 'none';
   if (sceneSound && isMusicSound(sceneSound, projectSounds)) {
     playSound(sceneSound, projectSounds);
-    if (hasBlock) playSound(blockSound, projectSounds);
+    if (hasBlock) playBlockSound(blockSound, blockMode, projectSounds);
     return;
   }
-  if (hasBlock) playSound(blockSound, projectSounds);
+  if (hasBlock) playBlockSound(blockSound, blockMode, projectSounds);
   else if (sceneSound) playSound(sceneSound, projectSounds);
+}
+
+/** Convierte un id de sonido (o una URL directa) en su definición; null si es un sonido interno sin definición. */
+function resolveSoundDefinition(typeOrUrl: string, projectSounds?: SoundDefinition[]): SoundDefinition | null {
+  if (
+    typeOrUrl.startsWith('http://') ||
+    typeOrUrl.startsWith('https://') ||
+    typeOrUrl.startsWith('data:audio/') ||
+    typeOrUrl.startsWith('blob:')
+  ) {
+    return { id: typeOrUrl, name: 'Audio', category: 'custom', sourceType: 'url', url: typeOrUrl };
+  }
+  return findSoundDefinition(typeOrUrl, projectSounds) || null;
+}
+
+/** Reproduce un sonido UNA sola vez, sin bucle, aunque sea de categoría música. */
+function playOneShot(typeOrUrl: string, def: SoundDefinition | null) {
+  if (!soundEnabled) return;
+  if (def) {
+    previewSoundDefinition(def).catch(() => {});
+    return;
+  }
+  playSound(typeOrUrl); // sonido interno sin definición: se reproduce como siempre
+}
+
+/**
+ * Reproduce el sonido de un párrafo según su modo:
+ *  - 'loop': pista principal en bucle (sustituye a la anterior; dura hasta que otro párrafo la detiene)
+ *  - 'once': pista principal de una sola vez (corta la música en curso, no se repite)
+ *  - 'sfx':  efecto de una sola vez por encima de lo que suene, sin cortar nada
+ * Sin modo se conserva el comportamiento automático de siempre.
+ */
+export function playBlockSound(
+  typeOrUrl: string | undefined,
+  mode: SoundMode | undefined,
+  projectSounds?: SoundDefinition[]
+) {
+  if (!typeOrUrl || typeOrUrl === 'none') return;
+  if (!mode || typeOrUrl === 'stop_music') {
+    playSound(typeOrUrl, projectSounds);
+    return;
+  }
+
+  const def = resolveSoundDefinition(typeOrUrl, projectSounds);
+
+  if (mode === 'loop') {
+    if (def) playMusic(def); // playMusic ya gestiona el sonido silenciado y no reinicia la misma pista
+    else playSound(typeOrUrl, projectSounds);
+    return;
+  }
+
+  if (mode === 'once') {
+    // Sustituye a la pista principal: la música en bucle se corta (y no vuelve al reactivar el sonido)
+    mutedMusicDef = null;
+    stopMusic();
+    playOneShot(typeOrUrl, def);
+    return;
+  }
+
+  // 'sfx': se superpone, no toca la música ni otros sonidos
+  playOneShot(typeOrUrl, def);
 }
 
 /**
